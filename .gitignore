@@ -1,0 +1,14 @@
+# Genererade artefakter (måste vara gitignored enligt agent.md)
+test_results/
+uploads/
+caches/
+build/
+dist/
+*.pyc
+__pycache__/
+.venv/
+venv/
+node_modules/
+*.log
+.DS_Store
+
