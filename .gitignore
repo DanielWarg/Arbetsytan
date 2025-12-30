@@ -12,3 +12,12 @@ node_modules/
 *.log
 .DS_Store
 
+# Känsliga miljövariabler och secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+*.secret
+
