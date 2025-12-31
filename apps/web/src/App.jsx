@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import Dashboard from './pages/Dashboard'
 import ProjectsList from './pages/ProjectsList'
 import ProjectDetail from './pages/ProjectDetail'
-import CreateProject from './pages/CreateProject'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
@@ -71,7 +70,6 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/projects" element={<ProjectsList />} />
-            <Route path="/projects/new" element={<CreateProject />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
           </Routes>
         </div>

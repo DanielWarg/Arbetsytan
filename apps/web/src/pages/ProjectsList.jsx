@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../ui/Button'
+import { Card } from '../ui/Card'
+import { Badge } from '../ui/Badge'
+import { Modal } from '../ui/Modal'
+import CreateProject from './CreateProject'
 import { FolderPlus, Folder } from 'lucide-react'
 import './ProjectsList.css'
 
@@ -8,6 +12,7 @@ function ProjectsList() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const fetchProjects = async () => {
     try {
@@ -36,6 +41,13 @@ function ProjectsList() {
     fetchProjects()
   }, [])
 
+  const handleCreateSuccess = (project) => {
+    setShowCreateModal(false)
+    fetchProjects()
+    // Optionally navigate to project detail
+    // navigate(`/projects/${project.id}`)
+  }
+
   if (loading) return <div className="projects-page">Laddar...</div>
   if (error) return <div className="projects-page">Fel: {error}</div>
 
@@ -57,12 +69,13 @@ function ProjectsList() {
     <div className="projects-page">
       <div className="projects-header">
         <h2 className="projects-title">Dina Projekt</h2>
-        <Link to="/projects/new">
-          <button className="btn-create-project">
-            <FolderPlus size={16} />
-            <span>Nytt projekt</span>
-          </button>
-        </Link>
+        <button 
+          className="btn-create-project"
+          onClick={() => setShowCreateModal(true)}
+        >
+          <FolderPlus size={16} />
+          <span>Nytt projekt</span>
+        </button>
       </div>
 
       {projects.length === 0 ? (
@@ -70,12 +83,13 @@ function ProjectsList() {
           <Folder size={48} className="empty-icon" />
           <p className="empty-title">Inga projekt hittades</p>
           <p className="empty-text">Skapa ditt första projekt för att organisera transkriptioner.</p>
-          <Link to="/projects/new">
-            <button className="btn-create-project">
-              <FolderPlus size={16} />
-              <span>Nytt projekt</span>
-            </button>
-          </Link>
+          <button 
+            className="btn-create-project"
+            onClick={() => setShowCreateModal(true)}
+          >
+            <FolderPlus size={16} />
+            <span>Nytt projekt</span>
+          </button>
         </div>
       ) : (
         <div className="projects-grid">
@@ -85,12 +99,12 @@ function ProjectsList() {
               to={`/projects/${project.id}`} 
               className="project-card-link"
             >
-              <div className="project-card">
+              <Card interactive className="project-card">
                 <div className="project-card-top">
                   <Folder size={18} className="project-icon" />
-                  <span className={`project-badge ${getClassificationClass(project.classification)}`}>
+                  <Badge variant={project.classification === 'normal' ? 'normal' : 'sensitive'}>
                     {getClassificationLabel(project.classification)}
-                  </span>
+                  </Badge>
                 </div>
                 <h3 className="project-card-title">{project.name}</h3>
                 <div className="project-card-meta">
@@ -100,11 +114,22 @@ function ProjectsList() {
                   )}
                   <p>Transkript: 0 | Filer: 0</p>
                 </div>
-              </div>
+              </Card>
             </Link>
           ))}
         </div>
       )}
+
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Skapa nytt projekt"
+      >
+        <CreateProject
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleCreateSuccess}
+        />
+      </Modal>
     </div>
   )
 }

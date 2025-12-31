@@ -15,11 +15,12 @@
 
 .sidebar-header {
   padding: 1.25rem; /* p-5 */
-  min-height: 4rem; /* h-16 */
+  height: 4rem; /* h-16 - exact match to top-header */
   display: flex;
   flex-direction: column;
   justify-content: center;
-  border-bottom: 1px solid #f4f4f5; /* border-zinc-100 */
+  border-bottom: 1px solid #e4e4e7; /* border-zinc-200 - match top-header */
+  align-items: flex-start;
 }
 
 .dark .sidebar-header {
@@ -37,6 +38,7 @@
   color: #18181b; /* text-zinc-900 */
   font-family: var(--font-sans);
   margin-bottom: 0.25rem;
+  line-height: 1;
 }
 
 .dark .sidebar-logo {
@@ -157,7 +159,7 @@
 
 .sidebar-footer {
   padding: 1rem; /* p-4 */
-  border-top: 1px solid #f4f4f5; /* border-t border-zinc-100 */
+  border-top: 1px solid #e4e4e7; /* border-t border-zinc-200 - match top-header */
   display: flex;
   justify-content: space-between;
   align-items: center;

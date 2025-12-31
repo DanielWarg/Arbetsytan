@@ -1,14 +1,12 @@
+/* Card Component - Single global style for all cards */
+/* Used for: project cards, info panels, modals, workspace containers */
+
 .card {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
   padding: var(--spacing-xl);
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-
-.dark .card {
-  background: #18181b;
-  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .card-interactive {
@@ -24,4 +22,3 @@
 .dark .card-interactive:hover {
   border-color: #60a5fa;
 }
-

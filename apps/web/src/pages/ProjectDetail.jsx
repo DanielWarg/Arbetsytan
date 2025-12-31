@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
-import { Input, Textarea } from '../ui/Input'
+import { FileText, StickyNote, Mic, Upload } from 'lucide-react'
 import './ProjectDetail.css'
 
 function ProjectDetail() {
@@ -12,9 +12,8 @@ function ProjectDetail() {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showEventForm, setShowEventForm] = useState(false)
-  const [newEventType, setNewEventType] = useState('')
-  const [newEventMetadata, setNewEventMetadata] = useState('')
+  const [ingestMode, setIngestMode] = useState('document') // document, note, audio
+  const [contextCollapsed, setContextCollapsed] = useState(false)
 
   const fetchProject = async () => {
     try {
@@ -50,150 +49,163 @@ function ProjectDetail() {
     fetchProject()
   }, [id])
 
-  const handleCreateEvent = async (e) => {
-    e.preventDefault()
-    
-    try {
-      const username = 'admin'
-      const password = 'password'
-      const auth = btoa(`${username}:${password}`)
-      
-      let metadata = null
-      if (newEventMetadata.trim()) {
-        try {
-          metadata = JSON.parse(newEventMetadata)
-        } catch {
-          metadata = { note: newEventMetadata }
-        }
-      }
-      
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/events`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          event_type: newEventType,
-          metadata: metadata
-        })
-      })
-      
-      if (!response.ok) throw new Error('Failed to create event')
-      
-      setNewEventType('')
-      setNewEventMetadata('')
-      setShowEventForm(false)
-      fetchProject()
-    } catch (err) {
-      alert('Fel vid skapande av event: ' + err.message)
-    }
+  const handleDropzoneClick = () => {
+    // Non-functional for now - will trigger file input
   }
 
-  if (loading) return <div className="page">Laddar...</div>
-  if (error) return <div className="page">Fel: {error}</div>
-  if (!project) return <div className="page">Projekt hittades inte</div>
+  if (loading) return <div className="projects-page">Laddar...</div>
+  if (error) return <div className="projects-page">Fel: {error}</div>
+  if (!project) return <div className="projects-page">Projekt hittades inte</div>
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
-          <h1>{project.name}</h1>
-        </div>
-        <Button onClick={() => setShowEventForm(!showEventForm)}>
-          {showEventForm ? 'Avbryt' : 'Nytt event'}
-        </Button>
+    <div className="projects-page">
+      <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
+      <div className="projects-header">
+        <h2 className="projects-title">{project.name}</h2>
       </div>
 
-      <Card className="project-info">
-        <div className="info-section">
-          <h2>Information</h2>
-          {project.description && (
-            <p className="project-description">{project.description}</p>
-          )}
-          <div className="info-grid">
-            <div>
-              <span className="info-label">Klassificering:</span>
-              <Badge variant={project.classification === 'normal' ? 'normal' : project.classification === 'sensitive' ? 'sensitive' : 'source-sensitive'}>
-                {project.classification}
-              </Badge>
+      <div className="project-workspace">
+        {/* Left Column: Workspace / Material */}
+        <div className={`workspace-main ${contextCollapsed ? 'workspace-main-expanded' : ''}`}>
+          <div className="material-section">
+            {/* Toolbar - Small, secondary */}
+            <div className="ingest-toolbar">
+              <div className="toolbar-left">
+                <button 
+                  className={`toolbar-btn ${ingestMode === 'document' ? 'active' : ''}`}
+                  onClick={() => setIngestMode('document')}
+                  disabled
+                >
+                  <FileText size={14} />
+                  <span>Dokument</span>
+                </button>
+                <button 
+                  className={`toolbar-btn ${ingestMode === 'note' ? 'active' : ''}`}
+                  onClick={() => setIngestMode('note')}
+                  disabled
+                >
+                  <StickyNote size={14} />
+                  <span>Anteckning</span>
+                </button>
+                <button 
+                  className={`toolbar-btn ${ingestMode === 'audio' ? 'active' : ''}`}
+                  onClick={() => setIngestMode('audio')}
+                  disabled
+                >
+                  <Mic size={14} />
+                  <span>Röstmemo</span>
+                </button>
+              </div>
+              <button 
+                className="toolbar-toggle-btn"
+                onClick={() => setContextCollapsed(!contextCollapsed)}
+                aria-label={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
+                title={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
+              >
+                <div className="panel-toggle-container">
+                  <svg className="panel-toggle-arrow panel-toggle-arrow-left" width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <path d="M5 1L2 4L5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <div className="panel-toggle-icon">
+                    <div className="panel-toggle-box">
+                      {!contextCollapsed && <div className="panel-toggle-sidebar"></div>}
+                    </div>
+                  </div>
+                  <svg className="panel-toggle-arrow panel-toggle-arrow-right" width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <path d="M3 1L6 4L3 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              </button>
             </div>
-            <div>
-              <span className="info-label">Skapad:</span>
-              <span>{new Date(project.created_at).toLocaleString('sv-SE')}</span>
-            </div>
-            <div>
-              <span className="info-label">Uppdaterad:</span>
-              <span>{new Date(project.updated_at).toLocaleString('sv-SE')}</span>
+
+            {/* Primary Dropzone - Full width, calm, editorial */}
+            <div 
+              className="ingest-dropzone"
+              onClick={handleDropzoneClick}
+            >
+              <div className="dropzone-content">
+                <Upload size={32} className="dropzone-icon" />
+                <p className="dropzone-text">Dra hit en fil eller klicka för att välja</p>
+                <p className="dropzone-hint">.TXT, .DOCX, .PDF • Max 25MB</p>
+              </div>
             </div>
           </div>
         </div>
-      </Card>
 
-      {showEventForm && (
-        <Card className="create-form">
-          <form onSubmit={handleCreateEvent}>
-            <div className="form-group">
-              <label htmlFor="event-type">Event-typ *</label>
-              <Input
-                id="event-type"
-                type="text"
-                value={newEventType}
-                onChange={(e) => setNewEventType(e.target.value)}
-                required
-                placeholder="t.ex. note, meeting, document_added"
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="event-metadata">Metadata (JSON eller text)</label>
-              <Textarea
-                id="event-metadata"
-                value={newEventMetadata}
-                onChange={(e) => setNewEventMetadata(e.target.value)}
-                placeholder='{"key": "value"} eller vanlig text'
-                rows="3"
-              />
-            </div>
-            <div className="form-actions">
-              <Button type="submit" variant="success">Skapa event</Button>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <div className="events-section">
-        <h2>Event Timeline</h2>
-        {events.length === 0 ? (
-          <p className="empty-state">Inga events ännu.</p>
-        ) : (
-          <div className="events-timeline">
-            {events.map(event => (
-              <Card key={event.id} className="event-item">
-                <div className="event-time">
-                  {new Date(event.timestamp).toLocaleString('sv-SE')}
-                </div>
-                <div className="event-content">
-                  <div className="event-header">
-                    <span className="event-type">{event.event_type}</span>
-                    {event.actor && (
-                      <span className="event-actor">av {event.actor}</span>
+        {/* Right Column: Context */}
+        <div className={`workspace-context ${contextCollapsed ? 'workspace-context-collapsed' : ''}`}>
+          {!contextCollapsed && (
+            <>
+              <Card className="context-card">
+                <div className="context-section">
+                  <h3 className="context-title">Projektinfo</h3>
+                  <div className="context-info">
+                    <div className="context-item">
+                      <span className="context-label">Klassificering:</span>
+                      <Badge variant={project.classification === 'normal' ? 'normal' : project.classification === 'sensitive' ? 'sensitive' : 'source-sensitive'}>
+                        {project.classification}
+                      </Badge>
+                    </div>
+                    <div className="context-item">
+                      <span className="context-label">Skapad:</span>
+                      <span className="context-value">{new Date(project.created_at).toLocaleDateString('sv-SE')}</span>
+                    </div>
+                    <div className="context-item">
+                      <span className="context-label">Uppdaterad:</span>
+                      <span className="context-value">{new Date(project.updated_at).toLocaleDateString('sv-SE')}</span>
+                    </div>
+                    {project.description && (
+                      <div className="context-item context-description">
+                        <span className="context-label">Beskrivning:</span>
+                        <p className="context-value">{project.description}</p>
+                      </div>
                     )}
                   </div>
-                  {event.metadata && (
-                    <div className="event-metadata">
-                      <pre>{JSON.stringify(event.metadata, null, 2)}</pre>
+                </div>
+              </Card>
+
+              <Card className="context-card context-timeline">
+                <div className="context-section">
+                  <h3 className="context-title context-title-muted">Händelser</h3>
+                  {events.length === 0 ? (
+                    <p className="timeline-empty">Inga händelser ännu.</p>
+                  ) : (
+                    <div className="timeline-list">
+                      {events.map(event => (
+                        <div key={event.id} className="timeline-item">
+                          <div className="timeline-time">
+                            {new Date(event.timestamp).toLocaleDateString('sv-SE', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                          <div className="timeline-content">
+                            <div className="timeline-header">
+                              <span className="timeline-type">{event.event_type}</span>
+                              {event.actor && (
+                                <span className="timeline-actor">av {event.actor}</span>
+                              )}
+                            </div>
+                            {event.metadata && (
+                              <div className="timeline-metadata">
+                                <pre>{JSON.stringify(event.metadata, null, 2)}</pre>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               </Card>
-            ))}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
 export default ProjectDetail
-

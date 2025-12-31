@@ -1,95 +1,99 @@
-/* Projects List - Exact match to Copy/Paste ProjectsOverview.tsx */
+/* Projects List - Using global tokens and Card component */
 
 .projects-page {
-  padding: 1.5rem; /* p-6 */
+  padding: var(--spacing-3xl);
 }
 
 .projects-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem; /* mb-6 */
+  margin-bottom: var(--spacing-3xl);
 }
 
 .projects-title {
-  font-size: 1.5rem; /* text-2xl */
-  font-weight: 700; /* font-bold */
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
   font-family: var(--font-serif);
-  color: #18181b; /* text-zinc-900 */
-}
-
-.dark .projects-title {
-  color: #ffffff; /* dark:text-white */
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0;
+  padding: 0;
 }
 
 .btn-create-project {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem; /* gap-2 */
-  padding: 0.5rem 1rem; /* px-4 py-2 */
-  background: #18181b; /* bg-zinc-900 */
-  color: #ffffff; /* text-white */
-  font-size: 0.875rem; /* text-sm */
-  font-weight: 500;
-  border-radius: 0.125rem; /* rounded-sm */
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   border: none;
   cursor: pointer;
   transition: opacity 0.2s;
   text-decoration: none;
+  font-family: var(--font-sans);
+  height: auto;
+  line-height: 1;
 }
 
 .dark .btn-create-project {
-  background: #ffffff; /* dark:bg-white */
-  color: #000000; /* dark:text-black */
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
 }
 
 .btn-create-project:hover {
-  opacity: 0.9; /* hover:opacity-90 */
+  opacity: 0.9;
 }
 
 .projects-empty {
   text-align: center;
-  padding: 3rem 0; /* py-12 */
-  color: #71717a; /* text-zinc-500 */
-}
-
-.dark .projects-empty {
-  color: #a1a1aa; /* dark:text-zinc-400 */
+  padding: var(--spacing-4xl) 0;
+  color: var(--color-text-muted);
 }
 
 .empty-icon {
-  margin: 0 auto 1rem; /* mx-auto mb-4 */
+  margin: 0 auto var(--spacing-xl);
   opacity: 0.5;
 }
 
 .empty-title {
-  font-size: 1.125rem; /* text-lg */
-  font-weight: 600;
-  margin-bottom: 0.5rem; /* mt-2 */
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-family: var(--font-sans);
 }
 
 .empty-text {
-  font-size: 0.875rem; /* text-sm */
-  margin-top: 0.5rem; /* mt-2 */
-  margin-bottom: 1.5rem; /* mt-6 */
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-3xl);
+  font-family: var(--font-sans);
 }
 
 .projects-grid {
   display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr)); /* grid-cols-1 */
-  gap: 1rem; /* gap-4 */
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: var(--spacing-xl);
 }
 
 @media (min-width: 768px) {
   .projects-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)); /* md:grid-cols-2 */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
   .projects-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr)); /* lg:grid-cols-3 */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -98,88 +102,37 @@
   color: inherit;
 }
 
+/* Project card content styling - Card component handles container */
 .project-card {
-  background: #ffffff; /* bg-white */
-  padding: 1rem; /* p-4 */
-  border-radius: 0.125rem; /* rounded-sm */
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
-  border: 1px solid #e4e4e7; /* border-zinc-200 */
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.dark .project-card {
-  background: #27272a; /* dark:bg-zinc-800 */
-  border-color: #3f3f46; /* dark:border-zinc-700 */
-}
-
-.project-card:hover {
-  border-color: #3b82f6; /* hover:border-blue-500 */
-}
-
-.dark .project-card:hover {
-  border-color: #60a5fa; /* dark:hover:border-blue-400 */
+  /* Card component provides: background, border, padding, radius */
 }
 
 .project-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem; /* mb-2 */
+  margin-bottom: var(--spacing-md);
 }
 
 .project-icon {
-  color: #71717a; /* text-zinc-500 */
-}
-
-.project-badge {
-  font-size: 0.75rem; /* text-xs */
-  padding: 0.25rem 0.5rem; /* px-2 py-1 */
-  border-radius: 0.125rem; /* rounded-sm */
-}
-
-.badge-normal {
-  background: #f4f4f5; /* bg-zinc-100 */
-  color: #3f3f46; /* text-zinc-700 */
-}
-
-.dark .badge-normal {
-  background: #3f3f46; /* dark:bg-zinc-700 */
-  color: #d4d4d8; /* dark:text-zinc-300 */
-}
-
-.badge-sensitive {
-  background: #fee2e2; /* bg-red-100 */
-  color: #991b1b; /* text-red-700 */
-}
-
-.dark .badge-sensitive {
-  background: rgba(220, 38, 38, 0.3); /* dark:bg-red-900/30 */
-  color: #fca5a5; /* dark:text-red-300 */
+  color: var(--color-text-muted);
 }
 
 .project-card-title {
-  font-weight: 600; /* font-semibold */
-  color: #18181b; /* text-zinc-900 */
-  margin-bottom: 0.5rem; /* mb-2 */
-  font-size: 1rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-lg);
   font-family: var(--font-sans);
 }
 
-.dark .project-card-title {
-  color: #ffffff; /* dark:text-white */
-}
-
 .project-card-meta {
-  font-size: 0.75rem; /* text-xs */
-  color: #71717a; /* text-zinc-500 */
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem; /* space-y-1 */
-}
-
-.dark .project-card-meta {
-  color: #a1a1aa; /* dark:text-zinc-400 */
+  gap: var(--spacing-sm);
+  font-family: var(--font-sans);
 }
 
 .project-card-meta p {
@@ -187,11 +140,7 @@
 }
 
 .project-card-description {
-  margin-top: 0.5rem;
-  color: #71717a;
-  font-size: 0.75rem;
-}
-
-.dark .project-card-description {
-  color: #a1a1aa;
+  margin-top: var(--spacing-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }

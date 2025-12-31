@@ -1,31 +1,20 @@
-/* Badge - Match Copy/Paste styling */
+/* Badge Component - Global style using only CSS variables */
+
 .badge {
   display: inline-block;
-  font-size: 0.75rem; /* text-xs */
-  padding: 0.25rem 0.5rem; /* px-2 py-1 */
-  border-radius: 0.125rem; /* rounded-sm */
-  font-weight: 500;
+  font-size: var(--font-size-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-medium);
 }
 
 .badge-normal {
-  background: #f4f4f5; /* bg-zinc-100 */
-  color: #3f3f46; /* text-zinc-700 */
-}
-
-.dark .badge-normal {
-  background: #3f3f46; /* dark:bg-zinc-700 */
-  color: #d4d4d8; /* dark:text-zinc-300 */
+  background: var(--color-badge-normal-bg);
+  color: var(--color-badge-normal-text);
 }
 
 .badge-sensitive,
 .badge-source-sensitive {
-  background: #fee2e2; /* bg-red-100 */
-  color: #991b1b; /* text-red-700 */
+  background: var(--color-badge-sensitive-bg);
+  color: var(--color-badge-sensitive-text);
 }
-
-.dark .badge-sensitive,
-.dark .badge-source-sensitive {
-  background: rgba(220, 38, 38, 0.3); /* dark:bg-red-900/30 */
-  color: #fca5a5; /* dark:text-red-300 */
-}
-

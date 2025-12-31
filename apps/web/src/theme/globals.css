@@ -1,6 +1,7 @@
 /**
- * Design System - Ported from Copy/Paste
- * CSS Variables for theming
+ * Global Design System - Copy/Paste Style
+ * Single source of truth for all UI tokens
+ * NO hard-coded colors or typography outside this file
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Merriweather:wght@300;400;700&display=swap');
@@ -11,26 +12,64 @@
   --font-serif: Merriweather, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Light Mode Colors */
+  /* Typography Scale - Global heading scale */
+  --font-size-xs: 0.625rem;      /* 10px */
+  --font-size-sm: 0.75rem;       /* 12px */
+  --font-size-base: 0.875rem;    /* 14px */
+  --font-size-lg: 1rem;          /* 16px */
+  --font-size-xl: 1.125rem;      /* 18px */
+  --font-size-2xl: 1.5rem;       /* 24px */
+  --font-size-3xl: 1.75rem;      /* 28px */
+  
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Light Mode Colors - Surface & Background */
   --color-bg-main: #fafafa;
   --color-bg-surface: #ffffff;
   --color-bg-active: #f4f4f5;
   --color-bg-content: rgba(250, 250, 250, 0.5);
+  --color-bg-hover: rgba(244, 244, 245, 0.3);
   
+  /* Light Mode Colors - Text */
   --color-text-primary: #18181b;
   --color-text-muted: #71717a;
   --color-text-secondary: #a1a1aa;
   --color-text-medium: #52525b;
+  --color-text-label: #71717a;
   
+  /* Light Mode Colors - Borders */
   --color-border-default: #e4e4e7;
   --color-border-subtle: #f4f4f5;
-
+  --color-border-hover: #a1a1aa;
+  
+  /* Light Mode Colors - Interactive */
+  --color-interactive-default: #18181b;
+  --color-interactive-hover: rgba(24, 24, 27, 0.9);
+  --color-interactive-text: #ffffff;
+  
   /* Accent Colors */
   --color-accent-status: #dc2626;
   --color-accent-success: #059669;
   --color-accent-success-hover: #047857;
   --color-accent-warning: #f59e0b;
   --color-accent-error: #ef4444;
+  
+  /* Badge Colors - Normal */
+  --color-badge-normal-bg: #f4f4f5;
+  --color-badge-normal-text: #3f3f46;
+  
+  /* Badge Colors - Sensitive */
+  --color-badge-sensitive-bg: #fee2e2;
+  --color-badge-sensitive-text: #991b1b;
+  
+  /* Input Colors */
+  --color-input-bg: #f4f4f5;
+  --color-input-border: #e4e4e7;
+  --color-input-focus-border: #3b82f6;
+  --color-input-focus-ring: rgba(59, 130, 246, 0.1);
 
   /* Spacing */
   --spacing-xs: 0.125rem;
@@ -50,24 +89,50 @@
 
   /* Layout */
   --content-max-width: 64rem;
+  --sidebar-width: 16rem;
+  --header-height: 3.5rem;
 }
 
 .dark {
-  /* Dark Mode Colors */
+  /* Dark Mode Colors - Surface & Background */
   --color-bg-main: #09090b;
   --color-bg-surface: #18181b;
   --color-bg-active: rgba(255, 255, 255, 0.1);
   --color-bg-content: rgba(0, 0, 0, 0.2);
   --color-bg-code: rgba(24, 24, 27, 0.5);
+  --color-bg-hover: rgba(255, 255, 255, 0.02);
   
+  /* Dark Mode Colors - Text */
   --color-text-primary: #ffffff;
   --color-text-muted: #a1a1aa;
   --color-text-secondary: #71717a;
   --color-text-label: #52525b;
   --color-text-secondary-text: #e4e4e7;
   
+  /* Dark Mode Colors - Borders */
   --color-border-default: rgba(255, 255, 255, 0.05);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-hover: rgba(255, 255, 255, 0.2);
   --color-border-code: #27272a;
+  
+  /* Dark Mode Colors - Interactive */
+  --color-interactive-default: #ffffff;
+  --color-interactive-hover: rgba(255, 255, 255, 0.9);
+  --color-interactive-text: #000000;
+  
+  /* Dark Mode Badge Colors - Normal */
+  --color-badge-normal-bg: #3f3f46;
+  --color-badge-normal-text: #d4d4d8;
+  
+  /* Dark Mode Badge Colors - Sensitive */
+  --color-badge-sensitive-bg: rgba(220, 38, 38, 0.3);
+  --color-badge-sensitive-text: #fca5a5;
+  
+  /* Dark Mode Input Colors */
+  --color-input-bg: #27272a;
+  --color-input-border: #3f3f46;
+  --color-input-focus-border: #60a5fa;
+  --color-input-focus-ring: rgba(96, 165, 250, 0.2);
 }
 
 * {
@@ -78,6 +143,8 @@
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--color-bg-main);
@@ -86,7 +153,43 @@ body {
 }
 
 .dark body {
-  background: #09090b;
+  background: var(--color-bg-main);
+}
+
+/* Global Heading Scale */
+h1, .h1 {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-serif);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+h2, .h2 {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-serif);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+h3, .h3 {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+h4, .h4 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  line-height: 1.4;
 }
 
 code {
@@ -117,3 +220,6 @@ code {
   background: #e4e4e7;
 }
 
+.dark ::selection {
+  background: #27272a;
+}
