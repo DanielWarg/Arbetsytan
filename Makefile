@@ -110,6 +110,40 @@ verify-fas4-static:
 	@echo "Note: 'Originalmaterial bevaras i säkert lager' should be added to DocumentView tooltip (see DEMO_NARRATIVE.md)"
 	@echo "✓ FAS 4 (static) PASS"
 
+verify-fas4-5:
+	@echo "=== FAS 4.5: Editorial Control Layer ==="
+	@echo "Testing due_date in project responses..."
+	@PROJECT_ID=$$(curl -s -u admin:password -X POST http://localhost:8000/api/projects \
+		-H "Content-Type: application/json" \
+		-d '{"name":"FAS4.5 Test","classification":"normal","due_date":"2025-12-31T00:00:00Z"}' \
+		| grep -o '"id":[0-9]*' | cut -d: -f2 | head -1); \
+		if [ -z "$$PROJECT_ID" ]; then \
+			echo "✗ Project creation failed"; \
+			exit 1; \
+		fi; \
+		echo "✓ Project created (ID: $$PROJECT_ID)"; \
+		if ! curl -s -u admin:password http://localhost:8000/api/projects/$$PROJECT_ID | grep -q "due_date"; then \
+			echo "✗ due_date missing in project response"; \
+			exit 1; \
+		fi; \
+		echo "✓ due_date present in project response"; \
+		echo "Testing project edit (PUT)..."; \
+		if ! curl -s -u admin:password -X PUT http://localhost:8000/api/projects/$$PROJECT_ID \
+			-H "Content-Type: application/json" \
+			-d '{"name":"FAS4.5 Test Updated"}' | grep -q "FAS4.5 Test Updated"; then \
+			echo "✗ Project edit failed"; \
+			exit 1; \
+		fi; \
+		echo "✓ Project edit works"; \
+		echo "Testing project delete (DELETE)..."; \
+		DELETE_STATUS=$$(curl -s -u admin:password -X DELETE http://localhost:8000/api/projects/$$PROJECT_ID -w "%{http_code}" -o /dev/null); \
+		if [ "$$DELETE_STATUS" != "204" ]; then \
+			echo "✗ Project delete failed (status: $$DELETE_STATUS, expected 204)"; \
+			exit 1; \
+		fi; \
+		echo "✓ Project delete works (status: 204)"; \
+		echo "✓ FAS 4.5 PASS"
+
 verify-all:
 	@echo "🧭 Running all FAS 0-4 verifications..."
 	@$(MAKE) verify-fas0
@@ -117,6 +151,7 @@ verify-all:
 	@$(MAKE) verify-fas2
 	@$(MAKE) verify-sanitization
 	@$(MAKE) verify-fas4-static
+	@$(MAKE) verify-fas4-5
 	@echo ""
 	@echo "🟢 All verifications PASSED - System ready for FAS 5"
 

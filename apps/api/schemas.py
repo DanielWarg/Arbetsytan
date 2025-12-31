@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional, Dict, Any
-from datetime import datetime
+from typing import Optional, Dict, Any, List
+from datetime import datetime, date
 from models import Classification
 
 
@@ -8,12 +8,16 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     classification: Classification = Classification.NORMAL
+    due_date: Optional[datetime] = None
+    tags: Optional[List[str]] = None
 
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     classification: Optional[Classification] = None
+    due_date: Optional[datetime] = None
+    tags: Optional[List[str]] = None
 
 
 class ProjectResponse(BaseModel):
@@ -21,6 +25,8 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str]
     classification: str
+    due_date: Optional[datetime] = None
+    tags: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 

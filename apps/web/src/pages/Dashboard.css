@@ -145,7 +145,93 @@
   display: block;
 }
 
-.project-due-soon {
+.project-due-date {
+  display: block;
+}
+
+.project-due-date-normal {
+  color: var(--color-text-muted);
+}
+
+.project-due-date-due-soon {
   color: var(--color-accent-warning);
   font-weight: var(--font-weight-semibold);
+}
+
+.project-due-date-overdue {
+  color: var(--color-brand-red);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Deadlines nära section */
+.deadlines-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.deadline-item-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.deadline-item {
+  padding: var(--spacing-md);
+}
+
+.deadline-item-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.deadline-item-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  flex: 1;
+}
+
+.deadline-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.deadline-item-date {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+}
+
+.deadline-badge {
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+}
+
+/* Urgency variants (not classification) */
+.deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.1); /* orange-500/10 */
+  color: var(--color-accent-warning);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dark .deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b; /* orange-500 */
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.1); /* red-600/10 */
+  color: var(--color-brand-red);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.dark .deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #fca5a5; /* red-300 */
+  border: 1px solid rgba(220, 38, 38, 0.3);
 }

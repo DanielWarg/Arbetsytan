@@ -5,6 +5,7 @@ import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
+import { getDueUrgency } from '../lib/urgency'
 import { FileText, StickyNote, Mic, Upload, File, Info, Edit, Trash2 } from 'lucide-react'
 import './ProjectDetail.css'
 
@@ -143,6 +144,18 @@ function ProjectDetail() {
     return 'normal'
   }
 
+  const getDueDateStatus = (dueDate) => {
+    if (!dueDate) return null
+    const due = new Date(dueDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    due.setHours(0, 0, 0, 0)
+    const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysUntilDue < 0) return 'overdue'
+    if (daysUntilDue <= 7) return 'due-soon'
+    return 'normal'
+  }
+
   const handleDeleteProject = async () => {
     setDeleting(true)
     try {
@@ -162,6 +175,7 @@ function ProjectDetail() {
         throw new Error(errorData.detail || 'Failed to delete project')
       }
       
+      // DELETE returns 204 No Content - do NOT call .json()
       // Redirect to projects list
       navigate('/projects')
     } catch (err) {
@@ -179,7 +193,23 @@ function ProjectDetail() {
       <div className="workspace-container">
         <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
         <div className="projects-header">
-          <h2 className="projects-title">{project.name}</h2>
+          <div className="project-title-section">
+            <h2 className="projects-title">{project.name}</h2>
+            {(() => {
+              const u = getDueUrgency(project.due_date)
+              if (!u.normalizedDate) return null
+              return (
+                <div className="project-header-due-date">
+                  <span className="project-due-date-muted">{u.normalizedDate}</span>
+                  {u.label && (
+                    <Badge variant="normal" className={`deadline-badge ${u.variant}`}>
+                      {u.label}
+                    </Badge>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
           <div className="project-header-actions">
             <button 
               className="project-action-btn"
@@ -372,10 +402,32 @@ function ProjectDetail() {
                       <span className="context-label">Uppdaterad:</span>
                       <span className="context-value">{new Date(project.updated_at).toLocaleDateString('sv-SE')}</span>
                     </div>
+                    {project.due_date && (
+                      <div className="context-item">
+                        <span className="context-label">Deadline:</span>
+                        <span className={`context-value context-due-date context-due-date-${getDueDateStatus(project.due_date)}`}>
+                          {new Date(project.due_date).toLocaleDateString('sv-SE')}
+                          {getDueDateStatus(project.due_date) === 'due-soon' && ' ⚠️'}
+                          {getDueDateStatus(project.due_date) === 'overdue' && ' 🔴'}
+                        </span>
+                      </div>
+                    )}
                     {project.description && (
                       <div className="context-item context-description">
                         <span className="context-label">Beskrivning:</span>
                         <p className="context-value">{project.description}</p>
+                      </div>
+                    )}
+                    {project.tags && project.tags.length > 0 && (
+                      <div className="context-item">
+                        <span className="context-label">Taggar:</span>
+                        <div className="context-tags">
+                          {project.tags.map((tag, index) => (
+                            <Badge key={index} variant="normal" className="tag-badge">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -425,22 +477,21 @@ function ProjectDetail() {
       </div>
       
       {/* Edit Project Modal */}
-      {showEditModal && (
-        <Modal onClose={() => setShowEditModal(false)}>
-          <CreateProject
-            project={project}
-            onClose={() => setShowEditModal(false)}
-            onSuccess={(updatedProject) => {
-              setProject(updatedProject)
-              setShowEditModal(false)
-            }}
-          />
-        </Modal>
-      )}
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)}>
+        <CreateProject
+          project={project}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={async (updatedProject) => {
+            setProject(updatedProject)
+            setShowEditModal(false)
+            // Refresh project data to ensure UI is up to date
+            await fetchProject()
+          }}
+        />
+      </Modal>
       
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <Modal onClose={() => setShowDeleteModal(false)}>
+      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)}>
           <div className="delete-confirmation">
             <h3 className="delete-confirmation-title">Radera projekt permanent</h3>
             <p className="delete-confirmation-text">
@@ -466,7 +517,6 @@ function ProjectDetail() {
             </div>
           </div>
         </Modal>
-      )}
     </div>
   )
 }

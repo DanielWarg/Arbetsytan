@@ -5,6 +5,7 @@ import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
+import { getDueUrgency } from '../lib/urgency'
 import { FolderPlus, Folder } from 'lucide-react'
 import './ProjectsList.css'
 
@@ -68,13 +69,6 @@ function ProjectsList() {
     return 'badge-normal'
   }
 
-  const isDueSoon = (dueDate) => {
-    if (!dueDate) return false
-    const due = new Date(dueDate)
-    const today = new Date()
-    const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return daysUntilDue >= 0 && daysUntilDue <= 7
-  }
 
   return (
     <div className="projects-list-page">
@@ -119,17 +113,34 @@ function ProjectsList() {
                 </div>
                 <h3 className="project-card-title">{project.name}</h3>
                 <div className="project-card-meta">
-                  {project.start_date && (
-                    <p>Start: {new Date(project.start_date).toLocaleDateString('sv-SE')}</p>
-                  )}
-                  {project.due_date && (
-                    <p className={isDueSoon(project.due_date) ? 'project-due-soon' : ''}>
-                      Deadline: {new Date(project.due_date).toLocaleDateString('sv-SE')}
-                      {isDueSoon(project.due_date) && ' ⚠️'}
-                    </p>
-                  )}
+                  {(() => {
+                    const u = getDueUrgency(project.due_date)
+                    if (!u.normalizedDate) return null
+                    return (
+                      <div className="project-due-date-row">
+                        <span className="project-due-date-muted">{u.normalizedDate}</span>
+                        {u.label && (
+                          <Badge variant="normal" className={`deadline-badge ${u.variant}`}>
+                            {u.label}
+                          </Badge>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {project.description && (
                     <p className="project-card-description">{project.description}</p>
+                  )}
+                  {project.tags && project.tags.length > 0 && (
+                    <div className="project-card-tags">
+                      {project.tags.slice(0, 3).map((tag, index) => (
+                        <Badge key={index} variant="normal" className="tag-badge-small">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {project.tags.length > 3 && (
+                        <span className="project-tags-more">+{project.tags.length - 3}</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </Card>

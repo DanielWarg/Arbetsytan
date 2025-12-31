@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
+import { getDueUrgency } from '../lib/urgency'
 import './Dashboard.css'
 
 function Dashboard() {
   const [project, setProject] = useState(null)
+  const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const fetchLatestProject = async () => {
+    const fetchData = async () => {
       try {
         const username = 'admin'
         const password = 'password'
@@ -25,6 +27,21 @@ function Dashboard() {
         if (!response.ok) throw new Error('Failed to fetch projects')
         
         const data = await response.json()
+        
+        // DEBUG: Log projects payload before filtering
+        console.log('[DEBUG] Total projects from API:', data.length)
+        const projectsWithDueDate = data.filter(p => p.due_date)
+        console.log('[DEBUG] Projects with due_date:', projectsWithDueDate.length)
+        if (projectsWithDueDate.length > 0) {
+          console.log('[DEBUG] Sample project with due_date:', {
+            id: projectsWithDueDate[0].id,
+            name: projectsWithDueDate[0].name,
+            due_date: projectsWithDueDate[0].due_date
+          })
+        }
+        
+        setProjects(data)
+        
         // Backend sorterar redan på updated_at.desc(), ta det första (senaste arbetade/öppnade)
         if (data.length > 0) {
           setProject(data[0])
@@ -36,15 +53,38 @@ function Dashboard() {
       }
     }
     
-    fetchLatestProject()
+    fetchData()
   }, [])
 
-  const isDueSoon = (dueDate) => {
-    if (!dueDate) return false
-    const due = new Date(dueDate)
-    const today = new Date()
-    const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return daysUntilDue >= 0 && daysUntilDue <= 7
+  // Get projects with near deadlines (using shared urgency helper)
+  const nearDeadlineProjects = projects
+    .filter(p => {
+      const urgency = getDueUrgency(p.due_date)
+      // DEBUG: Log each project's urgency
+      if (p.due_date) {
+        console.log(`[DEBUG] Project ${p.id} (${p.name}): due_date=${p.due_date}, urgency=`, urgency)
+      }
+      return urgency.label !== null // Only show projects with warning/danger/overdue
+    })
+    .sort((a, b) => {
+      // Sort by normalizedDate ascending (earliest first)
+      const urgencyA = getDueUrgency(a.due_date)
+      const urgencyB = getDueUrgency(b.due_date)
+      if (!urgencyA.normalizedDate) return 1
+      if (!urgencyB.normalizedDate) return -1
+      return urgencyA.normalizedDate.localeCompare(urgencyB.normalizedDate)
+    })
+    .slice(0, 5) // Limit to 5
+  
+  // DEBUG: Log after filtering
+  console.log('[DEBUG] urgentProjects.length:', nearDeadlineProjects.length)
+  if (nearDeadlineProjects.length > 0) {
+    console.log('[DEBUG] urgentProjects:', nearDeadlineProjects.map(p => ({
+      id: p.id,
+      name: p.name,
+      due_date: p.due_date,
+      urgency: getDueUrgency(p.due_date)
+    })))
   }
 
   if (loading) return <div className="dashboard-page">Laddar...</div>
@@ -59,6 +99,52 @@ function Dashboard() {
         </Link>
       </div>
       
+      {/* Deadlines nära section */}
+      {(() => {
+        console.log('[DEBUG] Rendering Deadlines nära check: nearDeadlineProjects.length =', nearDeadlineProjects.length)
+        return null
+      })()}
+      {nearDeadlineProjects.length > 0 && (
+        <section className="dashboard-section">
+          {console.log('[DEBUG] Rendering Deadlines nära section')}
+          <h2 className="section-title">Deadlines nära</h2>
+          <div className="deadlines-list">
+            {nearDeadlineProjects.map(proj => {
+              const urgency = getDueUrgency(proj.due_date)
+              // Use normalizedDate from helper (single source of truth)
+              const dueDateStr = urgency.normalizedDate || ''
+              
+              return (
+                <Link 
+                  key={proj.id} 
+                  to={`/projects/${proj.id}`} 
+                  className="deadline-item-link"
+                >
+                  <Card className="deadline-item">
+                    <div className="deadline-item-content">
+                      <span className="deadline-item-title">{proj.name}</span>
+                      <div className="deadline-item-meta">
+                        <span className="deadline-item-date">{dueDateStr}</span>
+                        {urgency.variant === 'warning' && (
+                          <Badge variant="normal" className="deadline-badge warning">
+                            {urgency.label}
+                          </Badge>
+                        )}
+                        {urgency.variant === 'danger' && (
+                          <Badge variant="normal" className="deadline-badge danger">
+                            {urgency.label}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <section className="dashboard-section">
         <h2 className="section-title">Senast arbetade projekt</h2>
         {!project ? (
@@ -82,15 +168,15 @@ function Dashboard() {
                 <p className="project-description">{project.description}</p>
               )}
               <div className="project-meta">
-                {project.start_date && (
-                  <span>Start: {new Date(project.start_date).toLocaleDateString('sv-SE')}</span>
-                )}
-                {project.due_date && (
-                  <span className={isDueSoon(project.due_date) ? 'project-due-soon' : ''}>
-                    Deadline: {new Date(project.due_date).toLocaleDateString('sv-SE')}
-                    {isDueSoon(project.due_date) && ' ⚠️'}
-                  </span>
-                )}
+                {project.due_date && (() => {
+                  const urgency = getDueUrgency(project.due_date)
+                  return (
+                    <span className={`project-due-date project-due-date-${urgency.variant === 'warning' ? 'due-soon' : urgency.variant === 'danger' ? 'overdue' : 'normal'}`}>
+                      Deadline: {new Date(project.due_date).toLocaleDateString('sv-SE')}
+                      {urgency.label && ` • ${urgency.label}`}
+                    </span>
+                  )
+                })()}
               </div>
             </Card>
           </Link>

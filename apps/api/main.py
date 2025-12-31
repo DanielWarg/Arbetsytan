@@ -101,7 +101,9 @@ async def create_project(
     db_project = Project(
         name=project.name,
         description=project.description,
-        classification=project.classification
+        classification=project.classification,
+        due_date=project.due_date,
+        tags=project.tags
     )
     db.add(db_project)
     db.commit()
@@ -163,6 +165,16 @@ async def update_project(
             changes["classification"] = {"old": project.classification.value, "new": project_update.classification.value}
         project.classification = project_update.classification
     
+    if project_update.due_date is not None:
+        if project.due_date != project_update.due_date:
+            changes["due_date"] = {"old": str(project.due_date) if project.due_date else None, "new": str(project_update.due_date) if project_update.due_date else None}
+        project.due_date = project_update.due_date
+    
+    if project_update.tags is not None:
+        if project.tags != project_update.tags:
+            changes["tags"] = {"old": project.tags, "new": project_update.tags}
+        project.tags = project_update.tags
+    
     # Update updated_at is automatic via onupdate
     
     db.commit()
@@ -213,7 +225,11 @@ async def delete_project(
                 # Ignore errors (file might already be deleted)
                 pass
     
-    # Delete project (cascade will delete events and documents from DB)
+    # Delete events first (explicit cascade)
+    db.query(ProjectEvent).filter(ProjectEvent.project_id == project_id).delete()
+    # Delete documents (cascade should handle, but explicit for safety)
+    db.query(Document).filter(Document.project_id == project_id).delete()
+    # Delete project
     db.delete(project)
     db.commit()
     

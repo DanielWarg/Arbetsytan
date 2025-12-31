@@ -153,9 +153,90 @@
   margin-top: var(--spacing-sm);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.project-due-soon {
+.project-due-date {
+  margin: 0;
+}
+
+.project-due-date-normal {
+  color: var(--color-text-muted);
+}
+
+.project-due-date-due-soon {
   color: var(--color-accent-warning);
   font-weight: var(--font-weight-semibold);
+}
+
+.project-due-date-overdue {
+  color: var(--color-brand-red);
+  font-weight: var(--font-weight-semibold);
+}
+
+.project-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+  align-items: center;
+}
+
+.tag-badge-small {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+}
+
+.project-tags-more {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-left: var(--spacing-xs);
+}
+
+/* Due date row styling */
+.project-due-date-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+}
+
+.project-due-date-muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Urgency badge variants (reused from Dashboard) */
+.deadline-badge {
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+}
+
+.deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-accent-warning);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dark .deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-brand-red);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.dark .deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(220, 38, 38, 0.3);
 }

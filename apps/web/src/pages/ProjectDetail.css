@@ -23,6 +23,53 @@
   padding: 0;
 }
 
+.project-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.project-header-due-date {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.project-due-date-muted {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Urgency badge variants (reused from Dashboard) */
+.deadline-badge {
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+}
+
+.deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-accent-warning);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dark .deadline-badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-brand-red);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.dark .deadline-badge.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #fca5a5;
+  border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
 .project-header-actions {
   display: flex;
   align-items: center;
@@ -625,6 +672,36 @@
 
 .dark .context-description .context-value {
   color: #a1a1aa; /* dark:text-zinc-400 */
+}
+
+.context-due-date {
+  font-weight: var(--font-weight-normal);
+}
+
+.context-due-date-normal {
+  color: var(--color-text-muted);
+}
+
+.context-due-date-due-soon {
+  color: var(--color-accent-warning);
+  font-weight: var(--font-weight-semibold);
+}
+
+.context-due-date-overdue {
+  color: var(--color-brand-red);
+  font-weight: var(--font-weight-semibold);
+}
+
+.context-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+.tag-badge {
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
 }
 
 /* Timeline - Muted and Secondary */

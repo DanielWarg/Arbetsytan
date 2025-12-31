@@ -5,9 +5,29 @@ CREATE TABLE IF NOT EXISTS projects (
     name VARCHAR NOT NULL,
     description VARCHAR,
     classification VARCHAR NOT NULL DEFAULT 'normal',
+    due_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Add due_date, description, and tags columns if they don't exist (idempotent)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='projects' AND column_name='due_date') THEN
+        ALTER TABLE projects ADD COLUMN due_date TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='projects' AND column_name='description') THEN
+        ALTER TABLE projects ADD COLUMN description TEXT;
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='projects' AND column_name='tags') THEN
+        ALTER TABLE projects ADD COLUMN tags JSONB DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS project_events (
     id SERIAL PRIMARY KEY,

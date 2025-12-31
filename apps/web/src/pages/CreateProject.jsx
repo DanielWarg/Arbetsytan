@@ -24,6 +24,17 @@ function CreateProject({ onClose, onSuccess, project = null }) {
       setName(project.name || '')
       setDescription(project.description || '')
       setClassification(project.classification || 'normal')
+      if (project.due_date) {
+        const dueDate = new Date(project.due_date)
+        setDueDate(dueDate.toISOString().split('T')[0])
+      } else {
+        setDueDate('')
+      }
+      if (project.tags && Array.isArray(project.tags)) {
+        setTags(project.tags.join(', '))
+      } else {
+        setTags('')
+      }
     }
   }, [project])
 
@@ -63,6 +74,12 @@ function CreateProject({ onClose, onSuccess, project = null }) {
       
       const method = isEditMode ? 'PUT' : 'POST'
       
+      // Parse tags from comma-separated string
+      // Normalize: trim, remove empty, limit to 10 tags
+      const tagsArray = tags.trim() 
+        ? tags.split(',').map(t => t.trim()).filter(t => t.length > 0).slice(0, 10)
+        : []
+      
       const response = await fetch(url, {
         method: method,
         headers: {
@@ -72,8 +89,9 @@ function CreateProject({ onClose, onSuccess, project = null }) {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          classification: classification
-          // Note: startDate, dueDate, tags not yet supported by backend
+          classification: classification,
+          due_date: dueDate ? new Date(dueDate).toISOString() : null,
+          tags: tagsArray
         })
       })
       
