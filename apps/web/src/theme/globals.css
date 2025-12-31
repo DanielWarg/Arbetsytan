@@ -26,23 +26,39 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Light Mode Colors - Surface & Background */
-  --color-bg-main: #fafafa;
-  --color-bg-surface: #ffffff;
-  --color-bg-active: #f4f4f5;
-  --color-bg-content: rgba(250, 250, 250, 0.5);
+  /* Copy/Paste Base Tokens - Surface & Background (for alias mapping) */
+  --cp-color-bg-main: #fafafa;
+  --cp-color-bg-surface: #ffffff;
+  --cp-color-bg-active: #f4f4f5;
+  --cp-color-bg-content: rgba(250, 250, 250, 0.5);
+  
+  /* Copy/Paste Base Tokens - Text (for alias mapping) */
+  --cp-color-text-primary: #18181b;
+  --cp-color-text-muted: #71717a;
+  --cp-color-text-secondary: #a1a1aa;
+  --cp-color-text-medium: #52525b;
+  
+  /* Copy/Paste Base Tokens - Borders (for alias mapping) */
+  --cp-color-border-default: #e4e4e7;
+  --cp-color-border-subtle: #f4f4f5;
+  
+  /* Light Mode Colors - Surface & Background (aliases to Copy/Paste base tokens) */
+  --color-bg-main: var(--cp-color-bg-main);
+  --color-bg-surface: var(--cp-color-bg-surface);
+  --color-bg-active: var(--cp-color-bg-active);
+  --color-bg-content: var(--cp-color-bg-content);
   --color-bg-hover: rgba(244, 244, 245, 0.3);
   
-  /* Light Mode Colors - Text */
-  --color-text-primary: #18181b;
-  --color-text-muted: #71717a;
-  --color-text-secondary: #a1a1aa;
-  --color-text-medium: #52525b;
-  --color-text-label: #71717a;
+  /* Light Mode Colors - Text (aliases to Copy/Paste base tokens) */
+  --color-text-primary: var(--cp-color-text-primary);
+  --color-text-muted: var(--cp-color-text-muted);
+  --color-text-secondary: var(--cp-color-text-secondary);
+  --color-text-medium: var(--cp-color-text-medium);
+  --color-text-label: var(--cp-color-text-muted);
   
-  /* Light Mode Colors - Borders */
-  --color-border-default: #e4e4e7;
-  --color-border-subtle: #f4f4f5;
+  /* Light Mode Colors - Borders (aliases to Copy/Paste base tokens) */
+  --color-border-default: var(--cp-color-border-default);
+  --color-border-subtle: var(--cp-color-border-subtle);
   --color-border-hover: #a1a1aa;
   
   /* Light Mode Colors - Interactive */
@@ -50,12 +66,29 @@
   --color-interactive-hover: rgba(24, 24, 27, 0.9);
   --color-interactive-text: #ffffff;
   
-  /* Accent Colors */
-  --color-accent-status: #dc2626;
-  --color-accent-success: #059669;
-  --color-accent-success-hover: #047857;
-  --color-accent-warning: #f59e0b;
-  --color-accent-error: #ef4444;
+  /* Copy/Paste Base Tokens (for alias mapping) */
+  --cp-color-accent-status: #dc2626;
+  --cp-color-accent-success: #059669;
+  --cp-color-accent-success-hover: #047857;
+  --cp-color-accent-warning: #f59e0b;
+  --cp-color-accent-error: #ef4444;
+  
+  /* Brand Red - Alias to Copy/Paste accent-status (exact match) */
+  --color-brand-red: var(--cp-color-accent-status);
+  
+  /* Accent Colors - Aliases to Copy/Paste tokens */
+  --color-accent-status: var(--cp-color-accent-status);
+  --color-accent-success: var(--cp-color-accent-success);
+  --color-accent-success-hover: var(--cp-color-accent-success-hover);
+  --color-accent-warning: var(--cp-color-accent-warning);
+  --color-accent-error: var(--cp-color-accent-error);
+  
+  /* Classification Colors - Aliases to Copy/Paste palette */
+  --color-classification-offentlig: var(--cp-color-accent-success); /* Copy/Paste success green */
+  --color-classification-offentlig-dark: var(--cp-color-accent-success-hover); /* Copy/Paste success hover */
+  --color-classification-kanslig: var(--cp-color-accent-warning); /* Copy/Paste warning orange */
+  --color-classification-kanslig-dark: #ea580c; /* Keep existing dark variant for consistency */
+  --color-classification-kallkritisk: var(--color-brand-red); /* brand red (alias to Copy/Paste accent-status) */
   
   /* Badge Colors - Normal */
   --color-badge-normal-bg: #f4f4f5;
@@ -70,6 +103,17 @@
   --color-input-border: #e4e4e7;
   --color-input-focus-border: #3b82f6;
   --color-input-focus-ring: rgba(59, 130, 246, 0.1);
+  
+  /* Shadow/Elevation Tokens - Copy/Paste patterns */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  
+  /* Focus/Ring Tokens - Copy/Paste patterns */
+  --focus-ring-width: 2px;
+  --focus-ring-color: #3b82f6; /* blue-500 */
+  --focus-ring-color-dark: #60a5fa; /* blue-400 */
+  --focus-ring-offset: 0;
 
   /* Spacing */
   --spacing-xs: 0.125rem;
@@ -91,29 +135,46 @@
   --content-max-width: 64rem;
   --sidebar-width: 16rem;
   --header-height: 3.5rem;
+  --sidebar-header-height: 4rem; /* Copy/Paste token */
 }
 
 .dark {
-  /* Dark Mode Colors - Surface & Background */
-  --color-bg-main: #09090b;
-  --color-bg-surface: #18181b;
-  --color-bg-active: rgba(255, 255, 255, 0.1);
-  --color-bg-content: rgba(0, 0, 0, 0.2);
-  --color-bg-code: rgba(24, 24, 27, 0.5);
+  /* Copy/Paste Dark Mode Base Tokens (for alias mapping) */
+  --cp-color-bg-main-dark: #09090b;
+  --cp-color-bg-surface-dark: #18181b;
+  --cp-color-bg-active-dark: rgba(255, 255, 255, 0.1);
+  --cp-color-bg-content-dark: rgba(0, 0, 0, 0.2);
+  --cp-color-bg-code-dark: rgba(24, 24, 27, 0.5);
+  
+  --cp-color-text-primary-dark: #ffffff;
+  --cp-color-text-muted-dark: #a1a1aa;
+  --cp-color-text-secondary-dark: #71717a;
+  --cp-color-text-label-dark: #52525b;
+  --cp-color-text-secondary-text-dark: #e4e4e7;
+  
+  --cp-color-border-default-dark: rgba(255, 255, 255, 0.05);
+  --cp-color-border-code-dark: #27272a;
+  
+  /* Dark Mode Colors - Surface & Background (aliases to Copy/Paste base tokens) */
+  --color-bg-main: var(--cp-color-bg-main-dark);
+  --color-bg-surface: var(--cp-color-bg-surface-dark);
+  --color-bg-active: var(--cp-color-bg-active-dark);
+  --color-bg-content: var(--cp-color-bg-content-dark);
+  --color-bg-code: var(--cp-color-bg-code-dark);
   --color-bg-hover: rgba(255, 255, 255, 0.02);
   
-  /* Dark Mode Colors - Text */
-  --color-text-primary: #ffffff;
-  --color-text-muted: #a1a1aa;
-  --color-text-secondary: #71717a;
-  --color-text-label: #52525b;
-  --color-text-secondary-text: #e4e4e7;
+  /* Dark Mode Colors - Text (aliases to Copy/Paste base tokens) */
+  --color-text-primary: var(--cp-color-text-primary-dark);
+  --color-text-muted: var(--cp-color-text-muted-dark);
+  --color-text-secondary: var(--cp-color-text-secondary-dark);
+  --color-text-label: var(--cp-color-text-label-dark);
+  --color-text-secondary-text: var(--cp-color-text-secondary-text-dark);
   
-  /* Dark Mode Colors - Borders */
-  --color-border-default: rgba(255, 255, 255, 0.05);
-  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  /* Dark Mode Colors - Borders (aliases to Copy/Paste base tokens) */
+  --color-border-default: var(--cp-color-border-default-dark);
+  --color-border-subtle: var(--cp-color-border-default-dark);
   --color-border-hover: rgba(255, 255, 255, 0.2);
-  --color-border-code: #27272a;
+  --color-border-code: var(--cp-color-border-code-dark);
   
   /* Dark Mode Colors - Interactive */
   --color-interactive-default: #ffffff;
@@ -131,8 +192,13 @@
   /* Dark Mode Input Colors */
   --color-input-bg: #27272a;
   --color-input-border: #3f3f46;
-  --color-input-focus-border: #60a5fa;
+  --color-input-focus-border: var(--focus-ring-color-dark);
   --color-input-focus-ring: rgba(96, 165, 250, 0.2);
+  
+  /* Dark Mode Shadow/Elevation (slightly adjusted for dark backgrounds) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
 }
 
 * {

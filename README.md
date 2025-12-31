@@ -6,6 +6,8 @@ Säker arbetsmiljö för journalister som hanterar känsliga tips och källor. A
 
 - [VISION.md](VISION.md) – Produktvision och arbetsflöde
 - [PRINCIPLES.md](PRINCIPLES.md) – Non-negotiable principer
+- [ROADMAP.md](ROADMAP.md) – Utvecklingsroadmap med stop/go-punkter
+- [RUNBOOK.md](RUNBOOK.md) – Verifieringsrunbook för FAS 0–4
 
 ## Run locally
 

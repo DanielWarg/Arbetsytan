@@ -48,14 +48,17 @@ function ProjectsList() {
     // navigate(`/projects/${project.id}`)
   }
 
-  if (loading) return <div className="projects-page">Laddar...</div>
-  if (error) return <div className="projects-page">Fel: {error}</div>
+  if (loading) return <div className="projects-list-page">Laddar...</div>
+  if (error) return <div className="projects-list-page">Fel: {error}</div>
 
   const getClassificationLabel = (classification) => {
-    if (classification === 'sensitive' || classification === 'source-sensitive') {
-      return 'Klassificerat'
+    if (classification === 'source-sensitive') {
+      return 'Källkritisk'
     }
-    return 'Offentligt'
+    if (classification === 'sensitive') {
+      return 'Känslig'
+    }
+    return 'Offentlig'
   }
 
   const getClassificationClass = (classification) => {
@@ -65,8 +68,16 @@ function ProjectsList() {
     return 'badge-normal'
   }
 
+  const isDueSoon = (dueDate) => {
+    if (!dueDate) return false
+    const due = new Date(dueDate)
+    const today = new Date()
+    const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    return daysUntilDue >= 0 && daysUntilDue <= 7
+  }
+
   return (
-    <div className="projects-page">
+    <div className="projects-list-page">
       <div className="projects-header">
         <h2 className="projects-title">Dina Projekt</h2>
         <button 
@@ -102,17 +113,24 @@ function ProjectsList() {
               <Card interactive className="project-card">
                 <div className="project-card-top">
                   <Folder size={18} className="project-icon" />
-                  <Badge variant={project.classification === 'normal' ? 'normal' : 'sensitive'}>
+                  <Badge variant={project.classification === 'normal' ? 'normal' : project.classification === 'sensitive' ? 'sensitive' : 'source-sensitive'}>
                     {getClassificationLabel(project.classification)}
                   </Badge>
                 </div>
                 <h3 className="project-card-title">{project.name}</h3>
                 <div className="project-card-meta">
-                  <p>Start: {project.created_at ? new Date(project.created_at).toLocaleDateString('sv-SE') : 'Ej startat'}</p>
+                  {project.start_date && (
+                    <p>Start: {new Date(project.start_date).toLocaleDateString('sv-SE')}</p>
+                  )}
+                  {project.due_date && (
+                    <p className={isDueSoon(project.due_date) ? 'project-due-soon' : ''}>
+                      Deadline: {new Date(project.due_date).toLocaleDateString('sv-SE')}
+                      {isDueSoon(project.due_date) && ' ⚠️'}
+                    </p>
+                  )}
                   {project.description && (
                     <p className="project-card-description">{project.description}</p>
                   )}
-                  <p>Transkript: 0 | Filer: 0</p>
                 </div>
               </Card>
             </Link>

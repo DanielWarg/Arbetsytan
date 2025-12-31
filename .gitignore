@@ -22,6 +22,7 @@ node_modules/
 *.onnx
 models/
 checkpoints/
+uploads/
 
 # Känsliga miljövariabler och secrets
 .env

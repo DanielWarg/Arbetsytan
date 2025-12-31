@@ -1,16 +1,30 @@
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
+import uuid
+import shutil
 from typing import Optional, List
+from pathlib import Path
 
 from database import get_db, engine
-from models import Project, ProjectEvent, Base
-from schemas import ProjectCreate, ProjectResponse, ProjectEventCreate, ProjectEventResponse
+from models import Project, ProjectEvent, Document, Base, Classification, SanitizeLevel
+from schemas import (
+    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
+    DocumentResponse, DocumentListResponse
+)
+from text_processing import (
+    extract_text_from_pdf, extract_text_from_txt,
+    normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError
+)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+# Upload directory
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Arbetsytan API")
 
@@ -119,6 +133,97 @@ async def get_project(
     return project
 
 
+@app.put("/api/projects/{project_id}", response_model=ProjectResponse)
+async def update_project(
+    project_id: int,
+    project_update: ProjectUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Update a project"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Track changes for event metadata
+    changes = {}
+    
+    if project_update.name is not None:
+        if project.name != project_update.name:
+            changes["name"] = {"old": project.name, "new": project_update.name}
+        project.name = project_update.name
+    
+    if project_update.description is not None:
+        if project.description != project_update.description:
+            changes["description"] = {"old": project.description, "new": project_update.description}
+        project.description = project_update.description
+    
+    if project_update.classification is not None:
+        if project.classification != project_update.classification:
+            changes["classification"] = {"old": project.classification.value, "new": project_update.classification.value}
+        project.classification = project_update.classification
+    
+    # Update updated_at is automatic via onupdate
+    
+    db.commit()
+    db.refresh(project)
+    
+    # Create event if any changes were made
+    if changes:
+        event = ProjectEvent(
+            project_id=project.id,
+            event_type="project_updated",
+            actor=username,
+            event_metadata={"changes": changes}
+        )
+        db.add(event)
+        db.commit()
+    
+    return project
+
+
+@app.delete("/api/projects/{project_id}", status_code=204)
+async def delete_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Delete a project and all its documents and events (permanent)"""
+    import os
+    from pathlib import Path
+    
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Get all documents for this project to delete files
+    documents = db.query(Document).filter(Document.project_id == project_id).all()
+    document_count = len(documents)
+    
+    # Delete document files from disk
+    deleted_files = 0
+    for doc in documents:
+        if doc.file_path:
+            file_path = UPLOAD_DIR / doc.file_path
+            try:
+                if file_path.exists():
+                    os.remove(file_path)
+                    deleted_files += 1
+            except Exception:
+                # Ignore errors (file might already be deleted)
+                pass
+    
+    # Delete project (cascade will delete events and documents from DB)
+    db.delete(project)
+    db.commit()
+    
+    # Log only IDs and counts (no filenames or content)
+    # Note: In production, use proper logging, not print
+    print(f"Deleted project {project_id} with {document_count} documents ({deleted_files} files removed from disk)")
+    
+    return None
+
+
 @app.get("/api/projects/{project_id}/events", response_model=List[ProjectEventResponse])
 async def get_project_events(
     project_id: int,
@@ -163,4 +268,213 @@ async def create_project_event(
     db.commit()
     db.refresh(db_event)
     return db_event
+
+
+# Documents endpoints
+@app.post("/api/projects/{project_id}/documents", response_model=DocumentListResponse, status_code=201)
+async def upload_document(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Upload a document to a project.
+    Returns metadata only (no masked_text).
+    """
+    # Verify project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate file size (25MB max)
+    file_content = await file.read()
+    if len(file_content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB")
+    
+    # Save file temporarily for validation and processing
+    temp_path = UPLOAD_DIR / f"temp_{uuid.uuid4()}"
+    try:
+        with open(temp_path, 'wb') as f:
+            f.write(file_content)
+        
+        # Validate file type (extension + magic bytes)
+        file_type, is_valid = validate_file_type(str(temp_path), file.filename)
+        if not is_valid:
+            os.remove(temp_path)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file type. Only PDF and TXT files are allowed. PDF must start with %PDF-, TXT must be valid text."
+            )
+        
+        # Extract text
+        try:
+            if file_type == 'pdf':
+                raw_text = extract_text_from_pdf(str(temp_path))
+            else:  # txt
+                raw_text = extract_text_from_txt(str(temp_path))
+        except Exception as e:
+            os.remove(temp_path)
+            raise HTTPException(status_code=400, detail=f"Failed to extract text: {str(e)}")
+        
+        # Normalize text
+        normalized_text = normalize_text(raw_text)
+        
+        # Progressive sanitization pipeline
+        pii_gate_reasons = {}
+        sanitize_level = SanitizeLevel.NORMAL
+        usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+        masked_text = None
+        
+        # Try normal masking
+        masked_text = mask_text(normalized_text, level="normal")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.NORMAL
+            pii_gate_reasons = None
+        else:
+            pii_gate_reasons["normal"] = reasons
+            
+            # Try strict masking
+            masked_text = mask_text(normalized_text, level="strict")
+            is_safe, reasons = pii_gate_check(masked_text)
+            if is_safe:
+                sanitize_level = SanitizeLevel.STRICT
+                usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+            else:
+                pii_gate_reasons["strict"] = reasons
+                
+                # Use paranoid masking (must always pass gate)
+                masked_text = mask_text(normalized_text, level="paranoid")
+                is_safe, reasons = pii_gate_check(masked_text)
+                
+                if not is_safe:
+                    # This should never happen - paranoid must guarantee gate pass
+                    os.remove(temp_path)
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Internal error: Paranoid masking failed PII gate check. This is a bug."
+                    )
+                
+                sanitize_level = SanitizeLevel.PARANOID
+                usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+        
+        # Move file to permanent location
+        file_id = str(uuid.uuid4())
+        file_ext = os.path.splitext(file.filename)[1]
+        permanent_path = UPLOAD_DIR / f"{file_id}{file_ext}"
+        shutil.move(str(temp_path), str(permanent_path))
+        
+        # Create document record
+        db_document = Document(
+            project_id=project_id,
+            filename=file.filename,
+            file_type=file_type,
+            classification=project.classification,  # Inherit from project
+            masked_text=masked_text,
+            file_path=str(permanent_path),  # Never exposed via API
+            sanitize_level=sanitize_level,
+            usage_restrictions=usage_restrictions,
+            pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None
+        )
+        db.add(db_document)
+        
+        # Update project updated_at
+        from sqlalchemy.sql import func
+        project.updated_at = func.now()
+        
+        # Create event
+        event = ProjectEvent(
+            project_id=project_id,
+            event_type="document_uploaded",
+            actor=username,
+            event_metadata={"filename": file.filename, "file_type": file_type}
+        )
+        db.add(event)
+        
+        db.commit()
+        db.refresh(db_document)
+        
+        # Return metadata only (no masked_text)
+        return DocumentListResponse(
+            id=db_document.id,
+            project_id=db_document.project_id,
+            filename=db_document.filename,
+            file_type=db_document.file_type,
+            classification=db_document.classification.value,
+            sanitize_level=db_document.sanitize_level.value,
+            usage_restrictions=db_document.usage_restrictions,
+            pii_gate_reasons=db_document.pii_gate_reasons,
+            created_at=db_document.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Cleanup on error
+        if temp_path.exists():
+            os.remove(temp_path)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@app.get("/api/projects/{project_id}/documents", response_model=List[DocumentListResponse])
+async def list_documents(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    List all documents for a project.
+    Returns metadata only (no masked_text, no file_path).
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    documents = db.query(Document).filter(
+        Document.project_id == project_id
+    ).order_by(Document.created_at.desc()).all()
+    
+    return [
+        DocumentListResponse(
+            id=doc.id,
+            project_id=doc.project_id,
+            filename=doc.filename,
+            file_type=doc.file_type,
+            classification=doc.classification.value,
+            sanitize_level=doc.sanitize_level.value,
+            usage_restrictions=doc.usage_restrictions,
+            pii_gate_reasons=doc.pii_gate_reasons,
+            created_at=doc.created_at
+        )
+        for doc in documents
+    ]
+
+
+@app.get("/api/documents/{document_id}", response_model=DocumentResponse)
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Get a specific document.
+    Returns masked_text + metadata only (no file_path).
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    return DocumentResponse(
+        id=document.id,
+        project_id=document.project_id,
+        filename=document.filename,
+        file_type=document.file_type,
+        classification=document.classification.value,
+        masked_text=document.masked_text,
+        sanitize_level=document.sanitize_level.value,
+        usage_restrictions=document.usage_restrictions,
+        pii_gate_reasons=document.pii_gate_reasons,
+        created_at=document.created_at
+    )
 

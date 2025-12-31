@@ -21,3 +21,22 @@ CREATE TABLE IF NOT EXISTS project_events (
 CREATE INDEX IF NOT EXISTS idx_project_events_project_id ON project_events(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_events_timestamp ON project_events(timestamp DESC);
 
+-- Add new columns to documents table (idempotent)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='documents' AND column_name='sanitize_level') THEN
+        ALTER TABLE documents ADD COLUMN sanitize_level VARCHAR DEFAULT 'normal';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='documents' AND column_name='usage_restrictions') THEN
+        ALTER TABLE documents ADD COLUMN usage_restrictions JSONB DEFAULT '{"ai_allowed": true, "export_allowed": true}';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='documents' AND column_name='pii_gate_reasons') THEN
+        ALTER TABLE documents ADD COLUMN pii_gate_reasons JSONB;
+    END IF;
+END $$;
+

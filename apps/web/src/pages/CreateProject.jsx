@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '../ui/Button'
 import { Input, Textarea } from '../ui/Input'
 import { Select } from '../ui/Select'
@@ -6,25 +6,42 @@ import { Badge } from '../ui/Badge'
 import { Info } from 'lucide-react'
 import './CreateProject.css'
 
-function CreateProject({ onClose, onSuccess }) {
-  const [name, setName] = useState('')
+function CreateProject({ onClose, onSuccess, project = null }) {
+  const isEditMode = project !== null
+  
+  const [name, setName] = useState(project?.name || '')
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
   const [dueDate, setDueDate] = useState('')
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(project?.description || '')
   const [tags, setTags] = useState('')
-  const [classification, setClassification] = useState('normal')
+  const [classification, setClassification] = useState(project?.classification || 'normal')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
+  
+  // Update state when project prop changes (for edit mode)
+  useEffect(() => {
+    if (project) {
+      setName(project.name || '')
+      setDescription(project.description || '')
+      setClassification(project.classification || 'normal')
+    }
+  }, [project])
 
   const getClassificationLabel = (classification) => {
-    if (classification === 'sensitive' || classification === 'source-sensitive') {
+    if (classification === 'source-sensitive') {
+      return 'Källkritisk'
+    }
+    if (classification === 'sensitive') {
       return 'Känslig'
     }
-    return 'Normal'
+    return 'Offentlig'
   }
 
   const getClassificationVariant = (classification) => {
-    if (classification === 'sensitive' || classification === 'source-sensitive') {
+    if (classification === 'source-sensitive') {
+      return 'source-sensitive'
+    }
+    if (classification === 'sensitive') {
       return 'sensitive'
     }
     return 'normal'
@@ -40,8 +57,14 @@ function CreateProject({ onClose, onSuccess }) {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch('http://localhost:8000/api/projects', {
-        method: 'POST',
+      const url = isEditMode 
+        ? `http://localhost:8000/api/projects/${project.id}`
+        : 'http://localhost:8000/api/projects'
+      
+      const method = isEditMode ? 'PUT' : 'POST'
+      
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/json'
@@ -56,12 +79,12 @@ function CreateProject({ onClose, onSuccess }) {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to create project')
+        throw new Error(errorData.detail || `Failed to ${isEditMode ? 'update' : 'create'} project`)
       }
       
-      const project = await response.json()
+      const updatedProject = await response.json()
       if (onSuccess) {
-        onSuccess(project)
+        onSuccess(updatedProject)
       }
       if (onClose) {
         onClose()
@@ -116,15 +139,15 @@ function CreateProject({ onClose, onSuccess }) {
       </div>
 
       <div className="form-group">
-        <label htmlFor="classification">Klassning</label>
+        <label htmlFor="classification">Klassificering</label>
         <Select
           id="classification"
           value={classification}
           onChange={(e) => setClassification(e.target.value)}
         >
-          <option value="normal">Normal</option>
+          <option value="normal">Offentlig</option>
           <option value="sensitive">Känslig</option>
-          <option value="source-sensitive">Källkänslig</option>
+          <option value="source-sensitive">Källkritisk</option>
         </Select>
         <div className="classification-badge-container">
           <Badge variant={getClassificationVariant(classification)}>
@@ -164,7 +187,7 @@ function CreateProject({ onClose, onSuccess }) {
           Avbryt
         </Button>
         <Button type="submit" variant="success" disabled={!name.trim() || creating}>
-          {creating ? 'Skapar...' : 'Skapa projekt'}
+          {creating ? (isEditMode ? 'Uppdaterar...' : 'Skapar...') : (isEditMode ? 'Spara ändringar' : 'Skapa projekt')}
         </Button>
       </div>
     </form>

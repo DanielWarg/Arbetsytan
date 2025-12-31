@@ -1,12 +1,12 @@
-/* Card Component - Single global style for all cards */
+/* Card Component - Copy/Paste pattern with tokens */
 /* Used for: project cards, info panels, modals, workspace containers */
 
 .card {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
-  padding: var(--spacing-xl);
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  padding: var(--spacing-lg) var(--spacing-xl); /* Reduced vertical padding */
+  box-shadow: var(--shadow-sm);
 }
 
 .card-interactive {
@@ -15,10 +15,10 @@
 }
 
 .card-interactive:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border-color: var(--focus-ring-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .dark .card-interactive:hover {
-  border-color: #60a5fa;
+  border-color: var(--focus-ring-color-dark);
 }
