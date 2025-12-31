@@ -41,6 +41,8 @@ Alla ändringar måste gå via Plan Mode först. Inga direkta implementationer u
 - Implementera exakt enligt plan
 - Inga extra filer eller ändringar utöver planen
 - Rapportera när implementation är klar
+- Varje steg måste avslutas med verifiering i ett körande system
+- GO ges endast efter att verifiering har utförts och resultat är tydligt rapporterade. Verifiering kan göras av användaren eller assistenten.
 
 ## Scope guard: demo-first
 

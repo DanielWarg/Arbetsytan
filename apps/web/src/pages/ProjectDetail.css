@@ -1,0 +1,141 @@
+.page {
+  padding: var(--spacing-4xl);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-4xl);
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-family: var(--font-serif);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.back-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.875rem;
+  margin-bottom: var(--spacing-md);
+  display: inline-block;
+  font-family: var(--font-sans);
+}
+
+.back-link:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+}
+
+.project-info {
+  margin-bottom: var(--spacing-4xl);
+}
+
+.info-section h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xl);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.project-description {
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-xl);
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.info-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+  font-family: var(--font-sans);
+}
+
+.events-section {
+  margin-top: var(--spacing-4xl);
+}
+
+.events-section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-3xl);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.events-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.event-item {
+  display: flex;
+  gap: var(--spacing-3xl);
+}
+
+.event-time {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  min-width: 180px;
+  flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+
+.event-content {
+  flex: 1;
+}
+
+.event-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+}
+
+.event-type {
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+.event-actor {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+}
+
+.event-metadata {
+  background: var(--color-bg-active);
+  border-radius: var(--radius-default);
+  padding: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+}
+
+.event-metadata pre {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: var(--font-mono);
+}
+

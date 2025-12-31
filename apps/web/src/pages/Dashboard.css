@@ -1,0 +1,104 @@
+.page {
+  padding: var(--spacing-4xl);
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-4xl);
+}
+
+.page-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-family: var(--font-serif);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.dashboard-section {
+  margin-top: var(--spacing-4xl);
+}
+
+.dashboard-section h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-3xl);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-4xl) 0;
+  color: var(--color-text-muted);
+}
+
+.empty-state-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-family: var(--font-sans);
+}
+
+.empty-state-text {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin-bottom: var(--spacing-3xl);
+  color: var(--color-text-muted);
+}
+
+.empty-state a {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.project-card {
+  margin-bottom: var(--spacing-3xl);
+}
+
+.project-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-xl);
+}
+
+.project-card-header h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+}
+
+.project-description {
+  color: var(--color-text-muted);
+  margin: var(--spacing-lg) 0;
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+
+.project-meta {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+

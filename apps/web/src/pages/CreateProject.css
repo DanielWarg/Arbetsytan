@@ -1,0 +1,45 @@
+.create-project-form {
+  max-width: 32rem;
+}
+
+.form-group {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-family: var(--font-sans);
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-sm);
+  line-height: 1.5;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--spacing-lg);
+  justify-content: flex-end;
+  margin-top: var(--spacing-3xl);
+}
+
+.form-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--color-accent-error);
+  color: var(--color-accent-error);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-radius: var(--radius-default);
+  margin-bottom: var(--spacing-2xl);
+  font-size: 0.875rem;
+}
+
+.dark .form-error {
+  background: rgba(239, 68, 68, 0.2);
+}
+

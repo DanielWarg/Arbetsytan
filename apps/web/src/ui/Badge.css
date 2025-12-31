@@ -1,0 +1,31 @@
+/* Badge - Match Copy/Paste styling */
+.badge {
+  display: inline-block;
+  font-size: 0.75rem; /* text-xs */
+  padding: 0.25rem 0.5rem; /* px-2 py-1 */
+  border-radius: 0.125rem; /* rounded-sm */
+  font-weight: 500;
+}
+
+.badge-normal {
+  background: #f4f4f5; /* bg-zinc-100 */
+  color: #3f3f46; /* text-zinc-700 */
+}
+
+.dark .badge-normal {
+  background: #3f3f46; /* dark:bg-zinc-700 */
+  color: #d4d4d8; /* dark:text-zinc-300 */
+}
+
+.badge-sensitive,
+.badge-source-sensitive {
+  background: #fee2e2; /* bg-red-100 */
+  color: #991b1b; /* text-red-700 */
+}
+
+.dark .badge-sensitive,
+.dark .badge-source-sensitive {
+  background: rgba(220, 38, 38, 0.3); /* dark:bg-red-900/30 */
+  color: #fca5a5; /* dark:text-red-300 */
+}
+
