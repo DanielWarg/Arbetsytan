@@ -25,6 +25,25 @@ function ProjectDetail() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef(null)
+  
+  // Recording states
+  const [recordingUploading, setRecordingUploading] = useState(false)
+  const [recordingProcessing, setRecordingProcessing] = useState(false)
+  const [recordingError, setRecordingError] = useState(null)
+  const [recordingSuccess, setRecordingSuccess] = useState(null)
+  const audioInputRef = useRef(null)
+  
+  // MediaRecorder states
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0) // seconds
+  const [recordingMode, setRecordingMode] = useState('record') // 'upload' | 'record' - default 'record' to show recording button
+  const [micPermissionError, setMicPermissionError] = useState(null)
+  
+  // Refs to avoid stale state in callbacks
+  const recorderRef = useRef(null)
+  const timerRef = useRef(null)
+  const streamRef = useRef(null)
+  const audioChunksRef = useRef([])
 
   const fetchProject = async () => {
     try {
@@ -66,7 +85,214 @@ function ProjectDetail() {
   }, [id])
 
   const handleDropzoneClick = () => {
-    fileInputRef.current?.click()
+    if (ingestMode === 'audio') {
+      audioInputRef.current?.click()
+    } else {
+      fileInputRef.current?.click()
+    }
+  }
+
+  const handleAudioSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      setRecordingError('Filen är för stor. Maximal storlek är 25MB')
+      return
+    }
+
+    setRecordingUploading(true)
+    setRecordingProcessing(false)
+    setRecordingError(null)
+    setRecordingSuccess(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      // Upload audio
+      const response = await fetch(`/api/projects/${id}/recordings`, {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Kunde inte ladda upp ljudfil')
+      }
+
+      const documentData = await response.json()
+
+      // Simulate processing delay (800-1200ms)
+      setRecordingUploading(false)
+      setRecordingProcessing(true)
+      
+      const delay = 800 + Math.random() * 400 // 800-1200ms
+      await new Promise(resolve => setTimeout(resolve, delay))
+      
+      setRecordingProcessing(false)
+      setRecordingSuccess({ documentId: documentData.id })
+
+      // Refresh documents list
+      await fetchProject()
+    } catch (err) {
+      setRecordingUploading(false)
+      setRecordingProcessing(false)
+      setRecordingError(err.message)
+    } finally {
+      // Reset file input
+      if (audioInputRef.current) {
+        audioInputRef.current.value = ''
+      }
+    }
+  }
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const startRecording = async () => {
+    let stream = null
+    
+    try {
+      setMicPermissionError(null)
+      
+      // Check MediaRecorder support
+      if (!window.MediaRecorder || !navigator.mediaDevices) {
+        throw new Error('MediaRecorder stöds inte i denna webbläsare')
+      }
+      
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      
+      // Determine MIME type (prefer webm, fallback to ogg, fail if neither)
+      let mimeType = null
+      if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm'
+      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+        mimeType = 'audio/ogg'
+      } else {
+        stream.getTracks().forEach(track => track.stop())
+        throw new Error('Inget ljudformat stöds. Använd fil-uppladdning istället.')
+      }
+      
+      const recorder = new MediaRecorder(stream, { mimeType })
+      recorderRef.current = recorder
+      audioChunksRef.current = []
+      
+      // Single onstop handler (no duplication)
+      recorder.onstop = async () => {
+        // Cleanup timer
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          timerRef.current = null
+        }
+        
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: mimeType })
+          await uploadRecordingBlob(blob)
+        } finally {
+          // Always stop stream tracks
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop())
+            streamRef.current = null
+          }
+        }
+      }
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+      
+      recorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      
+      // Timer with cleanup - auto-stop at 30 seconds
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          const newTime = prev + 1
+          // Auto-stop at 30 seconds (UI limit for demo)
+          if (newTime >= 30) {
+            stopRecording()
+          }
+          return newTime
+        })
+      }, 1000)
+      
+    } catch (err) {
+      // Cleanup on error
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop())
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current = null
+      }
+      
+      setMicPermissionError(`Mikrofonåtkomst nekad eller stöds inte: ${err.message}`)
+      // Don't auto-switch - user must click "Byt till uppladdning"
+    }
+  }
+
+  const stopRecording = () => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.stop()
+      setIsRecording(false)
+      // Timer cleanup handled in onstop
+    }
+  }
+
+  const uploadRecordingBlob = async (blob) => {
+    setRecordingUploading(true)
+    setRecordingProcessing(false)
+    setRecordingError(null)
+    setRecordingSuccess(null)
+    
+    try {
+      // Convert Blob to File for FormData
+      const filename = `recording_${Date.now()}.${blob.type.includes('webm') ? 'webm' : 'ogg'}`
+      const file = new File([blob], filename, { type: blob.type })
+      
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      const response = await fetch(`/api/projects/${id}/recordings`, {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Kunde inte ladda upp inspelning')
+      }
+      
+      const documentData = await response.json()
+      
+      setRecordingUploading(false)
+      setRecordingProcessing(true)
+      
+      // Processing delay: 800-1200ms (same as handleAudioSelect)
+      const delay = 800 + Math.random() * 400
+      await new Promise(resolve => setTimeout(resolve, delay))
+      
+      setRecordingProcessing(false)
+      setRecordingSuccess({ documentId: documentData.id })
+      await fetchProject()
+    } catch (err) {
+      setRecordingUploading(false)
+      setRecordingProcessing(false)
+      setRecordingError(err.message)
+    }
   }
 
   const handleFileSelect = async (e) => {
@@ -238,7 +464,7 @@ function ProjectDetail() {
                 <button 
                   className={`toolbar-btn ${ingestMode === 'document' ? 'active' : ''}`}
                   onClick={() => setIngestMode('document')}
-                  disabled
+                  disabled={false}
                 >
                   <FileText size={14} />
                   <span>Dokument</span>
@@ -253,8 +479,13 @@ function ProjectDetail() {
                 </button>
                 <button 
                   className={`toolbar-btn ${ingestMode === 'audio' ? 'active' : ''}`}
-                  onClick={() => setIngestMode('audio')}
-                  disabled
+                  onClick={() => {
+                    setIngestMode('audio')
+                    // Reset to 'record' mode when switching to audio to show recording button by default
+                    setRecordingMode('record')
+                    setMicPermissionError(null)
+                  }}
+                  disabled={false}
                 >
                   <Mic size={14} />
                   <span>Röstmemo</span>
@@ -346,36 +577,162 @@ function ProjectDetail() {
               </div>
             ) : null}
 
-            {/* Primary Dropzone - Full width, calm, editorial */}
-            <div 
-              className={`ingest-dropzone ${uploading ? 'uploading' : ''}`}
-              onClick={handleDropzoneClick}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.txt"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-              <div className="dropzone-content">
-                {uploading ? (
-                  <>
-                    <div className="dropzone-loading">Laddar upp...</div>
-                  </>
+            {/* Primary Dropzone / Audio Recording - Full width, calm, editorial */}
+            {ingestMode === 'audio' ? (
+              <div className="audio-recording-container">
+                {/* Mode selector */}
+                <div className="recording-mode-selector">
+                  <button
+                    className={`mode-btn ${recordingMode === 'record' ? 'active' : ''}`}
+                    onClick={() => {
+                      setRecordingMode('record')
+                      setMicPermissionError(null)
+                    }}
+                    disabled={isRecording || recordingUploading || recordingProcessing}
+                  >
+                    <Mic size={16} />
+                    <span>Spela in</span>
+                  </button>
+                  <button
+                    className={`mode-btn ${recordingMode === 'upload' ? 'active' : ''}`}
+                    onClick={() => {
+                      setRecordingMode('upload')
+                      setMicPermissionError(null)
+                    }}
+                    disabled={isRecording || recordingUploading || recordingProcessing}
+                  >
+                    <Upload size={16} />
+                    <span>Ladda upp fil</span>
+                  </button>
+                </div>
+                
+                {/* Recording mode */}
+                {recordingMode === 'record' ? (
+                  <div className="recording-controls">
+                    {micPermissionError && (
+                      <div className="recording-error">
+                        <p>{micPermissionError}</p>
+                        <button 
+                          className="recording-fallback-btn"
+                          onClick={() => {
+                            setRecordingMode('upload')
+                            setMicPermissionError(null)
+                          }}
+                        >
+                          Byt till uppladdning
+                        </button>
+                      </div>
+                    )}
+                    {!isRecording && !recordingUploading && !recordingProcessing && !micPermissionError && (
+                      <button
+                        className="record-start-btn"
+                        onClick={startRecording}
+                        disabled={!navigator.mediaDevices || !window.MediaRecorder}
+                      >
+                        <Mic size={24} />
+                        <span>Starta inspelning</span>
+                      </button>
+                    )}
+                    {isRecording && (
+                      <div className="recording-active">
+                        <div className="recording-indicator">
+                          <div className="recording-dot"></div>
+                          <span>Inspelar: {formatTime(recordingTime)}</span>
+                          {recordingTime >= 30 && <span className="recording-limit"> (Max 30 sek)</span>}
+                        </div>
+                        <button className="record-stop-btn" onClick={stopRecording}>
+                          Stoppa
+                        </button>
+                      </div>
+                    )}
+                    {(recordingUploading || recordingProcessing) && (
+                      <div className="recording-status">
+                        {recordingUploading ? 'Laddar upp...' : 'Bearbetar...'}
+                      </div>
+                    )}
+                  </div>
                 ) : (
-                  <>
-                    <Upload size={32} className="dropzone-icon" />
-                    <p className="dropzone-text">Dra hit en fil eller klicka för att välja</p>
-                    <p className="dropzone-hint">.TXT, .PDF • Max 25MB</p>
-                  </>
+                  /* Upload mode - existing file input */
+                  <div 
+                    className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''}`}
+                    onClick={() => audioInputRef.current?.click()}
+                  >
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleAudioSelect}
+                      style={{ display: 'none' }}
+                    />
+                    <div className="dropzone-content">
+                      {recordingUploading || recordingProcessing ? (
+                        <>
+                          <div className="dropzone-loading">
+                            {recordingUploading ? 'Laddar upp ljudfil...' : 'Bearbetar ljudfil...'}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={32} className="dropzone-icon" />
+                          <p className="dropzone-text">Dra hit en ljudfil eller klicka för att välja</p>
+                          <p className="dropzone-hint">Ljudfiler • Max 25MB</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Success message */}
+                {recordingSuccess && (
+                  <div className="recording-success">
+                    <p>Inspelning sparad!</p>
+                    <Link to={`/projects/${id}/documents/${recordingSuccess.documentId}`}>
+                      Öppna dokument
+                    </Link>
+                  </div>
+                )}
+                
+                {/* Error message */}
+                {recordingError && (
+                  <div className="recording-error">
+                    <p>{recordingError}</p>
+                  </div>
                 )}
               </div>
-            </div>
-            {uploadError && (
-              <div className="upload-error">
-                {uploadError}
-              </div>
+            ) : (
+              /* Document mode - existing dropzone */
+              <>
+                <div 
+                  className={`ingest-dropzone ${uploading ? 'uploading' : ''}`}
+                  onClick={handleDropzoneClick}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.txt"
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                  />
+                  <div className="dropzone-content">
+                    {uploading ? (
+                      <>
+                        <div className="dropzone-loading">Laddar upp...</div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={32} className="dropzone-icon" />
+                        <p className="dropzone-text">Dra hit en fil eller klicka för att välja</p>
+                        <p className="dropzone-hint">.TXT, .PDF • Max 25MB</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {uploadError && (
+                  <div className="upload-error">
+                    {uploadError}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

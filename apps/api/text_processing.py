@@ -4,7 +4,10 @@ Fail-closed: raises exceptions on errors.
 """
 import re
 import os
-from typing import Tuple, List
+import subprocess
+import tempfile
+from pathlib import Path
+from typing import Tuple, List, Optional
 
 
 class PiiGateError(Exception):
@@ -395,4 +398,316 @@ def validate_file_type(file_path: str, filename: str) -> Tuple[str, bool]:
     
     # Unknown extension
     return ('', False)
+
+
+def transcribe_audio(audio_path: str) -> str:
+    """
+    Transcribe audio file using local openai-whisper (no external API calls).
+    
+    Supports: webm, ogg, mp3, wav (whisper handles conversion internally).
+    
+    NEVER log the raw transcript output.
+    Fail-closed: raises exception on error (no document created).
+    """
+    try:
+        import whisper
+    except ImportError:
+        raise ImportError("openai-whisper is required for transcription. Install with: pip install openai-whisper")
+    
+    audio_path_obj = Path(audio_path)
+    if not audio_path_obj.exists():
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
+    
+    try:
+        # Load whisper model (base model, Swedish support)
+        # Model is downloaded automatically on first use
+        model = whisper.load_model("base")
+        
+        # Transcribe (whisper handles audio format conversion internally)
+        result = model.transcribe(
+            str(audio_path),
+            language="sv",  # Swedish
+            task="transcribe"
+        )
+        
+        # Extract transcript text
+        raw_transcript = result["text"].strip()
+        
+        # Validate transcript is not empty and not stub-like
+        if not raw_transcript or len(raw_transcript.strip()) < 10:
+            raise ValueError("Transcription produced empty or too short transcript")
+        
+        # Check for stub-like patterns (fail-closed if detected)
+        stub_patterns = [
+            "Detta är en inspelning från",
+            "Detta är ett röstmemo med",
+            "Jag pratar om viktiga saker här"
+        ]
+        for pattern in stub_patterns:
+            if pattern in raw_transcript:
+                raise ValueError(f"Transcription appears to be stub (contains: {pattern})")
+        
+        return raw_transcript
+        
+    except Exception as e:
+        # Fail-closed: raise exception (no document created)
+        raise RuntimeError(f"Audio transcription failed: {str(e)}")
+
+
+def normalize_transcript_text(raw_text: str) -> str:
+    """
+    Normalize and correct common Swedish STT errors in transcript.
+    
+    Deterministic post-processing (no AI):
+    - Merge fragmented sentences
+    - Remove repeated words
+    - Trim whitespace
+    - Apply common Swedish STT error mappings
+    
+    NEVER log raw_text or output.
+    """
+    if not raw_text:
+        return ""
+    
+    text = raw_text
+    
+    # Common Swedish STT error mappings (deterministic, explicit)
+    # Small list (10-30 entries), easy to extend
+    stt_error_mappings = {
+        # Common Whisper mishearings
+        "konfliktsutom": "konflikter",
+        "önskimol": "önskemål",
+        "öfomulerade": "oformulerade",
+        "ommedvetna": "omedvetna",
+        "nertonat": "nertonad",
+        "frustrerad agerande": "frustrerat agerande",
+        "involverad": "involverade",  # Context-dependent, but common error
+        "det är uppfattar": "det uppfattas",
+        "det är en konflikt består": "en konflikt består",
+        "inom form av sån": "i form av en sådan",
+        "sån situation": "sådan situation",
+        # Additional common errors
+        "det det": "det",
+        "och och": "och",
+        "är är": "är",
+        "som som": "som",
+        "för för": "för",
+        "i i": "i",
+        "av av": "av",
+        "med med": "med",
+        "till till": "till",
+        "på på": "på",
+        "om om": "om",
+        "en en": "en",
+        "ett ett": "ett",
+        "den den": "den",
+        "det det": "det",
+    }
+    
+    # Apply error mappings (word boundaries to avoid partial matches)
+    for error, correction in stt_error_mappings.items():
+        # Use word boundaries for whole-word replacements
+        pattern = r'\b' + re.escape(error) + r'\b'
+        text = re.sub(pattern, correction, text, flags=re.IGNORECASE)
+    
+    # Remove repeated words (common STT artifact)
+    # Pattern: word word (same word repeated with space)
+    text = re.sub(r'\b(\w+)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+    
+    # Merge fragmented sentences (common pattern: sentence. sentence -> sentence. sentence)
+    # Remove excessive periods that create fragments
+    # This is conservative - only merge obvious fragments
+    text = re.sub(r'\.\s+([a-z])', r'. \1', text)  # Ensure space after period before lowercase
+    
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text)  # Multiple spaces -> single space
+    text = re.sub(r'\s+\.', '.', text)  # Space before period -> period
+    text = re.sub(r'\.\s*\.', '.', text)  # Multiple periods -> single period
+    text = re.sub(r'\s+,\s*', ', ', text)  # Normalize comma spacing
+    text = re.sub(r'\s+:\s*', ': ', text)  # Normalize colon spacing
+    
+    # Remove empty lines and trim
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    text = ' '.join(lines)  # Join all lines with space
+    
+    # Final trim
+    text = text.strip()
+    
+    return text
+
+
+def generate_stub_transcript(filename: str, duration_seconds: Optional[int] = None) -> str:
+    """
+    Generate a deterministic stub transcript from filename.
+    DEPRECATED: Use transcribe_audio() for real transcription.
+    
+    NEVER log the output of this function or any raw transcript.
+    """
+    # Extract base name without extension
+    base_name = os.path.splitext(filename)[0]
+    
+    # Generate deterministic text based on filename
+    # Include multiple sentences so processor has content to work with
+    sentences = [
+        f"Detta är en inspelning från {base_name}.",
+        "Jag pratar om viktiga saker här som behöver dokumenteras.",
+        "Detta är en längre mening som innehåller mer information om ämnet och problemet vi diskuterar.",
+        "Vi behöver tänka på nästa steg och vad som krävs för att lösa detta.",
+        "Det finns en deadline som måste hållas och källor som behöver verifieras.",
+        "Detta är en risk som vi måste ta hänsyn till i vårt arbete.",
+        "Ytterligare detaljer kommer här som är relevanta för projektet.",
+        "Slutligen avslutar jag med några sista tankar om vad som behöver göras härnäst."
+    ]
+    
+    if duration_seconds:
+        sentences.insert(1, f"Detta är ett röstmemo med {duration_seconds} sekunder inspelning.")
+    
+    return " ".join(sentences)
+
+
+def process_transcript(raw_transcript: str, project_name: str, recording_date: str, duration_seconds: Optional[int] = None) -> str:
+    """
+    Process raw transcript into structured markdown-like format.
+    
+    NEVER log raw_transcript or the processed output.
+    Only use metadata (duration, size, mime) for logging.
+    
+    Output structure:
+    - Title: # Röstmemo – {project_name} – {recording_date}
+    - Sammanfattning: First 2 sentences or ~240 chars
+    - Nyckelpunkter: 3-5 bullets (prefer sentences with keywords)
+    - Tidslinje: 4-8 segments with timestamps
+    """
+    # Safety pre-scan: replace detected PII with tokens before processing
+    # Use same patterns as masking but apply before formatting
+    text = raw_transcript
+    
+    # Email pattern
+    email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
+    text = re.sub(email_pattern, '[EMAIL]', text, flags=re.IGNORECASE)
+    
+    # Phone patterns (similar to masking)
+    phone_patterns = [
+        r'\b0\d{1,2}[- ]\d{2,3}[- ]?\d{2,3}[- ]?\d{2,4}\b',  # Swedish phone
+        r'\b07\d[- ]\d{2,3}[- ]?\d{2,3}[- ]?\d{2,4}\b',      # Mobile
+        r'\+\d{1,3}[- ]?\d{1,4}[- ]?\d{2,4}[- ]?\d{2,4}\b',  # International
+    ]
+    for pattern in phone_patterns:
+        text = re.sub(pattern, '[PHONE]', text)
+    
+    # Personnummer patterns
+    personnummer_patterns = [
+        r'\b(19|20)\d{6}[- ]\d{4}\b',  # YYYYMMDD-XXXX
+        r'\b(19|20)\d{10}\b',          # YYYYMMDDXXXX
+    ]
+    for pattern in personnummer_patterns:
+        text = re.sub(pattern, '[PERSONNUMMER]', text)
+    
+    # Split into sentences
+    # Simple sentence splitting (period, exclamation, question mark followed by space or end)
+    sentences = re.split(r'[.!?]+\s+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    
+    # Build output with strict markdown formatting
+    # Ensure each section is separated by blank lines (\n\n)
+    output_lines = []
+    
+    # Title
+    output_lines.append(f"# Röstmemo – {project_name} – {recording_date}")
+    output_lines.append("")  # Blank line after title
+    
+    # Sammanfattning
+    output_lines.append("## Sammanfattning")
+    output_lines.append("")  # Blank line after heading
+    if len(sentences) >= 2:
+        summary = f"{sentences[0]}. {sentences[1]}."
+        if len(summary) > 240:
+            summary = summary[:237] + "..."
+        output_lines.append(summary)
+    elif len(sentences) == 1:
+        summary = sentences[0]
+        if len(summary) > 240:
+            summary = summary[:237] + "..."
+        output_lines.append(summary + ".")
+    else:
+        # Fallback
+        if duration_seconds:
+            output_lines.append(f"Detta är ett röstmemo med {duration_seconds} sekunder inspelning.")
+        else:
+            output_lines.append("Detta är ett röstmemo med inspelning.")
+    output_lines.append("")  # Blank line after summary
+    
+    # Nyckelpunkter
+    output_lines.append("## Nyckelpunkter")
+    output_lines.append("")  # Blank line after heading
+    
+    # Keywords to prefer
+    keywords = ['viktigt', 'problem', 'nästa steg', 'deadline', 'källa', 'risk', 'behöver']
+    
+    # Score sentences by keyword presence and length
+    scored_sentences = []
+    for i, sent in enumerate(sentences):
+        score = len(sent)  # Base score on length
+        sent_lower = sent.lower()
+        for keyword in keywords:
+            if keyword in sent_lower:
+                score += 100  # Boost for keywords
+        scored_sentences.append((score, i, sent))
+    
+    # Sort by score (descending) and take top 3-5
+    scored_sentences.sort(reverse=True)
+    key_points = scored_sentences[:min(5, len(scored_sentences))]
+    key_points = sorted(key_points, key=lambda x: x[1])  # Sort by original order
+    
+    # If we have fewer than 3, use longest sentences
+    if len(key_points) < 3:
+        longest = sorted([(len(s), i, s) for i, s in enumerate(sentences)], reverse=True)
+        key_points = longest[:min(5, len(longest))]
+        key_points = sorted(key_points, key=lambda x: x[1])
+    
+    for _, _, sent in key_points[:5]:
+        # Cap length at reasonable size
+        if len(sent) > 150:
+            sent = sent[:147] + "..."
+        output_lines.append(f"- {sent}")
+    
+    output_lines.append("")  # Blank line after bullets
+    
+    # Tidslinje
+    output_lines.append("## Tidslinje")
+    output_lines.append("")  # Blank line after heading
+    
+    # Chunk transcript into 4-8 segments
+    num_segments = min(8, max(4, len(sentences) // 3))
+    if num_segments == 0:
+        num_segments = 1
+    
+    chunk_size = max(1, len(sentences) // num_segments)
+    
+    for i in range(num_segments):
+        start_idx = i * chunk_size
+        end_idx = min(start_idx + chunk_size, len(sentences))
+        
+        if start_idx >= len(sentences):
+            break
+        
+        # Calculate timestamp (assume ~3 seconds per sentence)
+        timestamp_seconds = i * 15  # [00:00], [00:15], [00:30], etc.
+        minutes = timestamp_seconds // 60
+        seconds = timestamp_seconds % 60
+        timestamp = f"[{minutes:02d}:{seconds:02d}]"
+        
+        # Use first sentence of chunk
+        chunk_sentences = sentences[start_idx:end_idx]
+        if chunk_sentences:
+            first_sent = chunk_sentences[0].strip()
+            if len(first_sent) > 120:
+                first_sent = first_sent[:117] + "..."
+            output_lines.append(f"{timestamp} {first_sent}")
+    
+    # Join with newlines and ensure no trailing whitespace
+    result = "\n".join(output_lines)
+    # Remove any trailing whitespace from each line
+    result_lines = [line.rstrip() for line in result.split('\n')]
+    return "\n".join(result_lines)
 

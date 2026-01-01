@@ -179,10 +179,76 @@ make verify-fas4-static
 
 ---
 
+## 🧪 FAS 5 – Upload-only Röstmemo + deterministic transcript processor (FRYST)
+
+### Mål
+Verifiera att fil-uppladdning av ljudfiler fungerar och att deterministic transcript processor genererar korrekt markdown-format.
+
+**Status:** Klar – fryst
+
+**Notering:** FAS 6 utökar med browser recording + auth/proxy polish.
+
+---
+
+## 🧪 FAS 6 – Röstmemo: Browser-inspelning + upload + ingest (via proxy, inga creds i frontend) (MANUELL CHECKLISTA)
+
+### Mål
+Verifiera att MediaRecorder-baserad direktinspelning fungerar korrekt och säkert via proxy, utan credentials i frontend.
+
+**Auth:** Auth hanteras utanför frontend (proxy/basic auth), inga creds i UI.
+
+### Manual checklist
+
+**a) Recording start/stop → POST /recordings (Network):**
+- [ ] Klicka "Röstmemo" → "Spela in" → "Starta inspelning"
+- [ ] Verifiera att timer startar (mm:ss format)
+- [ ] Klicka "Stoppa" (eller vänta till auto-stop vid 30 sek)
+- [ ] Verifiera i Network tab (DevTools) att blob skapas
+- [ ] Verifiera POST till `/api/projects/{id}/recordings` skickas
+- [ ] Verifiera att webm/ogg blob skickas med korrekt MIME-type i request
+
+**b) Dokument skapas och öppnas:**
+- [ ] Verifiera att dokument visas i Material-listan med korrekt filnamn
+- [ ] Klicka på dokumentet och verifiera att DocumentView öppnas
+- [ ] Verifiera att maskerad text visas korrekt (transcript format)
+
+**c) Event metadata:**
+- [ ] Verifiera `recording_transcribed` event i API (GET `/api/projects/{id}/events`)
+- [ ] Kontrollera att event_metadata innehåller: `mime`, `size`, `recording_file_id`
+- [ ] Kontrollera att `duration` finns om tillgänglig
+- [ ] **KRITISKT:** Verifiera att INGET raw transcript, textutdrag eller filnamn finns i event
+
+**d) Permission denied / unsupported → fail-closed + knapp "Byt till uppladdning" och fil-upload funkar:**
+- [ ] Neka mikrofon-permission i browser (eller använd browser som saknar MediaRecorder)
+- [ ] Verifiera att tydligt fel visas med meddelande
+- [ ] Verifiera att knapp "Byt till uppladdning" visas
+- [ ] Klicka på knappen och verifiera att fil-uppladdning fungerar
+- [ ] **KRITISKT:** Ingen silent auto-switch ska ske
+
+**e) Fil-uppladdning (fallback):**
+- [ ] Klicka "Ladda upp fil" i mode selector
+- [ ] Välj en ljudfil och verifiera att upload fungerar
+- [ ] Verifiera att dokument skapas korrekt
+
+**f) Max 30 sek auto-stop:**
+- [ ] Starta inspelning och vänta till 30 sek
+- [ ] Verifiera att inspelning stoppas automatiskt
+- [ ] Verifiera att upload startar automatiskt
+
+**PASS om:**
+- Alla punkter (a-f) uppfyllda
+- Inga console errors
+- Inga raw data läcker i events
+- Fail-closed fungerar korrekt
+- Proxyn fungerar (relativa anrop `/api/...`)
+
+**Status:** PASS / FAIL
+
+---
+
 ## 📌 Rekommendation (nästa steg)
 
 Nästa naturliga utökning av runbooken är:
-- **FAS 5-runbook light** (Recorder → transcript)
 - **Demo-runbook** ("så klickar Stampen på 5 minuter")
 
 ---

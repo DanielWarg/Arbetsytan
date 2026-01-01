@@ -5,8 +5,14 @@ from sqlalchemy.orm import Session
 import os
 import uuid
 import shutil
+import logging
 from typing import Optional, List
 from pathlib import Path
+from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 from database import get_db, engine
 from models import Project, ProjectEvent, Document, Base, Classification, SanitizeLevel
@@ -16,7 +22,8 @@ from schemas import (
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
-    normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError
+    normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError,
+    transcribe_audio, normalize_transcript_text, process_transcript
 )
 
 # Create tables
@@ -493,4 +500,217 @@ async def get_document(
         pii_gate_reasons=document.pii_gate_reasons,
         created_at=document.created_at
     )
+
+
+# Recordings endpoint
+@app.post("/api/projects/{project_id}/recordings", response_model=DocumentListResponse, status_code=201)
+async def upload_recording(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Upload an audio recording and process it into a transcript document.
+    Returns metadata only (no masked_text, no raw transcript).
+    
+    NEVER logs raw transcript or raw document content.
+    """
+    # Verify project exists
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Validate file size (25MB max)
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB")
+    
+    # TEMP LOG: Audio file received (metadata only)
+    logger.info(f"[AUDIO] Audio file received: filename={file.filename}, size={file_size} bytes, mime={file.content_type}")
+    
+    # Save audio file to permanent location (never exposed via API)
+    audio_file_id = str(uuid.uuid4())
+    audio_ext = os.path.splitext(file.filename)[1] or '.mp3'
+    audio_path = UPLOAD_DIR / f"{audio_file_id}{audio_ext}"
+    
+    try:
+        with open(audio_path, 'wb') as f:
+            f.write(file_content)
+        logger.info(f"[AUDIO] Audio file saved: {audio_path}")
+    except Exception as e:
+        logger.error(f"[AUDIO] Failed to save audio file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save audio file: {str(e)}")
+    
+    # Get file metadata (mime type, size)
+    # Use actual content-type if available, fallback to application/octet-stream
+    mime_type = file.content_type or "application/octet-stream"
+    
+    # Transcribe audio using local STT (openai-whisper)
+    # NEVER log raw transcript
+    logger.info(f"[AUDIO] Starting transcription...")
+    try:
+        raw_transcript = transcribe_audio(str(audio_path))
+        transcript_length = len(raw_transcript) if raw_transcript else 0
+        logger.info(f"[AUDIO] Transcription finished: transcript_length={transcript_length} chars")
+    except Exception as e:
+        logger.error(f"[AUDIO] Transcription failed: {str(e)}")
+        # Fail-closed: cleanup and raise error (no document created)
+        if audio_path.exists():
+            os.remove(audio_path)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Audio transcription failed: {str(e)}"
+        )
+    
+    # Normalize transcript text (deterministic post-processing)
+    normalized_transcript = normalize_transcript_text(raw_transcript)
+    normalized_length = len(normalized_transcript) if normalized_transcript else 0
+    logger.info(f"[AUDIO] Transcript normalized: length={normalized_length} chars (was {transcript_length})")
+    
+    # Get actual duration from transcription (if available)
+    # For now, estimate from file size (can be improved with audio metadata)
+    estimated_duration = None
+    if file_size > 0:
+        # Rough estimate: assume ~128kbps = ~1MB per minute
+        estimated_duration = int((file_size / (1024 * 1024)) * 60)
+    
+    # Process transcript into structured format
+    recording_date = datetime.now().strftime("%Y-%m-%d")
+    processed_text = process_transcript(normalized_transcript, project.name, recording_date, estimated_duration)
+    
+    # Create temporary TXT file with processed text
+    temp_txt_path = UPLOAD_DIR / f"temp_transcript_{uuid.uuid4()}.txt"
+    try:
+        with open(temp_txt_path, 'w', encoding='utf-8') as f:
+            f.write(processed_text)
+    except Exception as e:
+        # Cleanup audio file
+        if audio_path.exists():
+            os.remove(audio_path)
+        raise HTTPException(status_code=500, detail=f"Failed to create transcript file: {str(e)}")
+    
+    # Feed processed text into existing ingest pipeline (same as TXT upload)
+    try:
+        # Normalize text
+        normalized_text = normalize_text(processed_text)
+        
+        # Progressive sanitization pipeline (same as document upload)
+        pii_gate_reasons = {}
+        sanitize_level = SanitizeLevel.NORMAL
+        usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+        masked_text = None
+        
+        # Try normal masking
+        masked_text = mask_text(normalized_text, level="normal")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.NORMAL
+            pii_gate_reasons = None
+        else:
+            pii_gate_reasons["normal"] = reasons
+            
+            # Try strict masking
+            masked_text = mask_text(normalized_text, level="strict")
+            is_safe, reasons = pii_gate_check(masked_text)
+            if is_safe:
+                sanitize_level = SanitizeLevel.STRICT
+                usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+            else:
+                pii_gate_reasons["strict"] = reasons
+                
+                # Use paranoid masking (must always pass gate)
+                masked_text = mask_text(normalized_text, level="paranoid")
+                is_safe, reasons = pii_gate_check(masked_text)
+                
+                if not is_safe:
+                    # This should never happen - paranoid must guarantee gate pass
+                    os.remove(temp_txt_path)
+                    if audio_path.exists():
+                        os.remove(audio_path)
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Internal error: Paranoid masking failed PII gate check. This is a bug."
+                    )
+                
+                sanitize_level = SanitizeLevel.PARANOID
+                usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+        
+        # Move TXT file to permanent location
+        txt_file_id = str(uuid.uuid4())
+        permanent_txt_path = UPLOAD_DIR / f"{txt_file_id}.txt"
+        shutil.move(str(temp_txt_path), str(permanent_txt_path))
+        
+        # Create document record (filename: rostmemo-{timestamp}.txt)
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        document_filename = f"röstmemo-{timestamp}.txt"
+        
+        db_document = Document(
+            project_id=project_id,
+            filename=document_filename,
+            file_type='txt',
+            classification=project.classification,  # Inherit from project
+            masked_text=masked_text,
+            file_path=str(permanent_txt_path),  # Never exposed via API
+            sanitize_level=sanitize_level,
+            usage_restrictions=usage_restrictions,
+            pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None
+        )
+        db.add(db_document)
+        
+        # Update project updated_at
+        from sqlalchemy.sql import func
+        project.updated_at = func.now()
+        
+        # Create event: recording_transcribed with ONLY metadata (no raw transcript)
+        event_metadata = {
+            "size": file_size,
+            "mime": mime_type,
+        }
+        if estimated_duration:
+            event_metadata["duration_seconds"] = estimated_duration
+        # Store reference to audio file (non-exposed)
+        event_metadata["recording_file_id"] = audio_file_id
+        
+        event = ProjectEvent(
+            project_id=project_id,
+            event_type="recording_transcribed",
+            actor=username,
+            event_metadata=event_metadata
+        )
+        db.add(event)
+        
+        logger.info(f"[AUDIO] Creating document...")
+        db.commit()
+        db.refresh(db_document)
+        logger.info(f"[AUDIO] Document created with id={db_document.id}")
+        
+        # Return metadata only (no masked_text, no raw transcript)
+        return DocumentListResponse(
+            id=db_document.id,
+            project_id=db_document.project_id,
+            filename=db_document.filename,
+            file_type=db_document.file_type,
+            classification=db_document.classification.value,
+            sanitize_level=db_document.sanitize_level.value,
+            usage_restrictions=db_document.usage_restrictions,
+            pii_gate_reasons=db_document.pii_gate_reasons,
+            created_at=db_document.created_at
+        )
+        
+    except HTTPException:
+        # Cleanup on error
+        if temp_txt_path.exists():
+            os.remove(temp_txt_path)
+        if audio_path.exists():
+            os.remove(audio_path)
+        raise
+    except Exception as e:
+        # Cleanup on error
+        if temp_txt_path.exists():
+            os.remove(temp_txt_path)
+        if audio_path.exists():
+            os.remove(audio_path)
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 

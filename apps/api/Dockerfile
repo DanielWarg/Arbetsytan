@@ -1,7 +1,11 @@
 FROM python:3.11-slim
 
-# Install postgres client for init script and curl for healthcheck
-RUN apt-get update && apt-get install -y postgresql-client curl && rm -rf /var/lib/apt/lists/*
+# Install postgres client, curl for healthcheck, and ffmpeg for audio processing (whisper uses it)
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    curl \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

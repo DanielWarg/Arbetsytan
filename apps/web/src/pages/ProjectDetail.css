@@ -405,6 +405,209 @@
   background: rgba(239, 68, 68, 0.2);
 }
 
+/* Recording success state */
+.recording-success {
+  text-align: center;
+  padding: var(--spacing-lg);
+}
+
+.recording-success-text {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  margin-bottom: var(--spacing-md);
+  font-family: var(--font-sans);
+}
+
+.recording-success-link {
+  color: var(--color-interactive-default);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-sans);
+  transition: opacity 0.2s;
+}
+
+.recording-success-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Audio Recording Container */
+.audio-recording-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recording-mode-selector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.25rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  transition: all 0.15s;
+}
+
+.mode-btn:hover:not(:disabled) {
+  background: var(--color-bg-active);
+  border-color: var(--color-border-hover);
+}
+
+.mode-btn.active {
+  background: var(--color-bg-active);
+  border-color: var(--color-brand-red);
+  color: var(--color-text-primary);
+}
+
+.mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recording-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.record-start-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  background: var(--color-brand-red);
+  color: var(--color-interactive-text);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-sans);
+  transition: all 0.15s;
+}
+
+.record-start-btn:hover:not(:disabled) {
+  background: var(--color-accent-status);
+  opacity: 0.9;
+}
+
+.record-start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recording-active {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+.recording-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--color-brand-red);
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.recording-limit {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+}
+
+.record-stop-btn {
+  padding: 0.75rem 1.5rem;
+  background: var(--color-accent-error);
+  color: var(--color-interactive-text);
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-sans);
+  transition: all 0.15s;
+}
+
+.record-stop-btn:hover {
+  opacity: 0.9;
+}
+
+.recording-status {
+  padding: 1rem;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+}
+
+.recording-error {
+  padding: 1rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-accent-error);
+  border-radius: 0.5rem;
+  color: var(--color-accent-error);
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+}
+
+.recording-error p {
+  margin: 0 0 0.5rem 0;
+}
+
+.recording-fallback-btn {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  border-radius: 0.25rem;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  transition: all 0.15s;
+}
+
+.recording-fallback-btn:hover {
+  background: var(--color-bg-active);
+  border-color: var(--color-border-hover);
+}
+
+.dark .recording-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-accent-error);
+}
+
 /* Material List */
 .material-list {
   margin-bottom: var(--spacing-2xl);
