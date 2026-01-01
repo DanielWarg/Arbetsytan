@@ -23,7 +23,7 @@ from schemas import (
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
     normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError,
-    transcribe_audio, normalize_transcript_text, process_transcript
+    transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text
 )
 
 # Create tables
@@ -579,6 +579,9 @@ async def upload_recording(
     # Process transcript into structured format
     recording_date = datetime.now().strftime("%Y-%m-%d")
     processed_text = process_transcript(normalized_transcript, project.name, recording_date, estimated_duration)
+    
+    # Refine to editorial-ready first draft (deterministic)
+    processed_text = refine_editorial_text(processed_text)
     
     # Create temporary TXT file with processed text
     temp_txt_path = UPLOAD_DIR / f"temp_transcript_{uuid.uuid4()}.txt"

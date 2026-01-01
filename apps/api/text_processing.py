@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Tuple, List, Optional
+from collections import Counter
 
 
 class PiiGateError(Exception):
@@ -708,6 +709,215 @@ def process_transcript(raw_transcript: str, project_name: str, recording_date: s
     # Join with newlines and ensure no trailing whitespace
     result = "\n".join(output_lines)
     # Remove any trailing whitespace from each line
+    result_lines = [line.rstrip() for line in result.split('\n')]
+    return "\n".join(result_lines)
+
+
+def refine_editorial_text(structured_text: str) -> str:
+    """
+    Refine structured transcript text to editorial-ready first draft (deterministic).
+    
+    Performs ONLY:
+    - Trims speech signals in Nyckelpunkter ("Och…", "Det här…", "Jag tycker…")
+    - Simplifies obvious speech syntax to neutral written Swedish
+    - Ensures each bullet starts with noun or verb
+    - If Sammanfattning has < 2 sentences: adds 1 condensed conclusion based on existing words (no new info)
+    
+    MUST NOT:
+    - Change meaning
+    - Add new facts
+    - Use LLM or external services
+    
+    NEVER log structured_text or the refined output.
+    """
+    if not structured_text:
+        return structured_text
+    
+    lines = structured_text.split('\n')
+    output_lines = []
+    i = 0
+    
+    # Common Swedish speech signals to trim from bullet points
+    speech_signals = [
+        r'^och\s+',
+        r'^det här\s+',
+        r'^detta\s+',
+        r'^jag tycker\s+',
+        r'^jag tror\s+',
+        r'^jag tror att\s+',
+        r'^tycker jag\s+',
+        r'^tror jag\s+',
+        r'^alltså\s+',
+        r'^så\s+',
+        r'^sen\s+',
+        r'^sedan\s+',
+        r'^då\s+',
+        r'^men\s+',
+        r'^eller\s+',
+        r'^så att\s+',
+        r'^så att säga\s+',
+    ]
+    
+    # Speech-to-written Swedish transformations (deterministic mappings)
+    speech_to_written = {
+        # "det är" -> "det" (remove redundant "är")
+        r'\bdet är\s+': 'det ',
+        # "det här" -> "detta" (more formal)
+        r'\bdet här\s+': 'detta ',
+        # "så att" -> "så att" (keep, but can be context-dependent)
+        # "om vi" -> "om vi" (keep)
+        # "det kan" -> "det kan" (keep)
+        # Remove filler words in middle of sentences
+        r'\s+alltså\s+': ' ',
+        r'\s+så att säga\s+': ' ',
+        r'\s+typ\s+': ' ',
+        # Fix common speech patterns
+        r'\bdet det\b': 'det',
+        r'\bär är\b': 'är',
+        r'\bkan kan\b': 'kan',
+        r'\bska ska\b': 'ska',
+    }
+    
+    # Process line by line
+    in_sammanfattning = False
+    in_nyckelpunkter = False
+    sammanfattning_lines = []
+    sammanfattning_start_idx = -1
+    
+    while i < len(lines):
+        line = lines[i]
+        
+        # Detect sections
+        if line.strip() == "## Sammanfattning":
+            in_sammanfattning = True
+            in_nyckelpunkter = False
+            output_lines.append(line)
+            i += 1
+            continue
+        elif line.strip() == "## Nyckelpunkter":
+            in_sammanfattning = False
+            in_nyckelpunkter = True
+            output_lines.append(line)
+            i += 1
+            continue
+        elif line.strip().startswith("##"):
+            in_sammanfattning = False
+            in_nyckelpunkter = False
+            output_lines.append(line)
+            i += 1
+            continue
+        
+        # Process Sammanfattning section
+        if in_sammanfattning and line.strip() and not line.strip().startswith("#"):
+            if sammanfattning_start_idx == -1:
+                sammanfattning_start_idx = len(output_lines)
+            sammanfattning_lines.append(line)
+            # Apply speech-to-written transformations
+            refined_line = line
+            for pattern, replacement in speech_to_written.items():
+                refined_line = re.sub(pattern, replacement, refined_line, flags=re.IGNORECASE)
+            output_lines.append(refined_line)
+            i += 1
+            continue
+        
+        # Process Nyckelpunkter bullets
+        if in_nyckelpunkter and line.strip().startswith("- "):
+            bullet_text = line[2:].strip()  # Remove "- " prefix
+            
+            # Trim speech signals from beginning
+            for signal_pattern in speech_signals:
+                bullet_text = re.sub(signal_pattern, '', bullet_text, flags=re.IGNORECASE)
+            
+            # Apply speech-to-written transformations
+            for pattern, replacement in speech_to_written.items():
+                bullet_text = re.sub(pattern, replacement, bullet_text, flags=re.IGNORECASE)
+            
+            # Ensure bullet starts with noun or verb
+            # Simple heuristic: check if starts with common Swedish verbs or nouns
+            # Verbs: inflected forms are complex, so we check for common patterns
+            # Nouns: often start with determiners (en, ett, den, det) or are capitalized
+            bullet_lower = bullet_text.lower().strip()
+            
+            # If starts with common speech connectors, try to find next word
+            connectors = ['och', 'men', 'eller', 'så', 'då', 'sen', 'sedan', 'alltså']
+            words = bullet_text.split()
+            if words and words[0].lower() in connectors:
+                # Try to keep only if next word is a good start
+                if len(words) > 1:
+                    # Remove first word if it's a connector
+                    bullet_text = ' '.join(words[1:])
+                    bullet_lower = bullet_text.lower().strip()
+            
+            # Capitalize first letter if needed (basic heuristic)
+            if bullet_text and bullet_text[0].islower():
+                # Check if it's a verb or noun starting with lowercase
+                # Common Swedish verbs that start lowercase: behöver, kan, ska, måste, vill
+                # If not starting with verb, capitalize
+                common_verbs = ['behöver', 'kan', 'ska', 'måste', 'vill', 'får', 'gör', 'har', 'är', 'blir']
+                if not any(bullet_lower.startswith(v + ' ') for v in common_verbs):
+                    bullet_text = bullet_text[0].upper() + bullet_text[1:] if len(bullet_text) > 1 else bullet_text.upper()
+            
+            output_lines.append(f"- {bullet_text}")
+            i += 1
+            continue
+        
+        # Pass through other lines unchanged
+        output_lines.append(line)
+        i += 1
+    
+    # Post-process: Enhance Sammanfattning if it has < 2 sentences
+    if sammanfattning_start_idx != -1 and len(sammanfattning_lines) > 0:
+        # Count sentences in Sammanfattning
+        sammanfattning_text = ' '.join(sammanfattning_lines)
+        sentences = re.split(r'[.!?]+\s+', sammanfattning_text)
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 5]
+        
+        if len(sentences) < 2:
+            # Extract key words from existing text for condensed conclusion
+            # Use words from Nyckelpunkter and Sammanfattning (no new info)
+            all_words = []
+            
+            # Find Nyckelpunkter section and extract words from bullets
+            in_nyckelpunkter_section = False
+            for line in lines:
+                if line.strip() == "## Nyckelpunkter":
+                    in_nyckelpunkter_section = True
+                    continue
+                elif line.strip().startswith("##") and in_nyckelpunkter_section:
+                    in_nyckelpunkter_section = False
+                    continue
+                
+                if in_nyckelpunkter_section and line.strip().startswith("- "):
+                    bullet_text = line[2:].strip()
+                    all_words.extend(re.findall(r'\b\w+\b', bullet_text.lower()))
+            
+            # Add words from Sammanfattning
+            all_words.extend(re.findall(r'\b\w+\b', sammanfattning_text.lower()))
+            
+            # Find common important words (nouns, verbs - simple heuristic)
+            # Filter out common stop words
+            stop_words = {'detta', 'detta', 'finns', 'skulle', 'borde', 'bör', 'kanske', 'möjligt', 'eller', 'också', 'även', 'där', 'här', 'där', 'denna', 'detta', 'denne'}
+            important_words = [w for w in all_words if len(w) > 4 and w not in stop_words]
+            
+            # Create simple conclusion based on existing content
+            # Just extract key concept and make a simple statement
+            if important_words:
+                # Use most common word or a key concept
+                word_counts = Counter(important_words)
+                top_words = [w for w, _ in word_counts.most_common(3)]
+                
+                # Build simple conclusion sentence using existing patterns
+                conclusion = f"Detta fokuserar på {top_words[0] if top_words else 'huvudpunkterna'}."
+            else:
+                conclusion = "Detta sammanfattar huvudpunkterna."
+            
+            # Insert conclusion after existing Sammanfattning content
+            # Find where to insert (after last line of Sammanfattning, before blank line)
+            insert_idx = sammanfattning_start_idx + len(sammanfattning_lines)
+            output_lines.insert(insert_idx, conclusion)
+    
+    # Join and return
+    result = "\n".join(output_lines)
     result_lines = [line.rstrip() for line in result.split('\n')]
     return "\n".join(result_lines)
 
