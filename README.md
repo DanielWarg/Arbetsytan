@@ -51,18 +51,18 @@ Arbetsytan är ett internt arbetsverktyg som:
 
 - **Backend:** FastAPI (Python), PostgreSQL
 - **Frontend:** React + Vite
-- **Tal-till-text:** Whisper large-v3 (lokal, ingen extern tjänst)
+- **Tal-till-text:** Whisper (lokal, ingen extern tjänst, konfigurerbar modellstorlek)
 - **Deployment:** Docker Compose
 
 ## Lokal tal-till-text (STT)
 
-Arbetsytan använder **Whisper large-v3** för lokal tal-till-text-transkribering.
+Arbetsytan använder **Whisper** för lokal tal-till-text-transkribering (ingen extern tjänst).
 
-**Varför large-v3?**
-- Överlägsen svensk transkribering jämfört med mindre modeller
+**Varför lokal Whisper?**
 - Fullständig dataintegritet: ingen data lämnar systemet
 - Driftssäkerhet: fungerar offline, inga API-beroenden
-- Modell-caching säkerställer snabb efterföljande transkriberingar
+- Modell-caching säkerställer snabbare efterföljande transkriberingar
+- Konfigurerbar modellstorlek för olika användningsfall
 
 **Konfiguration:**
 - **Dev (default):** `WHISPER_MODEL=medium` (balans mellan kvalitet och minne)
@@ -80,8 +80,12 @@ Whisper-modell caches i global singleton för att undvika upprepad laddning. Mod
 - **medium:** ~3-5GB RAM (bra balans, default)
 - **large-v3:** ~6-10GB RAM (bäst kvalitet, kräver Docker Desktop med 10-12GB minne)
 
+**Prestanda:**
+- **medium (default):** ~3-5 minuter för första transkribering (modellladdning + CPU-inferens), efterföljande snabbare
+- **large-v3:** ~15-20 minuter för första transkribering, bäst kvalitet men långsam på CPU
+- **base/small:** ~1-2 minuter, snabbast men lägre kvalitet
+
 **Begränsningar:**
-- Första transkriberingen tar längre tid (modellladdning), efterföljande är snabbare
 - CPU-baserad inferens (ingen GPU-acceleration i nuvarande setup)
 - För large-v3: Öka Docker Desktop minne till minst 10GB (Settings → Resources → Advanced → Memory)
 

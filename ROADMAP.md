@@ -105,10 +105,14 @@ Status: **Klar – fryst**
 **Mål:** maximalt signalvärde, minimal komplexitet.
 
 Levererat:
-- **Röstmemo → transcript → ingest** – Browser-inspelning, lokal STT (Whisper large-v3), deterministisk transcript-normalisering, redaktionell förädling
+- **Röstmemo → transcript → ingest** – Browser-inspelning, lokal STT (Whisper), deterministisk transcript-normalisering, redaktionell förädling
 - Deterministisk pipeline för transkript: transcribe → normalize → process → refine → sanitize
-- **STT-motor:** Whisper large-v3 för optimal svensk transkribering (konfigurerbart via `WHISPER_MODEL` env)
-- **Modell-caching:** Persistent cache via Docker volume för snabbare efterföljande transkriberingar
+- **STT-motor:** Whisper (konfigurerbart via `WHISPER_MODEL` env var)
+  - **Default:** `medium` (~3-5GB RAM, bra balans kvalitet/hastighet)
+  - **Alternativ:** `large-v3` (~6-10GB RAM, bäst kvalitet, långsammare)
+  - **Dev:** `base` eller `small` för snabbare utveckling
+- **Modell-caching:** Persistent cache via Docker volume (`whisper_cache`) för snabbare efterföljande transkriberingar
+- **Prestanda:** Large-v3 tar ~15-20 min för första transkribering (modellladdning + CPU-inferens), medium tar ~3-5 min
 - **Alternativ STT (framtida):** Arkitekturen är förberedd för motorbyte (t.ex. Silero ASR) utan endpoint-ändringar
 
 Status: **Klar – fryst**

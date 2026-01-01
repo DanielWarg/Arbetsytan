@@ -174,10 +174,48 @@ make verify-fas4-static
 | FAS 2 | ?      | Runtime              | `make verify-fas2`           |
 | FAS 3 | ?      | Automatisk (kritisk) | `make verify-sanitization`   |
 | FAS 4 | ?      | Hybrid               | `make verify-fas4-static`   |
+| STT   | ?      | Automatisk           | `make verify-transcription-quality` |
 
 ➡️ **Systemet är redo för showreel-modul (FAS 5)** när alla är PASS
 
 **Notering:** FAS 5 (Röstmemo) och FAS 6 (Browser-inspelning) är implementerade och verifierade.
+
+---
+
+## 🧪 Transcription Quality Verification (AUTOMATISK)
+
+### Mål
+Verifiera att Whisper-producerar korrekta svenska transkriptioner med tillräcklig kvalitet.
+
+### Kommando
+
+```bash
+make verify-transcription-quality
+```
+
+**Notering:** Med `large-v3` kan detta ta 15-20 minuter första gången (modellladdning). Med `medium` tar det ~3-5 minuter.
+
+### Script verifierar:
+- Transkription är inte tom
+- Minst 10 ord
+- Inga stub-mönster (t.ex. "Detta är en inspelning från...")
+- Minst 50% svenska ord (heuristik baserad på svenska stopwords och å/ä/ö)
+
+**PASS om:**
+- Alla assertions passerar
+- Exit code = 0
+- Swedish ratio >= 50%
+
+**Minneskrav:**
+- `medium`: ~3-5GB Docker RAM (default, rekommenderas)
+- `large-v3`: ~6-10GB Docker RAM (bäst kvalitet, långsam)
+- `base`: ~1-2GB Docker RAM (utveckling, snabb)
+
+**Notering:** För large-v3 krävs att Docker Desktop har minst 10GB RAM allokerat (Settings → Resources → Advanced → Memory).
+
+**Status:** PASS / FAIL
+
+Se [README.md](README.md) för detaljer om minneskrav och konfiguration.
 
 ---
 
@@ -189,6 +227,11 @@ Verifiera att fil-uppladdning av ljudfiler fungerar och att deterministic transc
 **Status:** Klar – fryst
 
 **Notering:** FAS 6 utökar med browser recording + auth/proxy polish.
+
+**Whisper-konfiguration:**
+- Default: `medium` modell (bra balans, ~3-5 min transkribering)
+- Demo: `large-v3` modell (bäst kvalitet, ~15-20 min första transkribering)
+- Konfigureras via `WHISPER_MODEL` env var eller `.env` fil
 
 ---
 
