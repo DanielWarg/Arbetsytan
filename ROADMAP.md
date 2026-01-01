@@ -100,15 +100,15 @@ Status: **Klar – fryst**
 
 ---
 
-## FAS 5 – Showreel-moduler (välj 1–2)
+## FAS 5 – Showreel-moduler ✅
 
 **Mål:** maximalt signalvärde, minimal komplexitet.
 
-Alternativ:
-- **Recorder → transcript → ingest** (rekommenderat)
-- Dashboard-intelligens (Scout, deadlines)
+Levererat:
+- **Röstmemo → transcript → ingest** – Browser-inspelning, lokal STT (openai-whisper), deterministisk transcript-normalisering, redaktionell förädling
+- Deterministisk pipeline för transkript: transcribe → normalize → process → refine → sanitize
 
-Val görs baserat på demo-värde, inte teknikintresse.
+Status: **Klar – fryst**
 
 ---
 

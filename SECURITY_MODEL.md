@@ -8,20 +8,13 @@
 
 **Fail-closed vid osäkerhet** – Vid osäkerhet stängs systemet ner; ingen "fail-open". Bättre att blockera än att exponera känsligt material.
 
-## Två arbetsytor
+## Arbetsyta
 
-### Normalyta (maskad)
+### Maskad vy (standard)
 
 Standardarbetsmiljö där all känslig information är maskerad. Användare ser strukturerad information utan att exponera källor eller känsliga detaljer.
 
-### Originalyta / Fort Knox
-
-Åtkomst till originalmaterial kräver:
-
-- **Aktiv handling** – Explicit begäran, inga automatismer
-- **Tydlig varning** – Systemet varnar innan åtkomst beviljas
-- **Tidsbegränsad åtkomst** – Åtkomst upphör automatiskt efter definierad tid
-- **Inga previews i listor** – Originalmaterial visas aldrig i listor eller översikter
+Originalmaterial bevaras i säkert lager och exponeras aldrig i arbetsytan. Alla dokument visas endast i maskad vy.
 
 ## Klassificering
 
@@ -40,8 +33,8 @@ Klassificering påverkar:
 
 ## Roller och åtkomst
 
-- **Owner (reporter)** – Full åtkomst till eget material, kan bevilja åtkomst till andra
-- **Editor (maskad åtkomst)** – Kan arbeta med material i maskad vy, begära Fort Knox-åtkomst vid behov
+- **Owner (reporter)** – Full åtkomst till eget material i maskad vy
+- **Editor** – Kan arbeta med material i maskad vy
 - **Admin (drift)** – Systemadministration, aldrig innehållsåtkomst
 
 ## Loggpolicy
@@ -58,13 +51,15 @@ Klassificering påverkar:
 
 Loggar är för säkerhet och incidenthantering, inte för övervakning av användare.
 
-## Extern AI
+## AI och externa tjänster
 
-Extern AI används endast via maskad export:
+**Lokal STT** – Tal-till-text hanteras lokalt via openai-whisper. Ingen data lämnar systemet vid transkription.
 
-- **Endast via maskad export** – Inget originalmaterial lämnar systemet
-- **Alltid opt-in** – Användare måste explicit godkänna export
-- **Ingen rådata lämnar systemet** – Endast maskerat, strukturerat material exporteras
+**Extern AI** – Ej implementerat. Om extern AI skulle användas i framtiden:
+
+- Endast via maskad export
+- Alltid opt-in
+- Ingen rådata lämnar systemet – endast maskerat, strukturerat material exporteras
 
 ## Designintention
 

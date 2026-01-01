@@ -2,7 +2,7 @@
 
 ## Vad är Arbetsytan?
 
-Arbetsytan är en säker arbetsmiljö för journalister som hanterar känsliga tips och källor genom en strukturerad process från mottagning till analys.
+Arbetsytan är en säker arbetsmiljö för journalister som hanterar känsliga tips och källor genom en strukturerad process från mottagning till läsning.
 
 ## För vem?
 
@@ -10,12 +10,11 @@ Reporter och redaktörer som arbetar med känsliga tips, källor och material so
 
 ## Arbetsflöde
 
-1. **Tip** – Känsligt tips eller material tas emot
-2. **Project** – Ett projekt skapas för att organisera arbetet
-3. **Ingest** – Material importeras och struktureras
-4. **Masked workspace** – Standardarbetsmiljö där känslig information är maskerad
-5. **Fort Knox original** (valfritt) – Explicit, tidsbegränsat tillgång till originalmaterial vid behov
-6. **Overview** – AI-genererad översikt för att förstå materialet snabbt
+1. **Projekt** – Ett projekt skapas för att organisera material med klassificering (Offentlig, Känslig, Källkänslig)
+2. **Ingest** – Material importeras (PDF, textfiler) eller spelas in direkt (röstmemo via webbläsare)
+3. **Automatisk sanering** – Allt material går genom deterministisk progressive sanitization pipeline (Normal → Strikt → Paranoid)
+4. **Maskad vy** – Standardarbetsmiljö där all känslig information är maskerad; originalmaterial exponeras aldrig
+5. **Redaktionell förädling** – Röstmemo-transkript förädlas deterministiskt till redaktionellt arbetsbart första utkast
 
 ## Vad gör Arbetsytan INTE?
 
@@ -23,12 +22,20 @@ Reporter och redaktörer som arbetar med känsliga tips, källor och material so
 - Publicerar inte innehåll
 - Ersätter inte journalistens bedömning eller arbete
 - Är inte en redaktionssystem eller CMS
+- Använder inte extern AI för transkription eller bearbetning (endast lokal STT)
 
 ## Varför spelar det roll?
 
-- **Minska risk** – Säker hantering av känsligt material från start
-- **Öka översikt** – Snabb förståelse av stora mängder material
-- **Hjälpa journalistiken** – Struktur och verktyg som stödjer journalistiskt arbete, inte ersätter det
+- **Minska risk** – Säker hantering av känsligt material från start; allt maskeras automatiskt
+- **Öka effektivitet** – Strukturerad hantering av material i projekt
+- **Skydda källor** – Originalmaterial exponeras aldrig; endast maskad vy arbetas med
+- **Hjälpa journalistiken** – Verktyg som stödjer journalistiskt arbete, inte ersätter det
+
+## Teknisk approach
+
+- **Lokal STT** – Tal-till-text via openai-whisper (ingen extern tjänst, ingen data lämnar systemet)
+- **Deterministisk pipeline** – Alla transformationer är deterministiska; samma input ger samma output
+- **Fail-closed** – Vid osäkerhet stängs systemet ner; inget material exponeras
 
 ## Showreel intent
 

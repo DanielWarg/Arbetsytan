@@ -177,6 +177,8 @@ make verify-fas4-static
 
 ➡️ **Systemet är redo för showreel-modul (FAS 5)** när alla är PASS
 
+**Notering:** FAS 5 (Röstmemo) och FAS 6 (Browser-inspelning) är implementerade och verifierade.
+
 ---
 
 ## 🧪 FAS 5 – Upload-only Röstmemo + deterministic transcript processor (FRYST)
