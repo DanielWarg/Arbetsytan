@@ -51,8 +51,47 @@ Arbetsytan är ett internt arbetsverktyg som:
 
 - **Backend:** FastAPI (Python), PostgreSQL
 - **Frontend:** React + Vite
-- **Tal-till-text:** openai-whisper (lokal, ingen extern tjänst)
+- **Tal-till-text:** Whisper large-v3 (lokal, ingen extern tjänst)
 - **Deployment:** Docker Compose
+
+## Lokal tal-till-text (STT)
+
+Arbetsytan använder **Whisper large-v3** för lokal tal-till-text-transkribering.
+
+**Varför large-v3?**
+- Överlägsen svensk transkribering jämfört med mindre modeller
+- Fullständig dataintegritet: ingen data lämnar systemet
+- Driftssäkerhet: fungerar offline, inga API-beroenden
+- Modell-caching säkerställer snabb efterföljande transkriberingar
+
+**Konfiguration:**
+- **Dev (default):** `WHISPER_MODEL=medium` (balans mellan kvalitet och minne)
+- **Demo:** `WHISPER_MODEL=large-v3` (bäst kvalitet, kräver 10-12GB Docker RAM)
+
+**Arkitektur:**
+STT-motorn är abstraherad i `text_processing.py` för enkel utbytbarhet. Framtida motorbyten (t.ex. Silero ASR) kan implementeras utan ändringar i endpoints eller UI.
+
+**Caching:**
+Whisper-modell caches i global singleton för att undvika upprepad laddning. Modell-cache sparas i persistent Docker volume (`whisper_cache`) för att överleva container-rebuilds.
+
+**Minneskrav:**
+- **small:** ~1-2GB RAM (snabbast, lägre kvalitet)
+- **base:** ~1-2GB RAM (bra för utveckling)
+- **medium:** ~3-5GB RAM (bra balans, default)
+- **large-v3:** ~6-10GB RAM (bäst kvalitet, kräver Docker Desktop med 10-12GB minne)
+
+**Begränsningar:**
+- Första transkriberingen tar längre tid (modellladdning), efterföljande är snabbare
+- CPU-baserad inferens (ingen GPU-acceleration i nuvarande setup)
+- För large-v3: Öka Docker Desktop minne till minst 10GB (Settings → Resources → Advanced → Memory)
+
+## Security Core (framtida)
+
+Security Core är en isolerad, dormant modul förberedd för framtida extern AI-integration. Modulen porterats från copy-pastev2 och innehåller Privacy Shield (defense-in-depth masking), Privacy Gate (hard enforcement för extern LLM) och Privacy Guard (content protection för loggning).
+
+**Status:** Inaktiv, dormant, opt-in via feature flag. Ingen endpoint-användning. Befintlig masking i `text_processing.py` förblir aktiv och oberoende.
+
+Se [docs/SECURITY_CORE.md](docs/SECURITY_CORE.md) för detaljer.
 
 ## Run locally
 

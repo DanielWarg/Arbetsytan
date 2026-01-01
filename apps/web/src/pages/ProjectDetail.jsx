@@ -154,93 +154,108 @@ function ProjectDetail() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  // Simplified recording functions - avoid constructor issues
   const startRecording = async () => {
-    let stream = null
-    
     try {
       setMicPermissionError(null)
       
-      // Check MediaRecorder support
-      if (!window.MediaRecorder || !navigator.mediaDevices) {
-        throw new Error('MediaRecorder stöds inte i denna webbläsare')
+      // Check browser support
+      if (typeof window === 'undefined') return
+      if (!window.MediaRecorder) {
+        setMicPermissionError('MediaRecorder stöds inte i denna webbläsare')
+        return
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setMicPermissionError('Mikrofon stöds inte i denna webbläsare')
+        return
       }
       
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       
-      // Determine MIME type (prefer webm, fallback to ogg, fail if neither)
-      let mimeType = null
-      if (MediaRecorder.isTypeSupported('audio/webm')) {
-        mimeType = 'audio/webm'
-      } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
-        mimeType = 'audio/ogg'
-      } else {
-        stream.getTracks().forEach(track => track.stop())
-        throw new Error('Inget ljudformat stöds. Använd fil-uppladdning istället.')
+      // Find supported MIME type - prefer ogg for better Whisper compatibility
+      const mimeTypes = ['audio/ogg', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+      let mimeType = ''
+      for (const type of mimeTypes) {
+        if (window.MediaRecorder.isTypeSupported(type)) {
+          mimeType = type
+          break
+        }
+      }
+      console.log('Using MIME type:', mimeType)
+      
+      if (!mimeType) {
+        stream.getTracks().forEach(t => t.stop())
+        setMicPermissionError('Inget ljudformat stöds. Använd fil-uppladdning.')
+        return
       }
       
-      const recorder = new MediaRecorder(stream, { mimeType })
+      // Create recorder
+      const recorder = new window.MediaRecorder(stream, { mimeType })
       recorderRef.current = recorder
       audioChunksRef.current = []
       
-      // Single onstop handler (no duplication)
-      recorder.onstop = async () => {
-        // Cleanup timer
+      recorder.ondataavailable = function(e) {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data)
+        }
+      }
+      
+      recorder.onstop = function() {
+        // Clear timer
         if (timerRef.current) {
           clearInterval(timerRef.current)
           timerRef.current = null
         }
         
-        try {
-          const blob = new Blob(audioChunksRef.current, { type: mimeType })
-          await uploadRecordingBlob(blob)
-        } finally {
-          // Always stop stream tracks
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop())
-            streamRef.current = null
+        // Stop tracks
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop())
+          streamRef.current = null
+        }
+        
+        // Create blob and upload - use all collected chunks
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new window.Blob(audioChunksRef.current, { type: mimeType })
+          console.log('Recording blob size:', audioBlob.size, 'chunks:', audioChunksRef.current.length)
+          if (audioBlob.size > 0) {
+            uploadRecordingBlob(audioBlob)
+          } else {
+            setRecordingError('Inspelningen är tom. Försök igen.')
           }
+        } else {
+          setRecordingError('Ingen ljuddata inspelad. Försök igen.')
         }
       }
       
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data)
-        }
-      }
-      
-      recorder.start()
+      // Start with timeslice to get data every 250ms (ensures data is collected)
+      recorder.start(250)
       setIsRecording(true)
       setRecordingTime(0)
       
-      // Timer with cleanup - auto-stop at 30 seconds
+      // Timer - auto stop at 30s
       timerRef.current = setInterval(() => {
         setRecordingTime(prev => {
-          const newTime = prev + 1
-          // Auto-stop at 30 seconds (UI limit for demo)
-          if (newTime >= 30) {
+          if (prev >= 29) {
             stopRecording()
+            return 30
           }
-          return newTime
+          return prev + 1
         })
       }, 1000)
       
     } catch (err) {
-      // Cleanup on error
+      // Cleanup
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
       }
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
-      }
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop())
+        streamRef.current.getTracks().forEach(t => t.stop())
         streamRef.current = null
       }
-      
-      setMicPermissionError(`Mikrofonåtkomst nekad eller stöds inte: ${err.message}`)
-      // Don't auto-switch - user must click "Byt till uppladdning"
+      setMicPermissionError('Mikrofonåtkomst nekad: ' + (err.message || 'Okänt fel'))
     }
   }
 
@@ -248,26 +263,32 @@ function ProjectDetail() {
     if (recorderRef.current && isRecording) {
       recorderRef.current.stop()
       setIsRecording(false)
-      // Timer cleanup handled in onstop
     }
   }
 
-  const uploadRecordingBlob = async (blob) => {
+  const uploadRecordingBlob = async (audioBlob) => {
     setRecordingUploading(true)
     setRecordingProcessing(false)
     setRecordingError(null)
     setRecordingSuccess(null)
     
     try {
-      // Convert Blob to File for FormData
-      const filename = `recording_${Date.now()}.${blob.type.includes('webm') ? 'webm' : 'ogg'}`
-      const file = new File([blob], filename, { type: blob.type })
+      const ext = audioBlob.type.includes('webm') ? 'webm' : audioBlob.type.includes('ogg') ? 'ogg' : 'mp4'
+      const filename = 'recording_' + Date.now() + '.' + ext
       
-      const formData = new FormData()
-      formData.append('file', file)
+      const formData = new window.FormData()
+      formData.append('file', audioBlob, filename)
       
-      const response = await fetch(`/api/projects/${id}/recordings`, {
+      // Add auth header (same as other fetch calls)
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(username + ':' + password)
+      
+      const response = await fetch('http://localhost:8000/api/projects/' + id + '/recordings', {
         method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + auth
+        },
         body: formData
       })
       
@@ -281,9 +302,8 @@ function ProjectDetail() {
       setRecordingUploading(false)
       setRecordingProcessing(true)
       
-      // Processing delay: 800-1200ms (same as handleAudioSelect)
-      const delay = 800 + Math.random() * 400
-      await new Promise(resolve => setTimeout(resolve, delay))
+      // Brief delay for UX
+      await new Promise(r => setTimeout(r, 800))
       
       setRecordingProcessing(false)
       setRecordingSuccess({ documentId: documentData.id })
@@ -291,7 +311,7 @@ function ProjectDetail() {
     } catch (err) {
       setRecordingUploading(false)
       setRecordingProcessing(false)
-      setRecordingError(err.message)
+      setRecordingError(err.message || 'Uppladdning misslyckades')
     }
   }
 
@@ -513,8 +533,8 @@ function ProjectDetail() {
               </button>
             </div>
 
-            {/* Material List */}
-            {documents.length > 0 ? (
+            {/* Material List - Always visible, regardless of ingest mode */}
+            {documents.length > 0 && (
               <div className="material-list">
                 <h3 className="material-list-title">Material</h3>
                 <div className="material-list-items">
@@ -523,6 +543,7 @@ function ProjectDetail() {
                       key={doc.id}
                       className="material-list-item"
                       onClick={() => navigate(`/projects/${id}/documents/${doc.id}`)}
+                      style={{ cursor: 'pointer' }}
                     >
                       <div className="material-item-icon">
                         <File size={16} />
@@ -575,7 +596,7 @@ function ProjectDetail() {
                   ))}
                 </div>
               </div>
-            ) : null}
+            )}
 
             {/* Primary Dropzone / Audio Recording - Full width, calm, editorial */}
             {ingestMode === 'audio' ? (
@@ -635,6 +656,28 @@ function ProjectDetail() {
                     )}
                     {isRecording && (
                       <div className="recording-active">
+                        <div className="recording-pipeline">
+                          <div className="recording-pipeline-step active">
+                            <div className="pipeline-step-circle">
+                              <Mic size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Inspelning</span>
+                          </div>
+                          <div className="recording-pipeline-connector"></div>
+                          <div className="recording-pipeline-step pending">
+                            <div className="pipeline-step-circle">
+                              <Upload size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Uppladdning</span>
+                          </div>
+                          <div className="recording-pipeline-connector"></div>
+                          <div className="recording-pipeline-step pending">
+                            <div className="pipeline-step-circle">
+                              <FileText size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Transkription</span>
+                          </div>
+                        </div>
                         <div className="recording-indicator">
                           <div className="recording-dot"></div>
                           <span>Inspelar: {formatTime(recordingTime)}</span>
@@ -647,7 +690,31 @@ function ProjectDetail() {
                     )}
                     {(recordingUploading || recordingProcessing) && (
                       <div className="recording-status">
-                        {recordingUploading ? 'Laddar upp...' : 'Bearbetar...'}
+                        <div className="recording-pipeline">
+                          <div className="recording-pipeline-step completed">
+                            <div className="pipeline-step-circle">
+                              <Mic size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Inspelning</span>
+                          </div>
+                          <div className="recording-pipeline-connector active"></div>
+                          <div className={`recording-pipeline-step ${recordingUploading ? 'active' : 'completed'}`}>
+                            <div className="pipeline-step-circle">
+                              <Upload size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Uppladdning</span>
+                          </div>
+                          <div className={`recording-pipeline-connector ${recordingUploading ? '' : 'active'}`}></div>
+                          <div className={`recording-pipeline-step ${recordingProcessing ? 'active' : 'pending'}`}>
+                            <div className="pipeline-step-circle">
+                              <FileText size={16} />
+                            </div>
+                            <span className="pipeline-step-label">Transkription</span>
+                          </div>
+                        </div>
+                        <div className="recording-status-text">
+                          {recordingUploading ? 'Laddar upp...' : 'Bearbetar transkription...'}
+                        </div>
                       </div>
                     )}
                   </div>

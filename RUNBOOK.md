@@ -255,6 +255,38 @@ Nästa naturliga utökning av runbooken är:
 
 ---
 
+## 🧪 Projects E2E Verification (AUTOMATISK)
+
+### Mål
+End-to-end verifiering av hela projektmodulen mot riktiga API-endpoints.
+
+### Kommando
+
+```bash
+make verify-projects-e2e
+```
+
+### Scenarion som testas
+
+| Scenario | Beskrivning |
+|----------|-------------|
+| A_CRUD | Project Create/Read/Update/Delete |
+| B_DOCUMENT | Document upload med PII-maskning |
+| C_RECORDING | Röstmemo upload → transkription → maskning |
+| D_NOTES | Anteckningar med PII-maskning |
+
+### PASS om:
+- Alla 4 scenarion passerar
+- PII maskeras korrekt (email, telefon)
+- Events innehåller endast metadata
+- Transcript/content loggas aldrig
+
+**Status:** PASS / FAIL
+
+Se [docs/PROJECTS_E2E_REPORT.md](docs/PROJECTS_E2E_REPORT.md) för detaljer.
+
+---
+
 ## 🚀 Snabbverifiering (alla fas)
 
 ```bash
@@ -262,4 +294,3 @@ make verify-all
 ```
 
 Kör alla automatiska verifieringar i sekvens. Stoppar vid första FAIL.
-

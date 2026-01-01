@@ -15,10 +15,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 from database import get_db, engine
-from models import Project, ProjectEvent, Document, Base, Classification, SanitizeLevel
+from models import Project, ProjectEvent, Document, ProjectNote, Base, Classification, SanitizeLevel
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
-    DocumentResponse, DocumentListResponse
+    DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -717,3 +717,138 @@ async def upload_recording(
             os.remove(audio_path)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
+
+# ============================================================================
+# Project Notes endpoints
+# ============================================================================
+
+@app.get("/api/projects/{project_id}/notes", response_model=List[NoteListResponse])
+async def list_project_notes(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """List all notes for a project (metadata only, no masked_body)."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    notes = db.query(ProjectNote).filter(ProjectNote.project_id == project_id).order_by(ProjectNote.created_at.desc()).all()
+    return notes
+
+
+@app.post("/api/projects/{project_id}/notes", response_model=NoteResponse, status_code=201)
+async def create_note(
+    project_id: int,
+    note: NoteCreate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Create a note for a project.
+    Body goes through same normalize/mask/sanitization pipeline as documents.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Normalize text
+    normalized_text = normalize_text(note.body)
+    
+    # Progressive sanitization pipeline (same as documents)
+    pii_gate_reasons = {}
+    sanitize_level = SanitizeLevel.NORMAL
+    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+    
+    # Try normal masking
+    masked_text = mask_text(normalized_text, level="normal")
+    is_safe, reasons = pii_gate_check(masked_text)
+    if is_safe:
+        sanitize_level = SanitizeLevel.NORMAL
+        pii_gate_reasons = None
+    else:
+        pii_gate_reasons["normal"] = reasons
+        
+        # Try strict masking
+        masked_text = mask_text(normalized_text, level="strict")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.STRICT
+        else:
+            pii_gate_reasons["strict"] = reasons
+            
+            # Use paranoid masking
+            masked_text = mask_text(normalized_text, level="paranoid")
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    # Create note
+    db_note = ProjectNote(
+        project_id=project_id,
+        title=note.title,
+        masked_body=masked_text,
+        sanitize_level=sanitize_level,
+        pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None
+    )
+    db.add(db_note)
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_created",
+        actor=username,
+        event_metadata={
+            "note_id": None,  # Will be set after commit
+            "sanitize_level": sanitize_level.value
+        }
+    )
+    db.add(event)
+    
+    db.commit()
+    db.refresh(db_note)
+    
+    # Update event with note_id
+    event.event_metadata["note_id"] = db_note.id
+    db.commit()
+    
+    return db_note
+
+
+@app.get("/api/notes/{note_id}", response_model=NoteResponse)
+async def get_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Get a specific note with masked body."""
+    note = db.query(ProjectNote).filter(ProjectNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+
+@app.delete("/api/notes/{note_id}", status_code=204)
+async def delete_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Delete a note."""
+    note = db.query(ProjectNote).filter(ProjectNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    project_id = note.project_id
+    db.delete(note)
+    
+    # Create deletion event
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_deleted",
+        actor=username,
+        event_metadata={"note_id": note_id}
+    )
+    db.add(event)
+    
+    db.commit()
+    return None

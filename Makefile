@@ -1,4 +1,4 @@
-.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all
+.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e
 
 dev:
 	@echo "Starting development environment..."
@@ -144,6 +144,23 @@ verify-fas4-5:
 		echo "✓ Project delete works (status: 204)"; \
 		echo "✓ FAS 4.5 PASS"
 
+verify-projects-e2e:
+	@echo "=== Projects E2E Verification ==="
+	@docker-compose exec -T api python3 /app/_verify/verify_projects_e2e.py || \
+		(echo "Note: If containers are not running, start with 'make dev' first" && exit 1)
+
+verify-transcription-quality:
+	@echo "=== Transcription Quality Verification ==="
+	@echo "Note: This may take 3-10 minutes with large-v3 (first run downloads model)"
+	@echo "      If this hangs, run directly in container:"
+	@echo "      docker exec arbetsytan-api-1 python3 /app/_verify/verify_transcription_quality.py"
+	@docker-compose exec -T api python3 /app/_verify/verify_transcription_quality.py || \
+		(echo "" && \
+		 echo "Note: If containers are not running, start with 'make dev' first" && \
+		 echo "      If timeout occurred, run directly in container:" && \
+		 echo "      docker exec arbetsytan-api-1 python3 /app/_verify/verify_transcription_quality.py" && \
+		 exit 1)
+
 verify-all:
 	@echo "🧭 Running all FAS 0-4 verifications..."
 	@$(MAKE) verify-fas0
@@ -152,6 +169,8 @@ verify-all:
 	@$(MAKE) verify-sanitization
 	@$(MAKE) verify-fas4-static
 	@$(MAKE) verify-fas4-5
+	@$(MAKE) verify-projects-e2e
+	@$(MAKE) verify-transcription-quality
 	@echo ""
 	@echo "🟢 All verifications PASSED - System ready for FAS 5"
 

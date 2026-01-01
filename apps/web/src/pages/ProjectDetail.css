@@ -1,5 +1,17 @@
 /* Project Detail - Unified Editorial Workspace */
 
+.project-detail-page {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  width: 100%;
+}
+
+.workspace-container {
+  width: 100%;
+}
+
 /* Using projects-page and projects-header from ProjectsList.css for consistency */
 /* Header styling is now handled by global projects-header and projects-title classes */
 
@@ -516,7 +528,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
+  width: 100%;
 }
 
 .recording-indicator {
@@ -564,10 +577,101 @@
 }
 
 .recording-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
   padding: 1rem;
+  width: 100%;
+}
+
+.recording-status-text {
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Recording Pipeline - Visual progress indicator */
+.recording-pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.recording-pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 120px;
+}
+
+.pipeline-step-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+  border: 2px solid var(--color-border-default);
+  color: var(--color-text-muted);
+  transition: all 0.3s;
+}
+
+.recording-pipeline-step.completed .pipeline-step-circle {
+  background: var(--color-brand-red);
+  border-color: var(--color-brand-red);
+  color: var(--color-interactive-text);
+}
+
+.recording-pipeline-step.active .pipeline-step-circle {
+  background: var(--color-brand-red);
+  border-color: var(--color-brand-red);
+  color: var(--color-interactive-text);
+  animation: pulse 1.5s infinite;
+}
+
+.recording-pipeline-step.pending .pipeline-step-circle {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+  color: var(--color-text-muted);
+}
+
+.pipeline-step-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  text-align: center;
+  font-weight: 500;
+}
+
+.recording-pipeline-step.active .pipeline-step-label {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.recording-pipeline-step.completed .pipeline-step-label {
+  color: var(--color-text-primary);
+}
+
+.recording-pipeline-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--color-border-default);
+  margin-top: -1.5rem;
+  max-width: 60px;
+  transition: all 0.3s;
+}
+
+.recording-pipeline-connector.active {
+  background: var(--color-brand-red);
+  height: 3px;
 }
 
 .recording-error {

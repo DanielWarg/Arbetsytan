@@ -105,8 +105,11 @@ Status: **Klar – fryst**
 **Mål:** maximalt signalvärde, minimal komplexitet.
 
 Levererat:
-- **Röstmemo → transcript → ingest** – Browser-inspelning, lokal STT (openai-whisper), deterministisk transcript-normalisering, redaktionell förädling
+- **Röstmemo → transcript → ingest** – Browser-inspelning, lokal STT (Whisper large-v3), deterministisk transcript-normalisering, redaktionell förädling
 - Deterministisk pipeline för transkript: transcribe → normalize → process → refine → sanitize
+- **STT-motor:** Whisper large-v3 för optimal svensk transkribering (konfigurerbart via `WHISPER_MODEL` env)
+- **Modell-caching:** Persistent cache via Docker volume för snabbare efterföljande transkriberingar
+- **Alternativ STT (framtida):** Arkitekturen är förberedd för motorbyte (t.ex. Silero ASR) utan endpoint-ändringar
 
 Status: **Klar – fryst**
 

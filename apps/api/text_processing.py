@@ -401,11 +401,45 @@ def validate_file_type(file_path: str, filename: str) -> Tuple[str, bool]:
     return ('', False)
 
 
+# Whisper model singleton cache
+_whisper_model = None
+_whisper_model_name = None
+
+
+def _get_whisper_model():
+    """
+    Lazy load Whisper model (singleton pattern).
+    Model is cached globally to avoid reloading on each request.
+    """
+    global _whisper_model, _whisper_model_name
+    
+    import os
+    import whisper
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Get model name from env (default: "base" for dev, can be overridden to "large-v3" for demo)
+    model_name = os.getenv("WHISPER_MODEL", "base")
+    
+    # Reload if model name changed
+    if _whisper_model is None or _whisper_model_name != model_name:
+        logger.info(f"[STT] Loading Whisper model: {model_name} (cached={_whisper_model is not None})")
+        _whisper_model = whisper.load_model(model_name)
+        _whisper_model_name = model_name
+        logger.info(f"[STT] Model loaded: {model_name}")
+    
+    return _whisper_model
+
+
 def transcribe_audio(audio_path: str) -> str:
     """
     Transcribe audio file using local openai-whisper (no external API calls).
     
     Supports: webm, ogg, mp3, wav (whisper handles conversion internally).
+    
+    Model is cached globally (singleton) to avoid reloading on each request.
+    Model name can be configured via WHISPER_MODEL env var (default: "base").
     
     NEVER log the raw transcript output.
     Fail-closed: raises exception on error (no document created).
@@ -420,9 +454,8 @@ def transcribe_audio(audio_path: str) -> str:
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
     
     try:
-        # Load whisper model (base model, Swedish support)
-        # Model is downloaded automatically on first use
-        model = whisper.load_model("base")
+        # Get cached model (lazy load on first call)
+        model = _get_whisper_model()
         
         # Transcribe (whisper handles audio format conversion internally)
         result = model.transcribe(
@@ -452,7 +485,13 @@ def transcribe_audio(audio_path: str) -> str:
         
     except Exception as e:
         # Fail-closed: raise exception (no document created)
-        raise RuntimeError(f"Audio transcription failed: {str(e)}")
+        # Log error type only (no content leakage)
+        import logging
+        logger = logging.getLogger(__name__)
+        error_type = type(e).__name__
+        error_msg = str(e)[:100] if str(e) else ""  # Limit length, avoid full content
+        logger.error(f"[STT] Transcription failed: {error_type} - {error_msg}")
+        raise RuntimeError(f"Audio transcription failed: {error_type}")
 
 
 def normalize_transcript_text(raw_text: str) -> str:

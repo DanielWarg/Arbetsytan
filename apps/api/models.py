@@ -31,6 +31,7 @@ class Project(Base):
 
     events = relationship("ProjectEvent", back_populates="project", order_by="ProjectEvent.timestamp.desc()")
     documents = relationship("Document", back_populates="project", order_by="Document.created_at.desc()")
+    notes = relationship("ProjectNote", back_populates="project", order_by="ProjectNote.created_at.desc()")
 
 
 class ProjectEvent(Base):
@@ -63,3 +64,17 @@ class Document(Base):
 
     project = relationship("Project", back_populates="documents")
 
+
+class ProjectNote(Base):
+    """Project notes with same sanitization as documents."""
+    __tablename__ = "project_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String, nullable=True)  # Optional title
+    masked_body = Column(Text, nullable=False)  # Masked/sanitized body text
+    sanitize_level = Column(SQLEnum(SanitizeLevel), default=SanitizeLevel.NORMAL, nullable=False)
+    pii_gate_reasons = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="notes")

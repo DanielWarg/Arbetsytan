@@ -84,3 +84,33 @@ class DocumentListResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+# Project Notes schemas
+class NoteCreate(BaseModel):
+    title: Optional[str] = None
+    body: str  # Raw body text (will be sanitized)
+
+
+class NoteResponse(BaseModel):
+    id: int
+    project_id: int
+    title: Optional[str]
+    masked_body: str  # Sanitized body
+    sanitize_level: str
+    pii_gate_reasons: Optional[dict] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class NoteListResponse(BaseModel):
+    id: int
+    project_id: int
+    title: Optional[str]
+    sanitize_level: str
+    created_at: datetime
+    # NO masked_body in list
+
+    class Config:
+        from_attributes = True
