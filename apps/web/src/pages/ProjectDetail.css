@@ -450,6 +450,104 @@
   gap: 1rem;
 }
 
+/* Primary CTA for Audio Transcription */
+.audio-primary-cta {
+  margin-bottom: var(--spacing-3xl);
+  padding-bottom: var(--spacing-3xl);
+  border-bottom: 1px solid var(--color-border-default);
+  position: relative;
+  z-index: 1;
+}
+
+.audio-cta-buttons {
+  display: flex;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  position: relative;
+  z-index: 2;
+}
+
+.audio-cta-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--color-bg-surface);
+  border: 2px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.audio-cta-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dark .audio-cta-btn:hover:not(:disabled) {
+  background: var(--color-bg-active);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.audio-cta-btn.active {
+  background: var(--color-brand-red);
+  border-color: var(--color-brand-red);
+  color: white;
+}
+
+.audio-cta-btn.active:hover:not(:disabled) {
+  background: #c41e1e;
+  border-color: #c41e1e;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.audio-cta-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.audio-cta-help {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding-top: var(--spacing-sm);
+}
+
+/* Primary Document Upload - Same style as audio CTA */
+.document-primary-upload {
+  margin-bottom: var(--spacing-3xl);
+  padding-bottom: var(--spacing-3xl);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.document-primary-upload .ingest-dropzone {
+  margin-bottom: var(--spacing-md);
+}
+
+.document-upload-help {
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding-top: var(--spacing-sm);
+}
+
 .recording-mode-selector {
   display: flex;
   gap: 0.5rem;

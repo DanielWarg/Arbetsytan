@@ -66,17 +66,16 @@ Arbetsytan använder **faster-whisper** (default) eller **Whisper** för lokal t
 
 **Demo STT-konfiguration (default):**
 - **Engine:** `STT_ENGINE=faster_whisper` (4x snabbare än Whisper)
-- **Model:** `WHISPER_MODEL=base` (sweetspot: 15s för 20MB fil, bra kvalitet)
-- **Motivering:** Balanserar hastighet (15.2s) och kvalitet (1150 ord, 0.174 nonsense ratio)
-- **CPU:** 688% peak (lägre än Whisper)
-- **RAM:** 0.81GB (lägre än Whisper)
+- **Model:** `WHISPER_MODEL=small` (bättre kvalitet: 41.0s för 20MB fil, 1169 ord)
+- **Motivering:** Bättre kvalitet än base (1169 ord vs 1150 ord, lägre nonsense ratio 0.166 vs 0.174)
+- **CPU:** 696% peak, 494% medel
+- **RAM:** 1.54GB
 
 **Alternativ konfiguration:**
+- **Snabbast (lägre kvalitet):** `STT_ENGINE=faster_whisper WHISPER_MODEL=base` (15.2s, 1150 ord)
+- **Bäst kvalitet:** `STT_ENGINE=faster_whisper WHISPER_MODEL=medium` (långsammare, men bäst kvalitet)
 - **Whisper base:** `STT_ENGINE=whisper WHISPER_MODEL=base` (58.8s, 1107 ord)
-- **faster-whisper small:** `STT_ENGINE=faster_whisper WHISPER_MODEL=small` (41.0s, 1169 ord)
 - **Whisper small:** `STT_ENGINE=whisper WHISPER_MODEL=small` (179.2s, 1173 ord)
-
-**OBS:** Modellen "medium" är blockerad för demo (fallback till "base").
 
 **Arkitektur:**
 STT-motorn är abstraherad i `text_processing.py` för enkel utbytbarhet. Framtida motorbyten (t.ex. Silero ASR) kan implementeras utan ändringar i endpoints eller UI.

@@ -19,6 +19,12 @@
   align-items: flex-start;
 }
 
+/* Common divider style - matches top-header */
+.sidebar-header,
+.top-header {
+  border-bottom: 1px solid var(--color-border-default);
+}
+
 .sidebar-logo {
   display: flex;
   align-items: center;

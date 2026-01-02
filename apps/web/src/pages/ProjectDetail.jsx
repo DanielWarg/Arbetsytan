@@ -548,100 +548,40 @@ function ProjectDetail() {
               </button>
             </div>
 
-            {/* Material List - Always visible, regardless of ingest mode */}
-            {documents.length > 0 && (
-              <div className="material-list">
-                <h3 className="material-list-title">Material</h3>
-                <div className="material-list-items">
-                  {documents.map(doc => (
-                    <div
-                      key={doc.id}
-                      className="material-list-item"
-                      onClick={() => navigate(`/projects/${id}/documents/${doc.id}`)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div className="material-item-icon">
-                        <File size={16} />
-                      </div>
-                      <div className="material-item-content">
-                        <div className="material-item-header">
-                          <span className="material-item-filename">{doc.filename}</span>
-                          <div className="material-item-badges">
-                            <Badge variant={getClassificationVariant(doc.classification)}>
-                              {getClassificationLabel(doc.classification)}
-                            </Badge>
-                            {doc.sanitize_level && (
-                              <div className="sanitize-badge-container">
-                                <Badge variant={doc.sanitize_level === 'paranoid' ? 'sensitive' : 'normal'} className="sanitize-badge">
-                                  {doc.sanitize_level === 'normal' ? 'Normal' : doc.sanitize_level === 'strict' ? 'Strikt' : 'Paranoid'}
-                                </Badge>
-                                <div className="material-item-tooltip-container">
-                                  <Info size={12} className="material-item-info-icon" />
-                                  <div className="material-item-tooltip">
-                                    {doc.sanitize_level === 'normal' 
-                                      ? 'Normal: Standard sanering. Email, telefonnummer och personnummer maskeras automatiskt.'
-                                      : doc.sanitize_level === 'strict'
-                                      ? 'Strikt: Ytterligare numeriska sekvenser maskeras för extra säkerhet.'
-                                      : 'Paranoid: Alla siffror och känsliga mönster maskeras. AI och export avstängda för maximal säkerhet.'}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="material-item-meta">
-                          <span className="material-item-type">{doc.file_type.toUpperCase()}</span>
-                          <span className="material-item-date">
-                            {new Date(doc.created_at).toLocaleDateString('sv-SE')}
-                          </span>
-                          {doc.usage_restrictions && !doc.usage_restrictions.ai_allowed && (
-                            <div className="material-item-restriction-container">
-                              <span className="material-item-restriction">AI avstängt</span>
-                              <div className="material-item-tooltip-container">
-                                <Info size={12} className="material-item-info-icon" />
-                                <div className="material-item-tooltip">
-                                  Dokumentet krävde paranoid sanering. AI-funktioner är avstängda för säkerhet.
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Primary Dropzone / Audio Recording - Full width, calm, editorial */}
-            {ingestMode === 'audio' ? (
-              <div className="audio-recording-container">
-                {/* Mode selector */}
-                <div className="recording-mode-selector">
+            {/* Primary CTA for Audio Transcription - Only when audio mode is active - MUST be before Material List */}
+            {ingestMode === 'audio' && (
+              <div className="audio-primary-cta">
+                <div className="audio-cta-buttons">
                   <button
-                    className={`mode-btn ${recordingMode === 'record' ? 'active' : ''}`}
+                    className={`audio-cta-btn ${recordingMode === 'record' ? 'active' : ''}`}
                     onClick={() => {
                       setRecordingMode('record')
                       setMicPermissionError(null)
                     }}
                     disabled={isRecording || recordingUploading || recordingProcessing}
                   >
-                    <Mic size={16} />
+                    <Mic size={20} />
                     <span>Spela in</span>
                   </button>
                   <button
-                    className={`mode-btn ${recordingMode === 'upload' ? 'active' : ''}`}
+                    className={`audio-cta-btn ${recordingMode === 'upload' ? 'active' : ''}`}
                     onClick={() => {
                       setRecordingMode('upload')
                       setMicPermissionError(null)
                     }}
                     disabled={isRecording || recordingUploading || recordingProcessing}
                   >
-                    <Upload size={16} />
+                    <Upload size={20} />
                     <span>Ladda upp fil</span>
                   </button>
                 </div>
-                
+                <p className="audio-cta-help">Spela in direkt eller ladda upp en ljudfil för automatisk transkribering.</p>
+              </div>
+            )}
+
+            {/* Audio Recording Controls and Upload - MUST be before Material List */}
+            {ingestMode === 'audio' && (
+              <div className="audio-recording-container">
                 {/* Recording mode */}
                 {recordingMode === 'record' ? (
                   <div className="recording-controls">
@@ -781,9 +721,11 @@ function ProjectDetail() {
                   </div>
                 )}
               </div>
-            ) : (
-              /* Document mode - existing dropzone */
-              <>
+            )}
+
+            {/* Primary Document Upload - Only when document mode is active - MUST be before Material List */}
+            {ingestMode === 'document' && (
+              <div className="document-primary-upload">
                 <div 
                   className={`ingest-dropzone ${uploading ? 'uploading' : ''}`}
                   onClick={handleDropzoneClick}
@@ -809,12 +751,73 @@ function ProjectDetail() {
                     )}
                   </div>
                 </div>
-                {uploadError && (
-                  <div className="upload-error">
-                    {uploadError}
-                  </div>
-                )}
-              </>
+                <p className="document-upload-help">Ladda upp dokument för automatisk bearbetning och sanering.</p>
+              </div>
+            )}
+
+            {/* Material List - Always visible, regardless of ingest mode */}
+            {documents.length > 0 && (
+              <div className="material-list">
+                <h3 className="material-list-title">Material</h3>
+                <div className="material-list-items">
+                  {documents.map(doc => (
+                    <div
+                      key={doc.id}
+                      className="material-list-item"
+                      onClick={() => navigate(`/projects/${id}/documents/${doc.id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <div className="material-item-icon">
+                        <File size={16} />
+                      </div>
+                      <div className="material-item-content">
+                        <div className="material-item-header">
+                          <span className="material-item-filename">{doc.filename}</span>
+                          <div className="material-item-badges">
+                            <Badge variant={getClassificationVariant(doc.classification)}>
+                              {getClassificationLabel(doc.classification)}
+                            </Badge>
+                            {doc.sanitize_level && (
+                              <div className="sanitize-badge-container">
+                                <Badge variant={doc.sanitize_level === 'paranoid' ? 'sensitive' : 'normal'} className="sanitize-badge">
+                                  {doc.sanitize_level === 'normal' ? 'Normal' : doc.sanitize_level === 'strict' ? 'Strikt' : 'Paranoid'}
+                                </Badge>
+                                <div className="material-item-tooltip-container">
+                                  <Info size={12} className="material-item-info-icon" />
+                                  <div className="material-item-tooltip">
+                                    {doc.sanitize_level === 'normal' 
+                                      ? 'Normal: Standard sanering. Email, telefonnummer och personnummer maskeras automatiskt.'
+                                      : doc.sanitize_level === 'strict'
+                                      ? 'Strikt: Ytterligare numeriska sekvenser maskeras för extra säkerhet.'
+                                      : 'Paranoid: Alla siffror och känsliga mönster maskeras. AI och export avstängda för maximal säkerhet.'}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="material-item-meta">
+                          <span className="material-item-type">{doc.file_type.toUpperCase()}</span>
+                          <span className="material-item-date">
+                            {new Date(doc.created_at).toLocaleDateString('sv-SE')}
+                          </span>
+                          {doc.usage_restrictions && !doc.usage_restrictions.ai_allowed && (
+                            <div className="material-item-restriction-container">
+                              <span className="material-item-restriction">AI avstängt</span>
+                              <div className="material-item-tooltip-container">
+                                <Info size={12} className="material-item-info-icon" />
+                                <div className="material-item-tooltip">
+                                  Dokumentet krävde paranoid sanering. AI-funktioner är avstängda för säkerhet.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>

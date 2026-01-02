@@ -28,7 +28,7 @@ services:
       BASIC_AUTH_PASS: ${BASIC_AUTH_PASS:-password}
       DATABASE_URL: postgresql://arbetsytan:arbetsytan@postgres:5432/arbetsytan
       STT_ENGINE: ${STT_ENGINE:-faster_whisper}
-      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
     depends_on:
       postgres:
         condition: service_healthy

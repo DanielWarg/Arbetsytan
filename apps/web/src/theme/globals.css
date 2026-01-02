@@ -134,7 +134,7 @@
   /* Layout */
   --content-max-width: 64rem;
   --sidebar-width: 16rem;
-  --header-height: 3.5rem;
+  --header-height: 4rem; /* Match sidebar-header-height for consistent divider alignment */
   --sidebar-header-height: 4rem; /* Copy/Paste token */
 }
 

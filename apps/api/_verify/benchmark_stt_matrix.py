@@ -92,7 +92,7 @@ def transcribe_with_whisper(audio_path: str, model_name: str, show_progress: boo
         print(f"    🎤 Transkriberar audio...", flush=True)
     
     # Whisper doesn't have built-in progress, but we can show a spinner
-    result = model.transcribe(audio_path, language="sv", task="transcribe")
+    result = model.transcribe(audio_path, language=None, task="transcribe")  # Auto-detect language
     return result["text"].strip()
 
 def transcribe_with_faster_whisper(audio_path: str, model_name: str, show_progress: bool = True) -> str:
@@ -107,7 +107,7 @@ def transcribe_with_faster_whisper(audio_path: str, model_name: str, show_progre
     if show_progress:
         print(f"    🎤 Transkriberar audio (detta kan ta flera minuter)...", flush=True)
     
-    segments, info = model.transcribe(audio_path, language="sv")
+    segments, info = model.transcribe(audio_path, language=None)  # Auto-detect language
     
     # Collect segments (faster-whisper returns iterator)
     transcript_parts = []
