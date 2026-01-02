@@ -466,3 +466,202 @@ Alla claims har referens:
 - Secure delete: Om verifiering misslyckas, blockera delete och logga fel
 - Verification scripts: Alla tester måste passa, annars fail
 
+---
+
+## RUNBOOK — E2E Verification (Arbetsytan)
+
+**Datum:** 2026-01-02  
+**Mål:** Bevisa att verktyget fungerar som journalistisk arbetsyta och att "Security by Design" håller i praktiken.  
+**Resultatformat:** PASS/FAIL per steg + länkar till bevis (screenshots/loggar) + verifieringsscripts.
+
+### 0) Förutsättningar (måste vara sant innan start)
+
+- [ ] Docker Desktop igång
+- [ ] Repo: Arbetsytan
+- [ ] Du kör från repo-root
+- [ ] Inga gamla volymer som stör (om ni vill ha ren test)
+
+#### 0.1 Starta miljön (ren och reproducerbar)
+
+```bash
+docker compose down -v
+docker compose up -d --build
+docker compose ps
+```
+**Expected:** api healthy, postgres healthy, web up
+
+#### 0.2 Sanity-check API
+
+```bash
+docker compose logs api --tail 50
+```
+**Expected:** Inga tracebacks, inga "crash loop"
+
+### 1) Backend-verifiering (måste PASS innan UI)
+
+Kör alla verifieringsscripts som redan finns.
+
+```bash
+docker compose exec api python _verify/verify_recording_sanitization.py
+```
+**Expected:** ✅ PASS
+
+```bash
+docker compose exec api python _verify/verify_transcript_normalization.py
+```
+**Expected:** ✅ PASS
+
+```bash
+docker compose exec api python _verify/verify_enhanced_transcript_pipeline.py
+```
+**Expected:** ✅ PASS
+
+**Om något failar här: STOP. Fix först.**
+
+### 2) Browser E2E — "Journalist Workflow" (huvudtest)
+
+**Mål:** Skapa projekt → lägg in källmaterial → transkribera → skapa dokument → anteckningar → export (om finns) → event trail.
+
+#### 2.1 Skapa projekt
+
+- [ ] Öppna webben (din lokala url)
+- [ ] Klicka "Create project"
+- [ ] Sätt namn: `E2E - Källskyddstest 2026-01-02`
+- [ ] Skapa
+
+**Expected:** Projektet syns i listan och öppnas utan fel
+
+**Bevis:** Screenshot på projektlistan + projektvyn.
+
+#### 2.2 Ladda upp dokument (källmaterial)
+
+- [ ] I projektet: "Documents" → Upload
+- [ ] Ladda upp en PDF eller textfil (testmaterial)
+- [ ] Öppna dokumentvyn
+
+**Expected:** Dokument finns listat och går att öppna
+
+**Bevis:** Screenshot dokumentlistan + öppnat dokument.
+
+#### 2.3 Röstmemo → transkribering
+
+- [ ] Gå till "Röstmemo/Transcription"
+- [ ] Ladda upp audio (eller record om den finns)
+- [ ] Vänta tills transkribering klar (status ska visas)
+- [ ] Kontrollera att output är strukturerad:
+  - Sammanfattning
+  - Nyckelpunkter
+  - Tidslinje
+  - Fullständigt transkript
+
+**Expected:** Inget crash, text visas, och enhanced förbättringar syns (t.ex. "i form av", "sådan")
+
+**Bevis:** Screenshot av transcript-view.
+
+#### 2.4 Skapa anteckning (journalist notes)
+
+**Mål:** Notes ska kännas logiskt och proffsigt (inte 3 knappar på olika ställen).
+
+- [ ] Skapa ny anteckning från ett ställe (primär CTA)
+- [ ] Titel: `Vinklar / Hypoteser`
+- [ ] Klistra in en text (copy/paste) med känsliga bitar (fake email/telefon)
+
+**Expected:**
+- Anteckningen sparas
+- UI blir inte rörigt
+- Inga PII-läckor i events/loggar (se steg 3)
+
+**Bevis:** Screenshot notes-lista + öppnad anteckning.
+
+#### 2.5 Skapa "Document draft" från transcript (om flödet finns)
+
+- [ ] Skapa ett dokument/draft av transcriptet (om ni har knapp)
+- [ ] Kontrollera att dokumentet är normaliserat (stycken, rubriker)
+
+**Expected:** Skapas utan fel, och går att öppna som dokument.
+
+**Bevis:** Screenshot där draft skapats och syns i documents.
+
+#### 2.6 Event trail (audit)
+
+- [ ] Öppna "Events"/"Timeline"
+- [ ] Kontrollera att events finns för:
+  - `project_created`
+  - `document_uploaded`
+  - `recording_uploaded` / `transcribed`
+  - `note_created` / `updated`
+  - etc
+
+**Expected:** Inga event innehåller innehåll (bara metadata)
+
+**Bevis:** Screenshot på event trail.
+
+### 3) Security E2E — Bevis i praktiken
+
+Detta är "sexigheten": ni bevisar att systemet skyddar användaren även om användaren inte tänker på det.
+
+#### 3.1 "No content in events" — praktiskt bevis
+
+- [ ] I UI: öppna event trail och bekräfta visuellt: inga transkript/texter finns där
+- [ ] Backend: `docker compose exec api python -c "<script som dumpa senaste events>"` (om ni har ett verify-script för detta ännu, använd det)
+
+**Expected:**
+- Events innehåller inga fält som `text`/`body`/`content`/`transcript`/`filename`/`path`
+- När Milestone 1 är implementerad ska detta styrkas med: `verify_event_no_content_policy.py`
+
+#### 3.2 Logs-check (anti-leak)
+
+```bash
+docker compose logs api --tail 200
+```
+
+**Expected:** Inga transkript-texter, inga filpaths, inga filenames med känslig info.
+
+#### 3.3 Secure Delete — "riktig delete"
+
+**Mål:** Radera projekt och bevisa att det är borta på riktigt.
+
+- [ ] I UI: Delete project (med bekräftelse)
+- [ ] Försök öppna samma URL igen
+
+**Expected:** 404 / "Not found"
+
+- [ ] Kontrollera att projektet inte syns i listan
+- [ ] Efter Milestone 2: kör `verify_secure_delete.py` för bevis
+
+**Bevis:**
+- Screenshot: "Project deleted" + 404 vid direktlänk
+- Script-PASS i Docker
+
+### 4) Post-run: Evidence pack (för showreel)
+
+Skapa en mapp (lokalt) och samla bevis:
+
+- [ ] Screenshots: projektlista, dokument, transcript, note, events, delete
+- [ ] Output från verifieringsscripts (copy/paste från terminal)
+- [ ] "Docker ps" output
+
+**Resultat:** En liten "evidence bundle" som kan visas för chef/tech lead.
+
+### 5) Pass/Fail kriterier (hårda)
+
+**FAIL direkt om:**
+- [ ] Transkribering kraschar eller blir tom
+- [ ] Event trail innehåller innehåll (transkript, notes, doc-text)
+- [ ] Logs innehåller innehåll eller filpaths som identifierar källa
+- [ ] Delete tar bort projekt i UI men det går att nå via URL
+- [ ] Något verify-script failar
+
+**PASS om:**
+- [ ] Journalisten kan skapa projekt, hantera material, skapa transcript, skriva notes
+- [ ] Event trail visar aktivitet utan innehåll
+- [ ] Delete är verklig och verifierad
+
+### Nästa steg (så vi får detta "på räls")
+
+När Phase 1-milestones är implementerade:
+
+- [ ] Lägg till `make verify-e2e` som kör:
+  - `verify_*` scripts
+  - plus en liten "smoke" som skapar projekt + raderar
+
