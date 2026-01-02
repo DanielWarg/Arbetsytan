@@ -430,13 +430,11 @@ def _get_stt_engine():
     # Get engine from env (default: faster_whisper)
     engine_name = os.getenv("STT_ENGINE", "faster_whisper")
     
-    # Get model name from env (default: base)
-    model_name = os.getenv("WHISPER_MODEL", "base")
+    # Get model name from env (default: small for better quality)
+    model_name = os.getenv("WHISPER_MODEL", "small")
     
-    # Block "medium" model (fallback to base)
-    if model_name == "medium":
-        logger.warning(f"[STT] Model 'medium' is not allowed for demo. Falling back to 'base'.")
-        model_name = "base"
+    # Allow all models (small recommended for quality, medium for best quality)
+    # Note: medium is slower but provides best quality
     
     # Reload if engine or model changed
     if _stt_engine is None or _stt_engine_name != engine_name or _stt_model_name != model_name:
@@ -488,15 +486,21 @@ def transcribe_audio(audio_path: str) -> str:
         logger.info(f"[STT] Transcribing with engine: {engine_name}, model: {model_name}")
         
         # Transcribe based on engine type
+        # Use automatic language detection (None = auto-detect)
+        # This allows Whisper to detect English, Swedish, or other languages automatically
         if engine_name == "faster_whisper":
-            segments, info = engine.transcribe(str(audio_path), language="sv")
+            segments, info = engine.transcribe(str(audio_path), language=None)
+            detected_language = info.language if hasattr(info, 'language') else 'unknown'
+            logger.info(f"[STT] Detected language: {detected_language}")
             raw_transcript = " ".join([segment.text for segment in segments]).strip()
         elif engine_name == "whisper":
             result = model.transcribe(
                 str(audio_path),
-                language="sv",  # Swedish
+                language=None,  # Auto-detect language
                 task="transcribe"
             )
+            detected_language = result.get("language", "unknown")
+            logger.info(f"[STT] Detected language: {detected_language}")
             raw_transcript = result["text"].strip()
         else:
             raise ValueError(f"Unknown STT engine: {engine_name}")
@@ -596,6 +600,15 @@ def normalize_transcript_text(raw_text: str, use_enhanced: bool = True) -> str:
         "ovena": "ovänner",
         "nåt är det igen": "återigen",
         "bilder oss": "bildar oss",
+        # New error mappings from user feedback
+        "plasskar": "plaskar",
+        "plasskar med rom": "plaskar med rom",
+        "själva": "själv",
+        "längt": "länge",
+        "längt att": "länge att",
+        "längt att det": "länge att det",
+        "annorlunda": "annorlunda",
+        "hej och ho": "hej och välkommen",
         # Repeated words (common STT artifact)
         "det det": "det",
         "och och": "och",
@@ -719,6 +732,11 @@ def _apply_masterclass_enhancements(text: str) -> str:
     
     # Fix "göra ett bra jobb" -> "gör ett bra jobb"
     text = re.sub(r'\bgöra (ett|en) (bra|dåligt) (jobb|arbete)\b', r'gör \1 \2 \3', text, flags=re.IGNORECASE)
+    
+    # Fix common mishearings: "plasskar" -> "plaskar", "själva" -> "själv" (when appropriate)
+    text = re.sub(r'\bplasskar\b', 'plaskar', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bsjälva\b', 'själv', text, flags=re.IGNORECASE)
+    text = re.sub(r'\blängt\b', 'länge', text, flags=re.IGNORECASE)
     
     # Advanced sentence structure improvements
     # Fix "det är en X består" -> "en X består"

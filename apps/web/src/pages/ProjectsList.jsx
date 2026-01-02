@@ -6,7 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, Settings } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -14,6 +14,7 @@ function ProjectsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const fetchProjects = async () => {
     try {
@@ -69,85 +70,250 @@ function ProjectsList() {
     return 'badge-normal'
   }
 
+  // Get projects with due dates for Due Dates widget
+  // Prioritize urgent deadlines (warning/danger), then sort by date
+  const projectsWithDueDates = projects
+    .filter(p => p.due_date)
+    .map(p => ({
+      ...p,
+      urgency: getDueUrgency(p.due_date)
+    }))
+    .sort((a, b) => {
+      // First: prioritize urgent (warning/danger) over normal
+      const aUrgent = a.urgency.variant === 'warning' || a.urgency.variant === 'danger'
+      const bUrgent = b.urgency.variant === 'warning' || b.urgency.variant === 'danger'
+      if (aUrgent && !bUrgent) return -1
+      if (!aUrgent && bUrgent) return 1
+      // Then: sort by date (earliest first)
+      if (!a.urgency.normalizedDate) return 1
+      if (!b.urgency.normalizedDate) return -1
+      return a.urgency.normalizedDate.localeCompare(b.urgency.normalizedDate)
+    })
+    .slice(0, 4) // Limit to 4 most important
+
+  // Filter projects by search query
+  const filteredProjects = projects.filter(project => 
+    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  )
+
+  // Get last updated project
+  const lastUpdatedProject = projects.length > 0 
+    ? projects.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0]
+    : null
 
   return (
     <div className="projects-list-page">
       <div className="projects-header">
-        <h2 className="projects-title">Dina Projekt</h2>
-        <button 
-          className="btn-create-project"
-          onClick={() => setShowCreateModal(true)}
-        >
-          <FolderPlus size={16} />
-          <span>Nytt projekt</span>
-        </button>
+        <h2 className="projects-title">Kontrollrum</h2>
       </div>
 
-      {projects.length === 0 ? (
-        <div className="projects-empty">
-          <Folder size={48} className="empty-icon" />
-          <p className="empty-title">Inga projekt hittades</p>
-          <p className="empty-text">Skapa ditt första projekt för att organisera transkriptioner.</p>
-          <button 
-            className="btn-create-project"
-            onClick={() => setShowCreateModal(true)}
-          >
-            <FolderPlus size={16} />
-            <span>Nytt projekt</span>
-          </button>
-        </div>
-      ) : (
-        <div className="projects-grid">
-          {projects.map(project => (
-            <Link 
-              key={project.id} 
-              to={`/projects/${project.id}`} 
-              className="project-card-link"
+      {/* Overview Grid */}
+      <div className="overview-grid">
+        {/* Projekt Widget (Large) */}
+        <Card className="overview-card overview-card-large">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Projekt</h3>
+          </div>
+          <div className="overview-card-content">
+            <div className="project-widget-search">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Sök projekt..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="project-search-input"
+              />
+            </div>
+            <button 
+              className="btn-create-project btn-create-project-inline"
+              onClick={() => setShowCreateModal(true)}
             >
-              <Card interactive className="project-card">
-                <div className="project-card-top">
-                  <Folder size={18} className="project-icon" />
-                  <Badge variant={project.classification === 'normal' ? 'normal' : project.classification === 'sensitive' ? 'sensitive' : 'source-sensitive'}>
-                    {getClassificationLabel(project.classification)}
-                  </Badge>
-                </div>
-                <h3 className="project-card-title">{project.name}</h3>
-                <div className="project-card-meta">
-                  {(() => {
-                    const u = getDueUrgency(project.due_date)
-                    if (!u.normalizedDate) return null
-                    return (
-                      <div className="project-due-date-row">
-                        <span className="project-due-date-muted">{u.normalizedDate}</span>
-                        {u.label && (
-                          <Badge variant="normal" className={`deadline-badge ${u.variant}`}>
-                            {u.label}
+              <FolderPlus size={16} />
+              <span>Nytt projekt</span>
+            </button>
+            {lastUpdatedProject && (
+              <div className="project-widget-meta">
+                <span className="project-widget-meta-label">Senast uppdaterade:</span>
+                <span className="project-widget-meta-value">{lastUpdatedProject.name}</span>
+              </div>
+            )}
+            <div className="project-widget-count">
+              <span className="project-widget-count-label">Totalt:</span>
+              <span className="project-widget-count-value">{projects.length} projekt</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* Due Dates Widget */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Due Dates</h3>
+          </div>
+          <div className="overview-card-content">
+            {projectsWithDueDates.length === 0 ? (
+              <div className="overview-empty-state">
+                <p className="overview-empty-text">Inga deadlines ännu</p>
+              </div>
+            ) : (
+              <div className="due-dates-list">
+                {projectsWithDueDates.map(project => (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className="due-date-item"
+                  >
+                    <div className="due-date-item-content">
+                      <span className="due-date-item-name">{project.name}</span>
+                      <div className="due-date-item-meta">
+                        <span className="due-date-item-date">{project.urgency.normalizedDate}</span>
+                        {project.urgency.label && (
+                          <Badge 
+                            variant="normal" 
+                            className={`deadline-badge ${project.urgency.variant}`}
+                          >
+                            {project.urgency.label}
                           </Badge>
                         )}
                       </div>
-                    )
-                  })()}
-                  {project.description && (
-                    <p className="project-card-description">{project.description}</p>
-                  )}
-                  {project.tags && project.tags.length > 0 && (
-                    <div className="project-card-tags">
-                      {project.tags.slice(0, 3).map((tag, index) => (
-                        <Badge key={index} variant="normal" className="tag-badge-small">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {project.tags.length > 3 && (
-                        <span className="project-tags-more">+{project.tags.length - 3}</span>
-                      )}
                     </div>
-                  )}
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Scout Widget (Placeholder) */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Scout</h3>
+            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+          </div>
+          <div className="overview-card-content">
+            <p className="overview-placeholder-text">
+              Automatisk identifiering och kategorisering av innehåll.
+            </p>
+            <button 
+              className="btn-overview-disabled"
+              disabled
+            >
+              <Eye size={16} />
+              <span>Öppna Scout</span>
+            </button>
+          </div>
+        </Card>
+
+        {/* Fort Knox Widget (Placeholder) */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Fort Knox</h3>
+            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+          </div>
+          <div className="overview-card-content">
+            <p className="overview-placeholder-text">
+              Säkerhetshantering och åtkomstkontroll.
+            </p>
+            <button 
+              className="btn-overview-disabled"
+              disabled
+            >
+              <Lock size={16} />
+              <span>Öppna Fort Knox</span>
+            </button>
+          </div>
+        </Card>
+
+        {/* Dina Projekt Widget */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Dina Projekt</h3>
+            <button 
+              className="btn-create-project-small"
+              onClick={() => setShowCreateModal(true)}
+              title="Nytt projekt"
+            >
+              <FolderPlus size={14} />
+            </button>
+          </div>
+          <div className="overview-card-content">
+            {filteredProjects.length === 0 ? (
+              <div className="overview-empty-state">
+                <p className="overview-empty-text">
+                  {searchQuery ? 'Inga matchningar' : 'Inga projekt'}
+                </p>
+              </div>
+            ) : (
+              <div className="projects-list-compact">
+                {filteredProjects.map(project => (
+                  <Link 
+                    key={project.id} 
+                    to={`/projects/${project.id}`} 
+                    className="project-item-compact"
+                  >
+                    <div className="project-item-compact-content">
+                      <Folder size={14} className="project-item-icon" />
+                      <span className="project-item-name">{project.name}</span>
+                      {(() => {
+                        const u = getDueUrgency(project.due_date)
+                        if (u.label) {
+                          return (
+                            <Badge variant="normal" className={`deadline-badge-small ${u.variant}`}>
+                              {u.label}
+                            </Badge>
+                          )
+                        }
+                        return null
+                      })()}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Archive Widget (Placeholder) */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Arkiv</h3>
+            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+          </div>
+          <div className="overview-card-content">
+            <p className="overview-placeholder-text">
+              Arkiverade projekt och dokument.
+            </p>
+            <button 
+              className="btn-overview-disabled"
+              disabled
+            >
+              <FileText size={16} />
+              <span>Öppna Arkiv</span>
+            </button>
+          </div>
+        </Card>
+
+        {/* Inställningar Widget (Placeholder) */}
+        <Card className="overview-card">
+          <div className="overview-card-header">
+            <h3 className="overview-card-title">Inställningar</h3>
+            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+          </div>
+          <div className="overview-card-content">
+            <p className="overview-placeholder-text">
+              Systeminställningar och preferenser.
+            </p>
+            <button 
+              className="btn-overview-disabled"
+              disabled
+            >
+              <Settings size={16} />
+              <span>Öppna Inställningar</span>
+            </button>
+          </div>
+        </Card>
+      </div>
 
       <Modal
         isOpen={showCreateModal}

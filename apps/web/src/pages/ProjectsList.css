@@ -8,6 +8,381 @@
   padding: var(--spacing-3xl);
 }
 
+/* Overview Grid */
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-md); /* Tighter gap */
+  margin-bottom: var(--spacing-3xl);
+}
+
+@media (min-width: 768px) {
+  .overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .overview-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 240px; /* Reduced height for tighter design */
+  max-height: 240px; /* Fixed height */
+  height: 240px;
+}
+
+.overview-card-large {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+  .overview-card-large {
+    grid-column: span 1; /* No longer takes full width */
+  }
+}
+
+.overview-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm); /* Tighter spacing */
+  flex-shrink: 0; /* Don't shrink header */
+}
+
+.overview-card-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+  font-family: var(--font-sans);
+}
+
+.overview-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm); /* Tighter gap */
+  flex: 1;
+  min-height: 0; /* Allows flex children to shrink */
+  overflow: hidden; /* Prevent content overflow */
+}
+
+/* Project Widget */
+.project-widget-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0; /* Don't shrink search */
+}
+
+.search-icon {
+  position: absolute;
+  left: var(--spacing-md);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.project-search-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) calc(var(--spacing-sm) * 2 + 16px); /* Tighter padding */
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm); /* Smaller font */
+  font-family: var(--font-sans);
+  transition: border-color 0.2s;
+}
+
+.project-search-input:focus {
+  outline: none;
+  border-color: var(--color-interactive-default);
+}
+
+.dark .project-search-input {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border-default);
+}
+
+.btn-create-project-inline {
+  width: 100%;
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md); /* Tighter padding */
+  font-size: var(--font-size-sm); /* Smaller font */
+  flex-shrink: 0; /* Don't shrink button */
+}
+
+.btn-create-project-small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xs);
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-create-project-small:hover {
+  opacity: 0.9;
+}
+
+.project-widget-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs); /* Smaller font */
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  flex-shrink: 0; /* Don't shrink this section */
+}
+
+.project-widget-meta-label {
+  font-weight: var(--font-weight-medium);
+}
+
+.project-widget-meta-value {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.project-widget-count {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs); /* Smaller font */
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  flex-shrink: 0; /* Don't shrink this section */
+  margin-top: auto; /* Push to bottom */
+}
+
+.project-widget-count-label {
+  font-weight: var(--font-weight-medium);
+}
+
+.project-widget-count-value {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Due Dates Widget */
+.due-dates-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs); /* Tighter gap */
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: var(--spacing-xs); /* Space for scrollbar */
+  min-height: 0;
+}
+
+/* Custom scrollbar for due dates list */
+.due-dates-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.due-dates-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.due-dates-list::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 2px;
+}
+
+.dark .due-dates-list::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+}
+
+.due-date-item {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s;
+}
+
+.due-date-item:hover {
+  opacity: 0.8;
+}
+
+.due-date-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.due-date-item-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+.due-date-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.due-date-item-date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+}
+
+/* Projects List Compact (inside widget) */
+.projects-list-compact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs); /* Tighter gap */
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: var(--spacing-xs); /* Space for scrollbar */
+  min-height: 0;
+}
+
+.projects-list-compact::-webkit-scrollbar {
+  width: 4px;
+}
+
+.projects-list-compact::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.projects-list-compact::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 2px;
+}
+
+.dark .projects-list-compact::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+}
+
+.project-item-compact {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.project-item-compact:hover {
+  opacity: 0.8;
+}
+
+.project-item-compact-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+}
+
+.project-item-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.project-item-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deadline-badge-small {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+/* Placeholder Widgets */
+.overview-empty-state {
+  text-align: center;
+  padding: var(--spacing-lg) 0;
+}
+
+.overview-empty-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  margin: 0;
+}
+
+.overview-placeholder-text {
+  font-size: var(--font-size-xs); /* Smaller font */
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  line-height: 1.4;
+  margin: 0;
+  flex: 1; /* Take available space */
+  display: flex;
+  align-items: flex-start;
+}
+
+.btn-overview-disabled {
+  margin-top: auto; /* Push button to bottom */
+  padding: var(--spacing-sm) var(--spacing-md); /* Tighter padding */
+  font-size: var(--font-size-sm); /* Smaller font */
+  flex-shrink: 0; /* Don't shrink button */
+}
+
+.coming-soon-badge {
+  font-size: var(--font-size-xs);
+  padding: 2px 8px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-accent-warning);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dark .coming-soon-badge {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.btn-overview-disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-sans);
+  cursor: not-allowed;
+  opacity: 0.5;
+  width: 100%;
+}
+
+/* Projects Section */
+.projects-section {
+  margin-top: var(--spacing-3xl);
+}
+
+.projects-section-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xl);
+  font-family: var(--font-sans);
+}
+
 .projects-page {
   padding: var(--spacing-3xl);
 }

@@ -31,8 +31,7 @@ function Sidebar({ darkMode, toggleTheme }) {
       <div className="sidebar-nav">
         <div className="nav-section">
           <div className="nav-section-label">Navigation</div>
-          <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-          <NavItem to="/projects" icon={Folder} label="Arbetsytan" />
+          <NavItem to="/projects" icon={Folder} label="Kontrollrum" />
         </div>
       </div>
 

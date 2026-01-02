@@ -69,7 +69,7 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
         
         <div className="content-area">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<ProjectsList />} />
             <Route path="/projects" element={<ProjectsList />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/projects/:projectId/documents/:documentId" element={<DocumentView />} />
