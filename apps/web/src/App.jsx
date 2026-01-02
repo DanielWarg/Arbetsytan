@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { Settings } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import ProjectsList from './pages/ProjectsList'
 import ProjectDetail from './pages/ProjectDetail'
@@ -64,6 +65,13 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
                 Demo Protected
               </div>
             )}
+            <button 
+              className="header-settings-btn"
+              title="Inställningar"
+              disabled
+            >
+              <Settings size={18} />
+            </button>
           </div>
         </header>
         

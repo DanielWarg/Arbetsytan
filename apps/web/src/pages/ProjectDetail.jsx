@@ -7,6 +7,7 @@ import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
 import { FileText, StickyNote, Mic, Upload, File, Info, Edit, Trash2 } from 'lucide-react'
+import JournalistNotes from './JournalistNotes'
 import './ProjectDetail.css'
 
 function ProjectDetail() {
@@ -507,10 +508,9 @@ function ProjectDetail() {
                 <button 
                   className={`toolbar-btn ${ingestMode === 'note' ? 'active' : ''}`}
                   onClick={() => setIngestMode('note')}
-                  disabled
                 >
                   <StickyNote size={14} />
-                  <span>Anteckning</span>
+                  <span>Anteckningar</span>
                 </button>
                 <button 
                   className={`toolbar-btn ${ingestMode === 'audio' ? 'active' : ''}`}
@@ -526,26 +526,6 @@ function ProjectDetail() {
                   <span>Röstmemo</span>
                 </button>
               </div>
-              <button 
-                className="toolbar-toggle-btn"
-                onClick={() => setContextCollapsed(!contextCollapsed)}
-                aria-label={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
-                title={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
-              >
-                <div className="panel-toggle-container">
-                  <svg className="panel-toggle-arrow panel-toggle-arrow-left" width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <path d="M5 1L2 4L5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <div className="panel-toggle-icon">
-                    <div className="panel-toggle-box">
-                      {!contextCollapsed && <div className="panel-toggle-sidebar"></div>}
-                    </div>
-                  </div>
-                  <svg className="panel-toggle-arrow panel-toggle-arrow-right" width="8" height="8" viewBox="0 0 8 8" fill="none">
-                    <path d="M3 1L6 4L3 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              </button>
             </div>
 
             {/* Primary CTA for Audio Transcription - Only when audio mode is active - MUST be before Material List */}
@@ -755,8 +735,13 @@ function ProjectDetail() {
               </div>
             )}
 
-            {/* Material List - Always visible, regardless of ingest mode */}
-            {documents.length > 0 && (
+            {/* Journalist Notes View - Only when note mode is active */}
+            {ingestMode === 'note' && (
+              <JournalistNotes projectId={id} />
+            )}
+
+            {/* Material List - Always visible when not in note mode */}
+            {ingestMode !== 'note' && documents.length > 0 && (
               <div className="material-list">
                 <h3 className="material-list-title">Material</h3>
                 <div className="material-list-items">
@@ -824,6 +809,27 @@ function ProjectDetail() {
 
         {/* Right Column: Context */}
         <div className={`workspace-context ${contextCollapsed ? 'workspace-context-collapsed' : ''}`}>
+          {/* Toggle button - positioned on divider line */}
+          <button 
+            className="context-toggle-btn"
+            onClick={() => setContextCollapsed(!contextCollapsed)}
+            aria-label={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
+            title={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
+          >
+            <div className="panel-toggle-container">
+              <svg className="panel-toggle-arrow panel-toggle-arrow-left" width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <path d="M5 1L2 4L5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <div className="panel-toggle-icon">
+                <div className="panel-toggle-box">
+                  {!contextCollapsed && <div className="panel-toggle-sidebar"></div>}
+                </div>
+              </div>
+              <svg className="panel-toggle-arrow panel-toggle-arrow-right" width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <path d="M3 1L6 4L3 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </button>
           {!contextCollapsed && (
             <>
               <Card className="context-card">

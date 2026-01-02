@@ -14,16 +14,39 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
+def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
+    """
+    Helper function to sanitize event metadata using Privacy Guard.
+    
+    Args:
+        meta: Raw metadata dictionary
+        context: Context for sanitization ("audit" or "log")
+        
+    Returns:
+        Sanitized metadata dictionary (forbidden keys removed/truncated)
+        
+    Raises:
+        AssertionError: In DEV mode if forbidden keys found
+    """
+    sanitized = sanitize_for_logging(meta, context=context)
+    assert_no_content(sanitized, context=context)
+    return sanitized
+
 from database import get_db, engine
-from models import Project, ProjectEvent, Document, ProjectNote, Base, Classification, SanitizeLevel
+from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, Base, Classification, SanitizeLevel, NoteCategory
+from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
-    DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse
+    DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse,
+    JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
+    JournalistNoteImageResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
     normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError,
-    transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text
+    transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
+    sanitize_journalist_note
 )
 
 # Create tables
@@ -133,7 +156,7 @@ async def create_project(
         project_id=db_project.id,
         event_type="project_created",
         actor=username,
-        event_metadata={"name": project.name}
+        event_metadata=_safe_event_metadata({"name": project.name}, context="audit")
     )
     db.add(event)
     db.commit()
@@ -205,7 +228,7 @@ async def update_project(
             project_id=project.id,
             event_type="project_updated",
             actor=username,
-            event_metadata={"changes": changes}
+            event_metadata=_safe_event_metadata({"changes": changes}, context="audit")
         )
         db.add(event)
         db.commit()
@@ -219,42 +242,100 @@ async def delete_project(
     db: Session = Depends(get_db),
     username: str = Depends(verify_basic_auth)
 ):
-    """Delete a project and all its documents and events (permanent)"""
+    """
+    Delete a project and all its documents and events (permanent).
+    
+    Security by Design:
+    - Counts files before delete
+    - Deletes all files from disk
+    - Verifies no orphans remain
+    - Logs only metadata (no filenames/paths)
+    - Fail-closed: if verification fails, log error and block delete
+    """
     import os
     from pathlib import Path
+    from security_core.privacy_guard import sanitize_for_logging
     
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Get all documents for this project to delete files
-    documents = db.query(Document).filter(Document.project_id == project_id).all()
-    document_count = len(documents)
+    # === PHASE 1: Count all files before delete ===
+    files_to_delete = []
     
-    # Delete document files from disk
-    deleted_files = 0
+    # 1. Document files
+    documents = db.query(Document).filter(Document.project_id == project_id).all()
     for doc in documents:
         if doc.file_path:
             file_path = UPLOAD_DIR / doc.file_path
-            try:
-                if file_path.exists():
-                    os.remove(file_path)
-                    deleted_files += 1
-            except Exception:
-                # Ignore errors (file might already be deleted)
-                pass
+            if file_path.exists():
+                files_to_delete.append(file_path)
     
+    # 2. Recording files (audio files for transcripts)
+    # Note: Recordings are stored as documents with file_path, already counted above
+    
+    # 3. Journalist note images
+    journalist_notes = db.query(JournalistNote).filter(JournalistNote.project_id == project_id).all()
+    for note in journalist_notes:
+        for image in note.images:
+            if image.file_path:
+                image_path = Path(image.file_path)
+                if image_path.exists():
+                    files_to_delete.append(image_path)
+    
+    file_count_before = len(files_to_delete)
+    
+    logger.info(f"[SECURE_DELETE] Project {project_id}: Found {file_count_before} files to delete")
+    
+    # === PHASE 2: Delete files from disk ===
+    deleted_files = 0
+    failed_deletes = []
+    
+    for file_path in files_to_delete:
+        try:
+            os.remove(file_path)
+            deleted_files += 1
+        except Exception as e:
+            logger.warning(f"[SECURE_DELETE] Failed to delete file: {type(e).__name__}")
+            failed_deletes.append(str(file_path))
+    
+    # === PHASE 3: Verify no orphans remain ===
+    orphans = []
+    for file_path in files_to_delete:
+        if file_path.exists():
+            orphans.append(str(file_path))
+    
+    # Fail-closed: if orphans detected, log error and block delete
+    if orphans:
+        logger.error(f"[SECURE_DELETE] Project {project_id}: ORPHAN DETECTION FAILED - {len(orphans)} files remain on disk")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Secure delete failed: {len(orphans)} orphan files detected. Delete blocked for security."
+        )
+    
+    # === PHASE 4: Delete DB records (CASCADE) ===
     # Delete events first (explicit cascade)
     db.query(ProjectEvent).filter(ProjectEvent.project_id == project_id).delete()
     # Delete documents (cascade should handle, but explicit for safety)
     db.query(Document).filter(Document.project_id == project_id).delete()
+    # Delete project notes (cascade will delete journalist notes and images)
+    db.query(ProjectNote).filter(ProjectNote.project_id == project_id).delete()
+    db.query(JournalistNote).filter(JournalistNote.project_id == project_id).delete()
     # Delete project
     db.delete(project)
     db.commit()
     
-    # Log only IDs and counts (no filenames or content)
-    # Note: In production, use proper logging, not print
-    print(f"Deleted project {project_id} with {document_count} documents ({deleted_files} files removed from disk)")
+    # === PHASE 5: Log only metadata (privacy-safe) ===
+    safe_metadata = sanitize_for_logging({
+        "project_id": project_id,
+        "files_counted": file_count_before,
+        "files_deleted": deleted_files,
+        "files_failed": len(failed_deletes),
+        "orphans_detected": len(orphans),
+        "actor": username
+    }, context="audit")
+    
+    logger.info(f"[SECURE_DELETE] Project {project_id} deleted successfully", extra=safe_metadata)
     
     return None
 
@@ -292,7 +373,7 @@ async def create_project_event(
         project_id=project_id,
         event_type=event.event_type,
         actor=event.actor or username,
-        event_metadata=event.metadata
+        event_metadata=_safe_event_metadata(event.metadata or {}, context="audit")
     )
     db.add(db_event)
     
@@ -423,7 +504,7 @@ async def upload_document(
             project_id=project_id,
             event_type="document_uploaded",
             actor=username,
-            event_metadata={"filename": file.filename, "file_type": file_type}
+            event_metadata=_safe_event_metadata({"file_type": file_type}, context="audit")
         )
         db.add(event)
         
@@ -692,7 +773,7 @@ async def upload_recording(
             project_id=project_id,
             event_type="recording_transcribed",
             actor=username,
-            event_metadata=event_metadata
+            event_metadata=_safe_event_metadata(event_metadata, context="audit")
         )
         db.add(event)
         
@@ -809,10 +890,10 @@ async def create_note(
         project_id=project_id,
         event_type="note_created",
         actor=username,
-        event_metadata={
+        event_metadata=_safe_event_metadata({
             "note_id": None,  # Will be set after commit
             "sanitize_level": sanitize_level.value
-        }
+        }, context="audit")
     )
     db.add(event)
     
@@ -858,9 +939,337 @@ async def delete_note(
         project_id=project_id,
         event_type="note_deleted",
         actor=username,
-        event_metadata={"note_id": note_id}
+        event_metadata=_safe_event_metadata({"note_id": note_id}, context="audit")
     )
     db.add(event)
     
     db.commit()
     return None
+
+
+# Journalist Notes endpoints
+# ============================================================================
+
+@app.get("/api/projects/{project_id}/journalist-notes", response_model=List[JournalistNoteListResponse])
+async def list_journalist_notes(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """List all journalist notes for a project (metadata only, no body)."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    notes = db.query(JournalistNote).filter(JournalistNote.project_id == project_id).order_by(JournalistNote.updated_at.desc()).all()
+    
+    # Build list response with preview (title or first line of body)
+    result = []
+    for note in notes:
+        # Use title if available, otherwise first line of body
+        if note.title:
+            preview = note.title
+        else:
+            preview = note.body.split('\n')[0] if note.body else ""
+            if len(preview) > 100:
+                preview = preview[:100] + "..."
+        
+        result.append(JournalistNoteListResponse(
+            id=note.id,
+            project_id=note.project_id,
+            title=note.title,
+            preview=preview,
+            category=note.category.value,
+            created_at=note.created_at,
+            updated_at=note.updated_at
+        ))
+    
+    return result
+
+
+@app.get("/api/journalist-notes/{note_id}", response_model=JournalistNoteResponse)
+async def get_journalist_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Get a specific journalist note with raw body."""
+    note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+
+@app.get("/api/journalist-notes/{note_id}/images", response_model=List[JournalistNoteImageResponse])
+async def list_journalist_note_images(
+    note_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """List all images for a journalist note."""
+    note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    images = db.query(JournalistNoteImage).filter(JournalistNoteImage.note_id == note_id).order_by(JournalistNoteImage.created_at.desc()).all()
+    return images
+
+
+@app.post("/api/projects/{project_id}/journalist-notes", response_model=JournalistNoteResponse, status_code=201)
+async def create_journalist_note(
+    project_id: int,
+    note: JournalistNoteCreate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Create a journalist note.
+    Only technical sanitization (no masking, no normalization, no AI).
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Technical sanitization only (no masking, no normalization)
+    sanitized_body = sanitize_journalist_note(note.body)
+    
+    # Sanitize title if provided
+    sanitized_title = None
+    if note.title:
+        sanitized_title = sanitize_journalist_note(note.title).strip()
+        if not sanitized_title:
+            sanitized_title = None
+    
+    # Create note
+    db_note = JournalistNote(
+        project_id=project_id,
+        title=sanitized_title,
+        body=sanitized_body,
+        category=note.category or NoteCategory.RAW
+    )
+    db.add(db_note)
+    
+    # Create event (metadata only - NEVER content)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_created",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": None,  # Will be set after commit
+            "note_type": "journalist"
+        }, context="audit")
+    )
+    db.add(event)
+    
+    db.commit()
+    db.refresh(db_note)
+    
+    # Update event with note_id
+    event.event_metadata["note_id"] = db_note.id
+    db.commit()
+    
+    return db_note
+
+
+@app.put("/api/journalist-notes/{note_id}", response_model=JournalistNoteResponse)
+async def update_journalist_note(
+    note_id: int,
+    note: JournalistNoteUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Update a journalist note.
+    Only technical sanitization (no masking, no normalization, no AI).
+    """
+    db_note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not db_note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Technical sanitization only
+    sanitized_body = sanitize_journalist_note(note.body)
+    
+    # Sanitize title if provided
+    if note.title is not None:
+        sanitized_title = sanitize_journalist_note(note.title).strip()
+        db_note.title = sanitized_title if sanitized_title else None
+    # If title is not provided in update, keep existing title
+    
+    db_note.body = sanitized_body
+    
+    # Update category if provided
+    if note.category is not None:
+        db_note.category = note.category
+    
+    # updated_at is set automatically by onupdate
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=db_note.project_id,
+        event_type="note_updated",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": note_id,
+            "note_type": "journalist"
+        }, context="audit")
+    )
+    db.add(event)
+    
+    # Update project updated_at
+    from sqlalchemy.sql import func
+    project = db.query(Project).filter(Project.id == db_note.project_id).first()
+    if project:
+        project.updated_at = func.now()
+    
+    db.commit()
+    db.refresh(db_note)
+    
+    return db_note
+
+
+@app.delete("/api/journalist-notes/{note_id}", status_code=204)
+async def delete_journalist_note(
+    note_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Delete a journalist note and associated images."""
+    note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    project_id = note.project_id
+    
+    # Delete associated images from disk
+    images = db.query(JournalistNoteImage).filter(JournalistNoteImage.note_id == note_id).all()
+    for image in images:
+        image_path = UPLOAD_DIR / image.file_path
+        if image_path.exists():
+            try:
+                os.remove(image_path)
+            except Exception:
+                pass  # Ignore errors
+    
+    # Delete note (cascade will delete images from DB)
+    db.delete(note)
+    
+    # Create deletion event
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_deleted",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": note_id,
+            "note_type": "journalist"
+        }, context="audit")
+    )
+    db.add(event)
+    
+    db.commit()
+    return None
+
+
+@app.post("/api/journalist-notes/{note_id}/images", response_model=JournalistNoteImageResponse, status_code=201)
+async def upload_journalist_note_image(
+    note_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Upload an image to a journalist note.
+    Images are private references only - no analysis, no OCR, no AI.
+    """
+    note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Validate file size (10MB max)
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large. Maximum size is 10MB")
+    
+    # Validate image format
+    mime_type = file.content_type or ""
+    if not mime_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Create directory for note images
+    note_images_dir = UPLOAD_DIR / "journalist_notes" / str(note_id)
+    note_images_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save image
+    image_id = str(uuid.uuid4())
+    file_ext = os.path.splitext(file.filename)[1] or '.jpg'
+    image_path = note_images_dir / f"{image_id}{file_ext}"
+    
+    try:
+        with open(image_path, 'wb') as f:
+            f.write(file_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save image: {str(e)}")
+    
+    # Create image record
+    db_image = JournalistNoteImage(
+        note_id=note_id,
+        file_path=f"journalist_notes/{note_id}/{image_id}{file_ext}",  # Relative path
+        filename=file.filename,
+        mime_type=mime_type
+    )
+    db.add(db_image)
+    
+    # Create event (metadata only - NEVER image content)
+    event = ProjectEvent(
+        project_id=note.project_id,
+        event_type="note_image_added",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": note_id,
+            "image_id": None,  # Will be set after commit
+            "mime_type": mime_type,
+            "size": file_size
+        }, context="audit")
+    )
+    db.add(event)
+    
+    db.commit()
+    db.refresh(db_image)
+    
+    # Update event with image_id
+    event.event_metadata["image_id"] = db_image.id
+    db.commit()
+    
+    return db_image
+
+
+@app.get("/api/journalist-notes/{note_id}/images/{image_id}")
+async def get_journalist_note_image(
+    note_id: int,
+    image_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Get an image file for inline display."""
+    note = db.query(JournalistNote).filter(JournalistNote.id == note_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    image = db.query(JournalistNoteImage).filter(
+        JournalistNoteImage.id == image_id,
+        JournalistNoteImage.note_id == note_id
+    ).first()
+    
+    if not image:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    image_path = UPLOAD_DIR / image.file_path
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found")
+    
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        path=str(image_path),
+        media_type=image.mime_type,
+        filename=image.filename
+    )

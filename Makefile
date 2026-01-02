@@ -161,6 +161,30 @@ verify-transcription-quality:
 		 echo "      docker exec arbetsytan-api-1 python3 /app/_verify/verify_transcription_quality.py" && \
 		 exit 1)
 
+verify-security-phase1:
+	@echo "======================================================================"
+	@echo "PHASE 1: SECURITY BY DESIGN - Verification Suite"
+	@echo "======================================================================"
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "TEST 1/2: Event No Content Policy"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T -e DEBUG=true api python _verify/verify_event_no_content_policy.py || \
+		(echo "✗ Event No Content Policy verification FAILED" && exit 1)
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "TEST 2/2: Secure Delete Policy"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T api python _verify/verify_secure_delete.py || \
+		(echo "✗ Secure Delete Policy verification FAILED" && exit 1)
+	@echo ""
+	@echo "======================================================================"
+	@echo "✅ PHASE 1 VERIFICATION COMPLETE - All security policies enforced"
+	@echo "======================================================================"
+	@echo "Event No Content: ✅ PASS"
+	@echo "Secure Delete: ✅ PASS"
+	@echo ""
+
 verify-all:
 	@echo "🧭 Running all FAS 0-4 verifications..."
 	@$(MAKE) verify-fas0

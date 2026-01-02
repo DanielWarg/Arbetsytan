@@ -47,3 +47,13 @@ Långvariga operationer (>5 sekunder) måste visa progress. Användare ska allti
 - [ ] Processer stängs efter användning
 - [ ] Städning är verifierad (5-stegsprocess)
 - [ ] Inga aktiva modeller/filer tas bort
+## Phase Overrides — Security by Design (Phase 1)
+
+Följande undantag gäller endast för Phase 1: Security by Design enligt
+docs/PHASE_1_SECURITY_BY_DESIGN_PLAN.md
+
+- Nya dokumentationsfiler är tillåtna om de uttryckligen ingår i Phase 1-planen.
+- Verifieringsscripts (`apps/api/_verify/*`) räknas inte som genererade artefakter,
+  utan som obligatoriska säkerhetsbevis och får committas.
+- Implementation får ske utan ny plan endast om steget redan är godkänt i Phase 1-checklistan.
+- Inga andra undantag är tillåtna.

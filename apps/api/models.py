@@ -32,6 +32,7 @@ class Project(Base):
     events = relationship("ProjectEvent", back_populates="project", order_by="ProjectEvent.timestamp.desc()")
     documents = relationship("Document", back_populates="project", order_by="Document.created_at.desc()")
     notes = relationship("ProjectNote", back_populates="project", order_by="ProjectNote.created_at.desc()")
+    journalist_notes = relationship("JournalistNote", back_populates="project", order_by="JournalistNote.updated_at.desc()")
 
 
 class ProjectEvent(Base):
@@ -78,3 +79,42 @@ class ProjectNote(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="notes")
+
+
+class NoteCategory(str, enum.Enum):
+    RAW = "raw"  # Råanteckning
+    WORK = "work"  # Arbetsanteckning
+    REFLECTION = "reflection"  # Reflektion
+    QUESTION = "question"  # Fråga
+    SOURCE = "source"  # Källa
+    OTHER = "other"  # Övrigt
+
+
+class JournalistNote(Base):
+    """Journalist notes - raw text, no sanitization, no AI processing."""
+    __tablename__ = "journalist_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String, nullable=True)  # Optional title/name for the note
+    body = Column(Text, nullable=False)  # Raw text - only technical sanitization (no masking, no normalization)
+    category = Column(SQLEnum(NoteCategory), default=NoteCategory.RAW, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    project = relationship("Project", back_populates="journalist_notes")
+    images = relationship("JournalistNoteImage", back_populates="note", cascade="all, delete-orphan")
+
+
+class JournalistNoteImage(Base):
+    """Images attached to journalist notes - private references only."""
+    __tablename__ = "journalist_note_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    note_id = Column(Integer, ForeignKey("journalist_notes.id", ondelete="CASCADE"), nullable=False)
+    file_path = Column(String, nullable=False)  # Server-side only, never exposed
+    filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    note = relationship("JournalistNote", back_populates="images")

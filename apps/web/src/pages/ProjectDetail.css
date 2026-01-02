@@ -155,7 +155,7 @@
 .project-workspace {
   display: grid;
   grid-template-columns: 1fr 0.43fr; /* ≈70% / ≈30% */
-  gap: 1.5rem; /* gap-6 */
+  gap: 0; /* No gap - divider line will be the separator */
   align-items: start;
   position: relative;
 }
@@ -250,77 +250,7 @@
   cursor: not-allowed;
 }
 
-.toolbar-toggle-btn {
-  margin-left: auto;
-  padding: 0.5rem;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: all 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.toolbar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.dark .toolbar-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.panel-toggle-container {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.panel-toggle-arrow {
-  color: #71717a;
-  flex-shrink: 0;
-}
-
-.dark .panel-toggle-arrow {
-  color: #a1a1aa;
-}
-
-.panel-toggle-icon {
-  width: 1.5rem;
-  height: 1.125rem;
-  position: relative;
-  flex-shrink: 0;
-}
-
-.panel-toggle-box {
-  width: 100%;
-  height: 100%;
-  background: #000000;
-  border: 1.5px solid #a1a1aa;
-  border-radius: 0.125rem;
-  position: relative;
-  overflow: hidden;
-}
-
-.dark .panel-toggle-box {
-  background: #000000;
-  border-color: #a1a1aa;
-}
-
-.panel-toggle-sidebar {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 35%;
-  background: #71717a;
-  border-radius: 0 0.125rem 0.125rem 0;
-}
-
-.dark .panel-toggle-sidebar {
-  background: #71717a;
-}
+/* Toggle button styles moved to .context-toggle-btn above */
 
 /* Primary Dropzone - Full width, calm, editorial */
 .ingest-dropzone {
@@ -978,19 +908,23 @@
   flex-direction: column;
   gap: 1rem; /* gap-4 */
   position: sticky;
-  top: 1.5rem; /* top-6 */
+  top: 0; /* Align with content top (ingest-toolbar) */
   align-self: start;
   transition: all 0.3s ease;
   min-width: 0;
   position: relative;
+  padding-left: 1.5rem; /* Visual spacing from divider */
+  border-left: 1px solid var(--color-border-default); /* Divider line - exact alignment with grid split */
 }
 
 .workspace-context-collapsed {
   width: 0;
   min-width: 0;
-  overflow: visible; /* Changed from hidden to visible so button stays accessible */
+  overflow: visible;
   padding: 0;
   gap: 0;
+  border-left: none;
+  margin-left: 0;
 }
 
 .workspace-context-collapsed > *:not(.context-toggle-btn) {
@@ -999,14 +933,102 @@
   width: 0;
 }
 
-/* Toggle button removed - now in toolbar */
+/* Toggle button - positioned on divider line */
+.context-toggle-btn {
+  position: absolute;
+  left: -12px; /* Center on divider line (half of button width) */
+  top: 0; /* Align with content top */
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dark .context-toggle-btn {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.context-toggle-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
+  transform: scale(1.1);
+}
+
+.context-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+.panel-toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  height: 100%;
+}
+
+.panel-toggle-arrow {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.dark .panel-toggle-arrow {
+  color: var(--color-text-muted);
+}
+
+.panel-toggle-icon {
+  width: 1rem;
+  height: 0.75rem;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.panel-toggle-box {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-surface);
+  border: 1.5px solid var(--color-text-muted);
+  border-radius: 0.125rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .panel-toggle-box {
+  background: var(--color-bg-surface);
+  border-color: var(--color-text-muted);
+}
+
+.panel-toggle-sidebar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  background: var(--color-text-muted);
+  border-radius: 0 0.125rem 0.125rem 0;
+}
+
+.dark .panel-toggle-sidebar {
+  background: var(--color-text-muted);
+}
 
 .context-card {
   width: 100%;
+  margin-top: 0; /* Remove any default margin to align with content top */
 }
 
 .context-section {
   width: 100%;
+  padding-top: 0; /* Align content top with ingest-toolbar */
 }
 
 .context-title {

@@ -66,6 +66,47 @@ def extract_text_from_txt(file_path: str) -> str:
         raise ValueError(f"Failed to read TXT file: {str(e)}")
 
 
+def sanitize_journalist_note(raw_text: str) -> str:
+    """
+    Technical sanitization for journalist notes - NO language normalization, NO masking, NO AI.
+    
+    Only performs:
+    - Trim whitespace (start/end)
+    - Normalize line breaks (\r\n -> \n)
+    - Remove invisible control characters (except \n, \t)
+    - Escape HTML/JS for security
+    
+    NEVER logs raw_text or output.
+    """
+    if not raw_text:
+        return ""
+    
+    import html
+    
+    # Trim whitespace from start and end
+    text = raw_text.strip()
+    
+    # Normalize line breaks: \r\n -> \n, \r -> \n
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    
+    # Remove invisible control characters (except \n and \t)
+    # Keep: \n (newline), \t (tab), and all printable characters
+    cleaned = []
+    for char in text:
+        if char == '\n' or char == '\t':
+            cleaned.append(char)
+        elif char.isprintable():
+            cleaned.append(char)
+        # Skip all other control characters
+    
+    text = ''.join(cleaned)
+    
+    # Escape HTML/JS for security (prevent XSS)
+    text = html.escape(text, quote=False)  # quote=False means don't escape quotes (preserve text)
+    
+    return text
+
+
 def normalize_text(text: str) -> str:
     """
     Basic text normalization:

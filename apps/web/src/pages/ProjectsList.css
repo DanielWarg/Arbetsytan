@@ -50,25 +50,30 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--spacing-sm); /* Tighter spacing */
+  margin-bottom: var(--spacing-lg); /* More space for visual separation */
+  padding-bottom: var(--spacing-md); /* Visual divider */
+  border-bottom: 1px solid var(--color-border-default); /* Clear separation */
   flex-shrink: 0; /* Don't shrink header */
 }
 
 .overview-card-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl); /* Larger for hierarchy */
+  font-weight: var(--font-weight-bold); /* Bolder for emphasis */
   color: var(--color-text-primary);
   margin: 0;
   font-family: var(--font-sans);
+  letter-spacing: -0.01em; /* Tighter letter spacing for premium feel */
+  line-height: 1.2;
 }
 
 .overview-card-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm); /* Tighter gap */
+  gap: var(--spacing-md); /* Comfortable gap */
   flex: 1;
   min-height: 0; /* Allows flex children to shrink */
   overflow: hidden; /* Prevent content overflow */
+  padding-top: var(--spacing-xs); /* Slight indentation from header */
 }
 
 /* Project Widget */
@@ -138,10 +143,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-  font-size: var(--font-size-xs); /* Smaller font */
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  flex-shrink: 0; /* Don't shrink this section */
+  flex-shrink: 0;
+  padding-top: var(--spacing-xs); /* Visual separation */
+  border-top: 1px solid var(--color-border-default); /* Subtle divider */
+  margin-top: var(--spacing-xs);
 }
 
 .project-widget-meta-label {
@@ -157,11 +165,13 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  font-size: var(--font-size-xs); /* Smaller font */
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  flex-shrink: 0; /* Don't shrink this section */
+  flex-shrink: 0;
   margin-top: auto; /* Push to bottom */
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--color-border-default); /* Subtle divider */
 }
 
 .project-widget-count-label {
@@ -224,6 +234,7 @@
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+  line-height: 1.4; /* Better readability */
 }
 
 .due-date-item-meta {
@@ -310,7 +321,11 @@
 /* Placeholder Widgets */
 .overview-empty-state {
   text-align: center;
-  padding: var(--spacing-lg) 0;
+  padding: var(--spacing-xl) var(--spacing-md);
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .overview-empty-text {
@@ -318,38 +333,50 @@
   color: var(--color-text-muted);
   font-family: var(--font-sans);
   margin: 0;
+  font-style: italic; /* Indicates placeholder state */
 }
 
 .overview-placeholder-text {
-  font-size: var(--font-size-xs); /* Smaller font */
+  font-size: var(--font-size-sm); /* Readable size */
   color: var(--color-text-muted);
   font-family: var(--font-sans);
-  line-height: 1.4;
+  line-height: 1.5; /* Comfortable reading */
   margin: 0;
   flex: 1; /* Take available space */
   display: flex;
   align-items: flex-start;
+  padding-top: var(--spacing-xs); /* Slight indentation */
 }
 
 .btn-overview-disabled {
   margin-top: auto; /* Push button to bottom */
-  padding: var(--spacing-sm) var(--spacing-md); /* Tighter padding */
-  font-size: var(--font-size-sm); /* Smaller font */
+  padding: var(--spacing-md) var(--spacing-lg); /* Comfortable padding */
+  font-size: var(--font-size-sm);
   flex-shrink: 0; /* Don't shrink button */
+  opacity: 0.5; /* Clearly disabled, not broken */
+  cursor: not-allowed;
+  border-style: dashed; /* Visual indicator of "coming soon" */
+}
+
+.btn-overview-disabled:hover {
+  opacity: 0.6; /* Slight feedback */
 }
 
 .coming-soon-badge {
-  font-size: var(--font-size-xs);
-  padding: 2px 8px;
-  background: rgba(245, 158, 11, 0.1);
+  font-size: 0.625rem; /* Smaller, secondary */
+  padding: 3px 8px;
+  background: rgba(245, 158, 11, 0.08); /* More subtle */
   color: var(--color-accent-warning);
-  border: 1px solid rgba(245, 158, 11, 0.25);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .dark .coming-soon-badge {
-  background: rgba(245, 158, 11, 0.12);
+  background: rgba(245, 158, 11, 0.1);
   color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .btn-overview-disabled {

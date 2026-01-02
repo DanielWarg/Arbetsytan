@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
-from models import Classification
+from models import Classification, NoteCategory
 
 
 class ProjectCreate(BaseModel):
@@ -111,6 +111,57 @@ class NoteListResponse(BaseModel):
     sanitize_level: str
     created_at: datetime
     # NO masked_body in list
+
+    class Config:
+        from_attributes = True
+
+
+# Journalist Notes schemas (raw text, no sanitization)
+class JournalistNoteCreate(BaseModel):
+    title: Optional[str] = None  # Optional title/name
+    body: str  # Raw body text (will be technically sanitized only)
+    category: Optional[NoteCategory] = NoteCategory.RAW
+
+
+class JournalistNoteUpdate(BaseModel):
+    title: Optional[str] = None
+    body: str  # Raw body text (will be technically sanitized only)
+    category: Optional[NoteCategory] = None
+
+
+class JournalistNoteResponse(BaseModel):
+    id: int
+    project_id: int
+    title: Optional[str]
+    body: str  # Raw body (no masking)
+    category: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class JournalistNoteListResponse(BaseModel):
+    id: int
+    project_id: int
+    title: Optional[str]
+    preview: str  # First line of body or title
+    category: str
+    created_at: datetime
+    updated_at: datetime
+    # NO body in list
+
+    class Config:
+        from_attributes = True
+
+
+class JournalistNoteImageResponse(BaseModel):
+    id: int
+    note_id: int
+    filename: str
+    mime_type: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

@@ -6,7 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, Settings } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -294,25 +294,6 @@ function ProjectsList() {
           </div>
         </Card>
 
-        {/* Inställningar Widget (Placeholder) */}
-        <Card className="overview-card">
-          <div className="overview-card-header">
-            <h3 className="overview-card-title">Inställningar</h3>
-            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
-          </div>
-          <div className="overview-card-content">
-            <p className="overview-placeholder-text">
-              Systeminställningar och preferenser.
-            </p>
-            <button 
-              className="btn-overview-disabled"
-              disabled
-            >
-              <Settings size={16} />
-              <span>Öppna Inställningar</span>
-            </button>
-          </div>
-        </Card>
       </div>
 
       <Modal

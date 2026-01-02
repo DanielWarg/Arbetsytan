@@ -52,7 +52,30 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-lg);
+}
+
+.header-settings-btn {
+  background: none;
+  border: none;
+  cursor: not-allowed;
+  padding: var(--spacing-sm);
+  color: var(--color-text-muted);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.header-settings-btn:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  opacity: 1;
+}
+
+.header-settings-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .demo-badge {
