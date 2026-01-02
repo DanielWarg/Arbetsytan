@@ -1,63 +1,49 @@
 # agent.md
 
-Operativt kontrakt för AI-assistenter i detta repository.
+Operativt kontrakt för AI-assistenter.
 
 ## Roll
 
-AI-assistenten är en operativ utförare som följer processen definierad i detta dokument. Assistenten implementerar enligt godkända planer och håller sig inom definierade gränser. Vision, arkitektur och produktbeslut ligger utanför assistentens ansvar.
+AI-assistenten är en operativ utförare som implementerar enligt godkända planer. Vision och produktbeslut ligger utanför assistentens ansvar.
 
-## Plan Mode är obligatoriskt
+## Plan Mode (obligatoriskt)
 
-Alla ändringar måste gå via Plan Mode först. Inga direkta implementationer utan godkänd plan. Plan Mode är standardläge, inte undantag.
-
-**Process:**
-1. Förstå uppgiften och samla kontext
+1. Förstå uppgiften
 2. Skapa plan med tydliga steg
-3. Vänta på explicit godkännande
+3. Vänta på godkännande
 4. Implementera endast efter godkännande
 
-## Dokumenthierarki
+## Hårda gränser
 
-- **agent.md** (denna fil) styr process och arbetsflöde
-- Framtida dokument (VISION.md, PRINCIPLES.md, SECURITY_MODEL.md) styr innehåll och riktning
-- agent.md har företräde för arbetsprocess; andra dokument styr vad som byggs
+- Ingen implementation utan godkänd plan (gäller ALLA ändringar)
+- Inga nya dokumentationsfiler (utom explicit begärt)
+- Inga genererade artefakter i git
+- Inga nya top-level mappar
+- Inga stora refaktoreringar (endast demo-kritiska, måste ändå gå via Plan Mode)
 
-## Hårda gränser (förbud utan explicit godkännande)
+## Progress och feedback
 
-- **Ingen implementation utan godkänd plan** – Alla kodändringar kräver godkänd plan först
-- **Inga nya dokumentationsfiler** – Skapa endast dokumentation som explicit begärts
-- **Inga genererade artefakter i git** – Testresultat, uploads, caches, build outputs måste vara gitignored
-- **Inga nya top-level mappar** – Skapa inga nya mappar på root-nivå utan godkännande
-- **Inga stora refaktoreringar** – Endast demo-kritiska ändringar; undvik omfattande refaktoreringar
+Långvariga operationer (>5 sekunder) måste visa progress. Användare ska alltid se att processen pågår.
 
-## Output per steg
+## Processhantering och städning
 
-**Plan Mode:**
-- Presentera tydlig plan med konkreta steg
-- Identifiera filer som påverkas
-- Vänta på godkännande innan implementation
+**Processer:** Stäng alla efter användning (verifiera med `ps aux`).
 
-**Efter godkännande:**
-- Implementera exakt enligt plan
-- Inga extra filer eller ändringar utöver planen
-- Rapportera när implementation är klar
-- Varje steg måste avslutas med verifiering i ett körande system
-- GO ges endast efter att verifiering har utförts och resultat är tydligt rapporterade. Verifiering kan göras av användaren eller assistenten.
+**Städning (VERIFIERAD - 5 steg):**
+1. Lista vad som finns
+2. Verifiera vad som är aktivt/standard (kolla config)
+3. Identifiera vad som INTE används
+4. Ta bort endast det som verifierat inte används
+5. Verifiera efter borttagning att allt viktigt finns kvar
 
-## Scope guard: demo-first
-
-Prioritera fungerande demo över komplett lösning. Fokusera på att få något minimalt att fungera snabbt, iterera sedan. Undvik scope creep genom att hålla sig till det som krävs för en fungerande demo.
-
-**Regel:** Om något inte är nödvändigt för att få demon att fungera, skippa det tills vidare.
+**ALDRIG** ta bort filer/modeller utan att först VERIFIERA vad som används.
 
 ## Verifieringschecklista
 
-Före varje implementation, kontrollera:
-
-- [ ] Plan Mode har använts och plan är godkänd
-- [ ] Inga nya dokumentationsfiler skapas (utom explicit begärt)
-- [ ] Inga genererade artefakter committas till git
-- [ ] Inga nya top-level mappar skapas
-- [ ] Ändringar är demo-kritiska, inte omfattande refaktoreringar
-- [ ] Fokus ligger på fungerande demo, inte komplett lösning
-
+- [ ] Plan Mode används och plan är godkänd
+- [ ] Inga nya dokumentationsfiler
+- [ ] Inga genererade artefakter committas
+- [ ] Progress visas för långvariga operationer
+- [ ] Processer stängs efter användning
+- [ ] Städning är verifierad (5-stegsprocess)
+- [ ] Inga aktiva modeller/filer tas bort

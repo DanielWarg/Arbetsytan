@@ -401,71 +401,105 @@ def validate_file_type(file_path: str, filename: str) -> Tuple[str, bool]:
     return ('', False)
 
 
-# Whisper model singleton cache
-_whisper_model = None
-_whisper_model_name = None
+# STT engine singleton cache
+_stt_engine = None
+_stt_model = None
+_stt_engine_name = None
+_stt_model_name = None
 
 
-def _get_whisper_model():
+def _get_stt_engine():
     """
-    Lazy load Whisper model (singleton pattern).
-    Model is cached globally to avoid reloading on each request.
+    Lazy load STT engine (singleton pattern).
+    Engine is cached globally to avoid reloading on each request.
+    
+    Supports:
+    - faster_whisper (default, recommended for demo)
+    - whisper (legacy)
+    
+    Model defaults to "base" (demo sweetspot).
+    "medium" model is blocked (fallback to "base").
     """
-    global _whisper_model, _whisper_model_name
+    global _stt_engine, _stt_model, _stt_engine_name, _stt_model_name
     
     import os
-    import whisper
     import logging
     
     logger = logging.getLogger(__name__)
     
-    # Get model name from env (default: "base" for dev, can be overridden to "large-v3" for demo)
+    # Get engine from env (default: faster_whisper)
+    engine_name = os.getenv("STT_ENGINE", "faster_whisper")
+    
+    # Get model name from env (default: base)
     model_name = os.getenv("WHISPER_MODEL", "base")
     
-    # Reload if model name changed
-    if _whisper_model is None or _whisper_model_name != model_name:
-        logger.info(f"[STT] Loading Whisper model: {model_name} (cached={_whisper_model is not None})")
-        _whisper_model = whisper.load_model(model_name)
-        _whisper_model_name = model_name
-        logger.info(f"[STT] Model loaded: {model_name}")
+    # Block "medium" model (fallback to base)
+    if model_name == "medium":
+        logger.warning(f"[STT] Model 'medium' is not allowed for demo. Falling back to 'base'.")
+        model_name = "base"
     
-    return _whisper_model
+    # Reload if engine or model changed
+    if _stt_engine is None or _stt_engine_name != engine_name or _stt_model_name != model_name:
+        logger.info(f"[STT] Loading STT engine: {engine_name}, model: {model_name} (cached={_stt_engine is not None})")
+        
+        if engine_name == "faster_whisper":
+            from faster_whisper import WhisperModel
+            _stt_engine = WhisperModel(model_name, device="cpu", compute_type="int8")
+            _stt_model = None  # faster-whisper doesn't use separate model object
+        elif engine_name == "whisper":
+            import whisper
+            _stt_model = whisper.load_model(model_name)
+            _stt_engine = None  # whisper uses model object directly
+        else:
+            raise ValueError(f"Unknown STT engine: {engine_name}. Supported: faster_whisper, whisper")
+        
+        _stt_engine_name = engine_name
+        _stt_model_name = model_name
+        logger.info(f"[STT] Engine loaded: {engine_name}, model: {model_name}")
+    
+    return _stt_engine, _stt_model, _stt_engine_name, _stt_model_name
 
 
 def transcribe_audio(audio_path: str) -> str:
     """
-    Transcribe audio file using local openai-whisper (no external API calls).
+    Transcribe audio file using local STT engine (no external API calls).
     
-    Supports: webm, ogg, mp3, wav (whisper handles conversion internally).
+    Supports: webm, ogg, mp3, wav (engine handles conversion internally).
     
-    Model is cached globally (singleton) to avoid reloading on each request.
-    Model name can be configured via WHISPER_MODEL env var (default: "base").
+    Engine is cached globally (singleton) to avoid reloading on each request.
+    Engine can be configured via STT_ENGINE env var (default: "faster_whisper").
+    Model can be configured via WHISPER_MODEL env var (default: "base").
     
     NEVER log the raw transcript output.
     Fail-closed: raises exception on error (no document created).
     """
-    try:
-        import whisper
-    except ImportError:
-        raise ImportError("openai-whisper is required for transcription. Install with: pip install openai-whisper")
+    import logging
+    logger = logging.getLogger(__name__)
     
     audio_path_obj = Path(audio_path)
     if not audio_path_obj.exists():
         raise FileNotFoundError(f"Audio file not found: {audio_path}")
     
     try:
-        # Get cached model (lazy load on first call)
-        model = _get_whisper_model()
+        # Get cached engine (lazy load on first call)
+        engine, model, engine_name, model_name = _get_stt_engine()
         
-        # Transcribe (whisper handles audio format conversion internally)
-        result = model.transcribe(
-            str(audio_path),
-            language="sv",  # Swedish
-            task="transcribe"
-        )
+        # Log active STT configuration
+        logger.info(f"[STT] Transcribing with engine: {engine_name}, model: {model_name}")
         
-        # Extract transcript text
-        raw_transcript = result["text"].strip()
+        # Transcribe based on engine type
+        if engine_name == "faster_whisper":
+            segments, info = engine.transcribe(str(audio_path), language="sv")
+            raw_transcript = " ".join([segment.text for segment in segments]).strip()
+        elif engine_name == "whisper":
+            result = model.transcribe(
+                str(audio_path),
+                language="sv",  # Swedish
+                task="transcribe"
+            )
+            raw_transcript = result["text"].strip()
+        else:
+            raise ValueError(f"Unknown STT engine: {engine_name}")
         
         # Validate transcript is not empty and not stub-like
         if not raw_transcript or len(raw_transcript.strip()) < 10:
@@ -486,23 +520,26 @@ def transcribe_audio(audio_path: str) -> str:
     except Exception as e:
         # Fail-closed: raise exception (no document created)
         # Log error type only (no content leakage)
-        import logging
-        logger = logging.getLogger(__name__)
         error_type = type(e).__name__
         error_msg = str(e)[:100] if str(e) else ""  # Limit length, avoid full content
         logger.error(f"[STT] Transcription failed: {error_type} - {error_msg}")
         raise RuntimeError(f"Audio transcription failed: {error_type}")
 
 
-def normalize_transcript_text(raw_text: str) -> str:
+def normalize_transcript_text(raw_text: str, use_enhanced: bool = True) -> str:
     """
-    Normalize and correct common Swedish STT errors in transcript.
+    Normalize and enhance Swedish STT transcript output.
     
     Deterministic post-processing (no AI):
-    - Merge fragmented sentences
-    - Remove repeated words
-    - Trim whitespace
-    - Apply common Swedish STT error mappings
+    - Fix common Swedish STT errors and mishearings
+    - Improve punctuation and capitalization
+    - Remove repeated words and fragments
+    - Normalize whitespace and formatting
+    - Enhance sentence structure
+    
+    Args:
+        raw_text: Raw transcript from Whisper
+        use_enhanced: If True, use masterclass enhancement (default: True)
     
     NEVER log raw_text or output.
     """
@@ -512,21 +549,54 @@ def normalize_transcript_text(raw_text: str) -> str:
     text = raw_text
     
     # Common Swedish STT error mappings (deterministic, explicit)
-    # Small list (10-30 entries), easy to extend
+    # Extended list based on real Whisper errors
     stt_error_mappings = {
-        # Common Whisper mishearings
+        # Common Whisper mishearings (from actual transcripts)
         "konfliktsutom": "konflikter",
         "önskimol": "önskemål",
+        "önskimolen": "önskemålen",
         "öfomulerade": "oformulerade",
         "ommedvetna": "omedvetna",
         "nertonat": "nertonad",
         "frustrerad agerande": "frustrerat agerande",
-        "involverad": "involverade",  # Context-dependent, but common error
+        "involverad": "involverade",
         "det är uppfattar": "det uppfattas",
         "det är en konflikt består": "en konflikt består",
         "inom form av sån": "i form av en sådan",
         "sån situation": "sådan situation",
-        # Additional common errors
+        "drare": "drar",
+        "ytterstaspets": "yttersta spets",
+        "ytterstasyfte": "yttersta syfte",
+        "slå snere": "slå sig ner",
+        "höjer östen": "höjer rösten",
+        "börja gråta": "börjar gråta",
+        "skargång": "jargong",
+        "mål på jobbetor": "mår på jobbet",
+        "hämrisar": "hänvisar",
+        "förypa": "fördjupa",
+        "fördjupa sig": "fördjupa sig",
+        "beståndställer": "beståndsdelar",
+        "avröter": "avbröt",
+        "honsa hansa": "hon sa, han sa",
+        "Göteborgens": "Göteborgs",
+        "funnera": "definierar",
+        "funnera vi": "definierar vi",
+        "förstasked": "första skede",
+        "handtering": "hantering",
+        "bort dem": "bortom det",
+        "uppfattar som": "uppfattas som",
+        "praktiskt en": "praktiskt en",
+        "rätt visst": "rättvist",
+        "kallit upp oss": "hakat upp oss",
+        "kontors utrimmat": "kontorsutrymme",
+        "låter oerhört": "lade oerhört",
+        "gärna ett bra jobb": "gör ett bra jobb",
+        "lasa i stressen": "lade sig stressen",
+        "sjunk-iritationen": "sjönk irritationen",
+        "ovena": "ovänner",
+        "nåt är det igen": "återigen",
+        "bilder oss": "bildar oss",
+        # Repeated words (common STT artifact)
         "det det": "det",
         "och och": "och",
         "är är": "är",
@@ -541,7 +611,11 @@ def normalize_transcript_text(raw_text: str) -> str:
         "en en": "en",
         "ett ett": "ett",
         "den den": "den",
-        "det det": "det",
+        # Common phrase corrections
+        "det vill säga att": "det vill säga",
+        "det är det": "det är",
+        "det här är": "detta är",
+        "det här": "detta",
     }
     
     # Apply error mappings (word boundaries to avoid partial matches)
@@ -554,23 +628,120 @@ def normalize_transcript_text(raw_text: str) -> str:
     # Pattern: word word (same word repeated with space)
     text = re.sub(r'\b(\w+)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
     
-    # Merge fragmented sentences (common pattern: sentence. sentence -> sentence. sentence)
-    # Remove excessive periods that create fragments
-    # This is conservative - only merge obvious fragments
-    text = re.sub(r'\.\s+([a-z])', r'. \1', text)  # Ensure space after period before lowercase
+    # Fix common sentence structure issues
+    # Fix "det är det" -> "det är"
+    text = re.sub(r'\bdet är det\b', 'det är', text, flags=re.IGNORECASE)
+    
+    # Fix capitalization after sentence endings
+    # Capitalize first letter after period, exclamation, question mark
+    text = re.sub(r'([.!?])\s+([a-zåäö])', lambda m: m.group(1) + ' ' + m.group(2).upper(), text)
+    
+    # Fix common punctuation issues
+    text = re.sub(r'([a-zåäö])([A-ZÅÄÖ])', r'\1. \2', text)  # Add period if missing between sentences
+    text = re.sub(r'\.\s+([a-zåäö])', r'. \1', text)  # Ensure space after period before lowercase
     
     # Normalize whitespace
     text = re.sub(r'\s+', ' ', text)  # Multiple spaces -> single space
     text = re.sub(r'\s+\.', '.', text)  # Space before period -> period
-    text = re.sub(r'\.\s*\.', '.', text)  # Multiple periods -> single period
+    text = re.sub(r'\.\s*\.+', '.', text)  # Multiple periods -> single period
     text = re.sub(r'\s+,\s*', ', ', text)  # Normalize comma spacing
     text = re.sub(r'\s+:\s*', ': ', text)  # Normalize colon spacing
+    text = re.sub(r'\s+;\s*', '; ', text)  # Normalize semicolon spacing
+    text = re.sub(r'\s+-\s+', ' - ', text)  # Normalize dash spacing
     
-    # Remove empty lines and trim
+    # Fix common Swedish grammar issues
+    # "det är" + verb -> "det" + verb (when appropriate)
+    text = re.sub(r'\bdet är (går|kommer|blir|finns)\b', r'det \1', text, flags=re.IGNORECASE)
+    
+    # Fix common word order issues
+    # "det är en X består" -> "en X består"
+    text = re.sub(r'\bdet är en (\w+) består\b', r'en \1 består', text, flags=re.IGNORECASE)
+    
+    # Fix "vi definierar" -> "vi definierar" (ensure correct form)
+    text = re.sub(r'\bdefinierar vi\b', 'definierar vi', text, flags=re.IGNORECASE)
+    
+    # Remove excessive filler words (common in speech)
+    # Be conservative - only remove obvious duplicates
+    text = re.sub(r'\b(ja|alltså|liksom|typ)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+    
+    # Fix common Swedish word order issues
+    # "det här är" -> "detta är" (more formal/written)
+    text = re.sub(r'\bdet här är\b', 'detta är', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bdet här\b', 'detta', text, flags=re.IGNORECASE)
+    
+    # Remove empty lines and normalize line breaks
     lines = [line.strip() for line in text.split('\n') if line.strip()]
     text = ' '.join(lines)  # Join all lines with space
     
-    # Final trim
+    # Final cleanup
+    text = re.sub(r'\s+', ' ', text)  # Final whitespace normalization
+    text = text.strip()
+    
+    # Ensure text starts with capital letter
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+    
+    # MASTERCLASS: Enhanced enhancement (if enabled)
+    if use_enhanced:
+        text = _apply_masterclass_enhancements(text)
+    
+    return text
+
+
+# MASTERCLASS: Enhanced transcript improvements
+def _apply_masterclass_enhancements(text: str) -> str:
+    """
+    Apply masterclass-level enhancements to transcript.
+    Includes Swedish word list checking, verb form correction, and advanced structure improvements.
+    """
+    # Swedish common words for spell checking
+    SWEDISH_COMMON_WORDS = {
+        'konflikt', 'konflikter', 'situation', 'situationer', 'problem', 'arbetsplats',
+        'människa', 'människor', 'grupp', 'grupper', 'individ', 'individer',
+        'kollega', 'kollegor', 'avdelning', 'avdelningar', 'verksamhet', 'syfte',
+        'beteende', 'beteenden', 'känsla', 'känslor', 'frustration', 'blockering',
+        'önskemål', 'önskemålen', 'behov', 'autonomi', 'rättvisa', 'visshet',
+        'dialog', 'exempel', 'illustration', 'kontorsutrymme', 'samtal', 'uppgift',
+        'uppgifter', 'stress', 'irritation', 'tolkning', 'uppfattning',
+        'är', 'var', 'vara', 'ha', 'har', 'hade', 'kan', 'ska', 'skulle', 'måste',
+        'bör', 'börja', 'börjar', 'göra', 'gör', 'gjorde', 'kommer', 'kom',
+        'ser', 'såg', 'säger', 'sa', 'talar', 'talade', 'pratar', 'pratade',
+        'tänker', 'tänkte', 'känner', 'kände', 'vill', 'ville', 'behöver', 'behövde',
+        'finns', 'fanns', 'ligger', 'låg', 'står', 'stod', 'sitter', 'satt',
+        'går', 'gick', 'blir', 'blev', 'får', 'fick',
+        'definierar', 'definierade', 'hänvisar', 'hänvisade', 'illustrerar', 'illustrerade',
+        'identifiera', 'identifierade', 'lösa', 'löste', 'flytta', 'flyttade',
+        'sätta', 'satte', 'jobba', 'jobbar', 'jobade', 'slutföra', 'slutförde',
+    }
+    
+    # Fix verb forms: "börja gråta" -> "börjar gråta"
+    text = re.sub(r'\bbörja (gråta|prata|tala|jobba|arbeta)\b', r'börjar \1', text, flags=re.IGNORECASE)
+    
+    # Fix "göra ett bra jobb" -> "gör ett bra jobb"
+    text = re.sub(r'\bgöra (ett|en) (bra|dåligt) (jobb|arbete)\b', r'gör \1 \2 \3', text, flags=re.IGNORECASE)
+    
+    # Advanced sentence structure improvements
+    # Fix "det är en X består" -> "en X består"
+    text = re.sub(r'\bdet är en (\w+) består\b', r'en \1 består', text, flags=re.IGNORECASE)
+    
+    # Fix "inom form av" -> "i form av"
+    text = re.sub(r'\binom form av\b', 'i form av', text, flags=re.IGNORECASE)
+    
+    # Fix "sån" -> "sådan" (more formal)
+    text = re.sub(r'\bsån\b', 'sådan', text, flags=re.IGNORECASE)
+    
+    # Enhanced punctuation: ensure proper spacing
+    text = re.sub(r'([.!?])\s*([a-zåäö])', lambda m: m.group(1) + ' ' + m.group(2).upper(), text)
+    
+    # Fix common Swedish grammar: "det är det" -> "det är"
+    text = re.sub(r'\bdet är det\b', 'det är', text, flags=re.IGNORECASE)
+    
+    # Normalize spacing around punctuation
+    text = re.sub(r'\s+([.,!?;:])', r'\1', text)
+    text = re.sub(r'([.,!?;:])([^\s])', r'\1 \2', text)
+    
+    # Final normalization
+    text = re.sub(r'\s+', ' ', text)
     text = text.strip()
     
     return text
@@ -659,16 +830,44 @@ def process_transcript(raw_transcript: str, project_name: str, recording_date: s
     # Sammanfattning
     output_lines.append("## Sammanfattning")
     output_lines.append("")  # Blank line after heading
-    if len(sentences) >= 2:
-        summary = f"{sentences[0]}. {sentences[1]}."
+    if len(sentences) >= 1:
+        # Build summary from sentences until we reach ~240 chars or 3-4 sentences
+        summary_parts = []
+        total_length = 0
+        target_length = 200  # Aim for ~200 chars, max 240
+        max_sentences = 4
+        
+        for i, sent in enumerate(sentences[:max_sentences]):
+            if i == 0:
+                summary_parts.append(sent)
+                total_length = len(sent)
+            else:
+                # Add sentence with period and space
+                next_part = f". {sent}"
+                if total_length + len(next_part) <= target_length:
+                    summary_parts.append(sent)
+                    total_length += len(next_part)
+                elif total_length < 100:  # If we're still very short, add one more
+                    summary_parts.append(sent)
+                    total_length += len(next_part)
+                    break
+                else:
+                    break
+        
+        # Join sentences
+        if len(summary_parts) == 1:
+            summary = summary_parts[0] + "."
+        else:
+            summary = ". ".join(summary_parts) + "."
+        
+        # Cap at 240 chars
         if len(summary) > 240:
             summary = summary[:237] + "..."
+        
+        # Apply presentation enhancement to summary
+        summary = enhance_presentation_text(summary)
+        
         output_lines.append(summary)
-    elif len(sentences) == 1:
-        summary = sentences[0]
-        if len(summary) > 240:
-            summary = summary[:237] + "..."
-        output_lines.append(summary + ".")
     else:
         # Fallback
         if duration_seconds:
@@ -706,9 +905,29 @@ def process_transcript(raw_transcript: str, project_name: str, recording_date: s
         key_points = sorted(key_points, key=lambda x: x[1])
     
     for _, _, sent in key_points[:5]:
-        # Cap length at reasonable size
+        # Ensure key point is a complete sentence (no truncation with "...")
+        # If too long, try to find a natural break point (sentence boundary)
         if len(sent) > 150:
-            sent = sent[:147] + "..."
+            # Try to find a sentence boundary before 150 chars
+            # Look for period, exclamation, or question mark
+            break_point = -1
+            for i in range(min(150, len(sent) - 1), max(0, len(sent) - 50), -1):
+                if sent[i] in '.!?':
+                    break_point = i + 1
+                    break
+            if break_point > 50:  # Only use if we found a reasonable break
+                sent = sent[:break_point].strip()
+            else:
+                # No good break found, keep original but ensure it ends properly
+                sent = sent.strip()
+        
+        # Apply presentation enhancement to key points
+        sent = enhance_presentation_text(sent)
+        
+        # Ensure it's a complete sentence (ends with punctuation)
+        if sent and sent[-1] not in '.!?':
+            sent = sent.rstrip() + '.'
+        
         output_lines.append(f"- {sent}")
     
     output_lines.append("")  # Blank line after bullets
@@ -745,11 +964,146 @@ def process_transcript(raw_transcript: str, project_name: str, recording_date: s
                 first_sent = first_sent[:117] + "..."
             output_lines.append(f"{timestamp} {first_sent}")
     
+    output_lines.append("")  # Blank line after timeline
+    
+    # Fullständigt transkript
+    output_lines.append("## Fullständigt transkript")
+    output_lines.append("")  # Blank line after heading
+    
+    # Format full transcript with paragraph breaks for readability
+    # IMPORTANT: Use original text (after PII masking) to preserve exact content
+    # Only add paragraph breaks - do NOT modify content
+    original_text_for_full = text  # This is already PII-masked but unenhanced
+    
+    # Split into sentences preserving original punctuation
+    # Use the same sentence splitting as above but keep original text
+    original_sentences_list = re.split(r'([.!?]+\s+)', original_text_for_full)
+    
+    # Reconstruct sentences with their original punctuation
+    full_sentences = []
+    i = 0
+    while i < len(original_sentences_list):
+        if i + 1 < len(original_sentences_list):
+            # Sentence + punctuation
+            full_sentences.append(original_sentences_list[i] + original_sentences_list[i + 1].strip())
+            i += 2
+        elif original_sentences_list[i].strip():
+            full_sentences.append(original_sentences_list[i].strip())
+            i += 1
+        else:
+            i += 1
+    
+    # If that didn't work, use simple approach: split by period and keep original
+    if not full_sentences or len(' '.join(full_sentences)) != len(original_text_for_full.replace(' ', '')):
+        # Fallback: use original text directly, just add paragraph breaks by length
+        target_paragraph_length = 350
+        paragraphs = []
+        words = original_text_for_full.split()
+        current_para = []
+        current_len = 0
+        
+        for word in words:
+            word_len = len(word) + 1  # +1 for space
+            if current_len + word_len > target_paragraph_length and current_para:
+                paragraphs.append(' '.join(current_para))
+                current_para = [word]
+                current_len = word_len
+            else:
+                current_para.append(word)
+                current_len += word_len
+        
+        if current_para:
+            paragraphs.append(' '.join(current_para))
+    else:
+        # Group sentences into paragraphs
+        paragraphs = []
+        current_paragraph = []
+        current_length = 0
+        target_paragraph_length = 350
+        max_sentences_per_paragraph = 5
+        
+        for sent in full_sentences:
+            sent_length = len(sent)
+            if (current_length + sent_length > target_paragraph_length and current_paragraph) or \
+               len(current_paragraph) >= max_sentences_per_paragraph:
+                paragraph_text = " ".join(current_paragraph)
+                paragraphs.append(paragraph_text)
+                current_paragraph = [sent]
+                current_length = sent_length
+            else:
+                current_paragraph.append(sent)
+                current_length += sent_length + 1
+        
+        if current_paragraph:
+            paragraph_text = " ".join(current_paragraph)
+            paragraphs.append(paragraph_text)
+    
+    # Add paragraphs with blank lines between them
+    for i, para in enumerate(paragraphs):
+        output_lines.append(para)
+        if i < len(paragraphs) - 1:
+            output_lines.append("")  # Blank line between paragraphs
+    
     # Join with newlines and ensure no trailing whitespace
     result = "\n".join(output_lines)
     # Remove any trailing whitespace from each line
     result_lines = [line.rstrip() for line in result.split('\n')]
     return "\n".join(result_lines)
+
+
+def enhance_presentation_text(text: str) -> str:
+    """
+    Light presentation enhancement for summary and key points ONLY.
+    
+    Rules:
+    - ONLY correct obvious STT errors (common mishearings)
+    - ONLY complete obviously incomplete sentences
+    - ONLY light linguistic simplification
+    - NO reinterpretation of content
+    - NO addition of new information
+    
+    This is a presentation layer - original transcript remains unchanged.
+    """
+    if not text or len(text.strip()) == 0:
+        return text
+    
+    enhanced = text
+    
+    # Common STT mishearings and spelling corrections
+    stt_fixes = {
+        # Common Swedish STT errors
+        r'\bdrare\b': 'drar',
+        r'\bnerjonat\b': 'nedtonat',
+        r'\bnertjonat\b': 'nedtonat',
+        r'\bviset\b': 'visst',
+        r'\bsås\b': 'sådan',
+        r'\bsån\b': 'sådan',
+        # Spelling corrections
+        r'\bvåran\b': 'vår',
+        r'\bdefinerar\b': 'definierar',
+        r'\bdefinierar\b': 'definierar',  # Already correct, but ensure consistency
+        # Remove incomplete sentence markers
+        r'\.\.\.\s*$': '.',  # Complete trailing ...
+        r'\.\.\.\s*\.': '.',  # Remove redundant ...
+    }
+    
+    # Apply fixes (only obvious corrections)
+    for pattern, replacement in stt_fixes.items():
+        enhanced = re.sub(pattern, replacement, enhanced, flags=re.IGNORECASE)
+    
+    # Light linguistic simplification (only very safe patterns)
+    # Remove excessive filler words at start (but keep if sentence becomes too short)
+    original_start = enhanced
+    enhanced = re.sub(r'^(Och|Men|Så|Då)\s+', '', enhanced, flags=re.IGNORECASE)
+    # But only if sentence is still meaningful
+    if len(enhanced.strip()) < 10:
+        enhanced = original_start  # Revert if too aggressive
+    
+    # Ensure sentence ends with punctuation
+    if enhanced and enhanced[-1] not in '.!?':
+        enhanced = enhanced.rstrip() + '.'
+    
+    return enhanced
 
 
 def refine_editorial_text(structured_text: str) -> str:

@@ -35,6 +35,18 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Arbetsytan API")
 
+# Preload STT engine at startup (to avoid blocking first transcription)
+@app.on_event("startup")
+async def preload_stt_engine():
+    """Preload STT engine at startup to avoid blocking first transcription request."""
+    try:
+        from text_processing import _get_stt_engine
+        logger.info("[STARTUP] Preloading STT engine...")
+        engine, model, engine_name, model_name = _get_stt_engine()
+        logger.info(f"[STARTUP] STT engine preloaded successfully: {engine_name}, model: {model_name}")
+    except Exception as e:
+        logger.warning(f"[STARTUP] Failed to preload STT engine: {str(e)} (will load on first use)")
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,

@@ -108,12 +108,27 @@ function ProjectDetail() {
     setRecordingSuccess(null)
 
     try {
+      // Validate file exists and has content
+      if (!file || file.size === 0) {
+        throw new Error('Filen är tom eller ogiltig')
+      }
+
       const formData = new FormData()
       formData.append('file', file)
 
+      // Add auth header (same as other fetch calls)
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(username + ':' + password)
+
       // Upload audio
-      const response = await fetch(`/api/projects/${id}/recordings`, {
+      // NOTE: Do NOT set Content-Type header - browser will set it automatically with boundary for FormData
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/recordings`, {
         method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + auth
+          // Do NOT set Content-Type - let browser set it with boundary
+        },
         body: formData
       })
 

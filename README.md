@@ -56,26 +56,39 @@ Arbetsytan är ett internt arbetsverktyg som:
 
 ## Lokal tal-till-text (STT)
 
-Arbetsytan använder **Whisper** för lokal tal-till-text-transkribering (ingen extern tjänst).
+Arbetsytan använder **faster-whisper** (default) eller **Whisper** för lokal tal-till-text-transkribering (ingen extern tjänst).
 
-**Varför lokal Whisper?**
+**Varför lokal STT?**
 - Fullständig dataintegritet: ingen data lämnar systemet
 - Driftssäkerhet: fungerar offline, inga API-beroenden
 - Modell-caching säkerställer snabbare efterföljande transkriberingar
 - Konfigurerbar modellstorlek för olika användningsfall
 
-**Konfiguration:**
-- **Dev (default):** `WHISPER_MODEL=medium` (balans mellan kvalitet och minne)
-- **Demo:** `WHISPER_MODEL=large-v3` (bäst kvalitet, kräver 10-12GB Docker RAM)
+**Demo STT-konfiguration (default):**
+- **Engine:** `STT_ENGINE=faster_whisper` (4x snabbare än Whisper)
+- **Model:** `WHISPER_MODEL=base` (sweetspot: 15s för 20MB fil, bra kvalitet)
+- **Motivering:** Balanserar hastighet (15.2s) och kvalitet (1150 ord, 0.174 nonsense ratio)
+- **CPU:** 688% peak (lägre än Whisper)
+- **RAM:** 0.81GB (lägre än Whisper)
+
+**Alternativ konfiguration:**
+- **Whisper base:** `STT_ENGINE=whisper WHISPER_MODEL=base` (58.8s, 1107 ord)
+- **faster-whisper small:** `STT_ENGINE=faster_whisper WHISPER_MODEL=small` (41.0s, 1169 ord)
+- **Whisper small:** `STT_ENGINE=whisper WHISPER_MODEL=small` (179.2s, 1173 ord)
+
+**OBS:** Modellen "medium" är blockerad för demo (fallback till "base").
 
 **Arkitektur:**
 STT-motorn är abstraherad i `text_processing.py` för enkel utbytbarhet. Framtida motorbyten (t.ex. Silero ASR) kan implementeras utan ändringar i endpoints eller UI.
 
 **Caching:**
-Whisper-modell caches i global singleton för att undvika upprepad laddning. Modell-cache sparas i persistent Docker volume (`whisper_cache`) för att överleva container-rebuilds.
+STT-engine caches i global singleton för att undvika upprepad laddning. Modell-cache sparas i persistent Docker volume (`whisper_cache`) för att överleva container-rebuilds.
 
 **Minneskrav:**
-- **small:** ~1-2GB RAM (snabbast, lägre kvalitet)
+- **faster-whisper base:** ~0.8GB RAM (rekommenderat för demo)
+- **faster-whisper small:** ~1.5GB RAM
+- **whisper base:** ~0.9GB RAM
+- **whisper small:** ~1.8GB RAM
 - **base:** ~1-2GB RAM (bra för utveckling)
 - **medium:** ~3-5GB RAM (bra balans, default)
 - **large-v3:** ~6-10GB RAM (bäst kvalitet, kräver Docker Desktop med 10-12GB minne)

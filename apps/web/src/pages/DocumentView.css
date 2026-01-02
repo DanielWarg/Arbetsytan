@@ -181,3 +181,14 @@
   margin-bottom: 0;
 }
 
+.document-enhancement-notice {
+  margin: 0;
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-family: var(--font-sans);
+  padding-left: var(--spacing-sm);
+  border-left: 2px solid var(--color-border-default);
+}
+

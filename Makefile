@@ -179,3 +179,51 @@ clean:
 	docker-compose down -v
 	docker system prune -f
 
+benchmark-stt:
+	@echo "======================================================================"
+	@echo "STT BENCHMARK MATRIX - Prestanda & Kvalitet"
+	@echo "======================================================================"
+	@echo "Kör 4 konfigurationer * 2 runs = 8 totala körningar"
+	@echo "Uppskattad tid: 30-60 minuter (beroende på modell)"
+	@echo ""
+	@docker compose up -d --build
+	@sleep 10
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "KONFIGURATION 1/4: Whisper base"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T -e STT_ENGINE=whisper -e WHISPER_MODEL=base -e TEST_AUDIO_PATH=/app/Del21.wav -e NUM_RUNS=2 api python _verify/benchmark_stt_matrix.py
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "KONFIGURATION 2/4: Whisper small"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T -e STT_ENGINE=whisper -e WHISPER_MODEL=small -e TEST_AUDIO_PATH=/app/Del21.wav -e NUM_RUNS=2 api python _verify/benchmark_stt_matrix.py
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "KONFIGURATION 3/4: faster-whisper base"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T -e STT_ENGINE=faster_whisper -e WHISPER_MODEL=base -e TEST_AUDIO_PATH=/app/Del21.wav -e NUM_RUNS=2 api python _verify/benchmark_stt_matrix.py
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "KONFIGURATION 4/4: faster-whisper small"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T -e STT_ENGINE=faster_whisper -e WHISPER_MODEL=small -e TEST_AUDIO_PATH=/app/Del21.wav -e NUM_RUNS=2 api python _verify/benchmark_stt_matrix.py
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "AGGREGERAR RESULTAT"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose exec -T api python _verify/aggregate_stt_benchmark.py
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "KOPIERAR RAPPORT"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@docker compose cp api:/app/test_results/STT_BENCHMARK.md docs/STT_BENCHMARK.md 2>/dev/null || echo "⚠️  Kunde inte kopiera rapport (kör manuellt: docker compose cp api:/app/test_results/STT_BENCHMARK.md docs/STT_BENCHMARK.md)"
+	@echo ""
+	@echo "======================================================================"
+	@echo "✅ BENCHMARK KLAR"
+	@echo "======================================================================"
+	@echo "JSON Rapport: apps/api/test_results/stt_benchmark_report.json"
+	@echo "Markdown Rapport: docs/STT_BENCHMARK.md"
+	@echo "Transcripts: apps/api/test_results/transcripts/"
+	@echo ""
+
