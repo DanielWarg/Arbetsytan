@@ -56,81 +56,81 @@ En punkt i denna plan är inte klar förrän:
 
 ### 0) Setup & Guardrails
 
-- [ ] Skapa dokument: `docs/PHASE_1_SECURITY_BY_DESIGN_PLAN.md` och lägg in checklistan (denna) så den lever i repot
-- [ ] Bekräfta körmiljö: `docker compose ps` visar api + postgres healthy
-- [ ] Bekräfta hur verifieringsscripts körs i Arbetsytan: `docker compose exec api python _verify/<script>.py` (working dir `/app`)
+- [x] Skapa dokument: `docs/PHASE_1_SECURITY_BY_DESIGN_PLAN.md` och lägg in checklistan (denna) så den lever i repot
+- [x] Bekräfta körmiljö: `docker compose ps` visar api + postgres healthy
+- [x] Bekräfta hur verifieringsscripts körs i Arbetsytan: `docker compose exec api python _verify/<script>.py` (working dir `/app`)
 
 ### Milestone 1 — Event "No Content" Enforcement (Max effekt / Min risk)
 
 #### 1.1 Inventory: var ska enforcement in?
 
-- [ ] Lista alla ställen i `apps/api/main.py` där `ProjectEvent` skapas (rad-länkar)
-- [ ] Bekräfta att `apps/api/security_core/privacy_guard.py` innehåller:
+- [x] Lista alla ställen i `apps/api/main.py` där `ProjectEvent` skapas (rad-länkar)
+- [x] Bekräfta att `apps/api/security_core/privacy_guard.py` innehåller:
   - `sanitize_for_logging()`
   - `assert_no_content()`
-- [ ] Definiera "förbjudna fält" (en lista i docs + i verify-script): se "Definitions & Guardrails" ovan för komplett lista
+- [x] Definiera "förbjudna fält" (en lista i docs + i verify-script): se "Definitions & Guardrails" ovan för komplett lista
 
 #### 1.2 Implementera enforcement i alla events
 
-- [ ] Importera Privacy Guard i `apps/api/main.py`
-- [ ] Skapa en liten helper (t.ex. `_safe_event_metadata(meta: dict, context: str) -> dict`) som:
+- [x] Importera Privacy Guard i `apps/api/main.py`
+- [x] Skapa en liten helper (t.ex. `_safe_event_metadata(meta: dict, context: str) -> dict`) som:
   - kör `sanitize_for_logging(meta, context=...)`
   - kör `assert_no_content(sanitized, context=...)`
   - returnerar `sanitized`
-- [ ] Byt ut samtliga `ProjectEvent(... metadata=...)` så att metadata alltid passerar helpern
-- [ ] Säkerställ fail-closed:
+- [x] Byt ut samtliga `ProjectEvent(... metadata=...)` så att metadata alltid passerar helpern
+- [x] Säkerställ fail-closed:
   - DEV (`DEBUG=true`): raise AssertionError (så vi ser fel direkt)
   - PROD (`DEBUG=false`): droppa fält och fortsätt (enligt policy)
-- [ ] Dokumentera vilken env-flagga som styr "DEV vs PROD": `DEBUG` (default: `false`)
+- [x] Dokumentera vilken env-flagga som styr "DEV vs PROD": `DEBUG` (default: `false`)
 
 #### 1.3 Verifieringsscript: event policy
 
-- [ ] Skapa: `apps/api/_verify/verify_event_no_content_policy.py`
-- [ ] Testfall 1: försök skapa event med förbjuden nyckel (t.ex. `{"text": "content"}`) → AssertionError i DEV
-- [ ] Testfall 2: försök skapa event med source identifier (t.ex. `{"filename": "secret.pdf"}`) → AssertionError i DEV
-- [ ] Testfall 3: skapa event med harmlös metadata (t.ex. `{"project_id": 123}`) → PASS
-- [ ] Scriptet ska köras i **DEV mode** (`DEBUG=true`) för att bevisa fail-closed hårt
-- [ ] Optional: testfall som visar PROD "drops" utan crash (för demo-trovärdighet)
-- [ ] Scriptet ska vara körbart i Docker och skriva tydligt PASS/FAIL
+- [x] Skapa: `apps/api/_verify/verify_event_no_content_policy.py`
+- [x] Testfall 1: försök skapa event med förbjuden nyckel (t.ex. `{"text": "content"}`) → AssertionError i DEV
+- [x] Testfall 2: försök skapa event med source identifier (t.ex. `{"filename": "secret.pdf"}`) → AssertionError i DEV
+- [x] Testfall 3: skapa event med harmlös metadata (t.ex. `{"project_id": 123}`) → PASS
+- [x] Scriptet ska köras i **DEV mode** (`DEBUG=true`) för att bevisa fail-closed hårt
+- [x] Optional: testfall som visar PROD "drops" utan crash (för demo-trovärdighet)
+- [x] Scriptet ska vara körbart i Docker och skriva tydligt PASS/FAIL
 
 #### 1.4 Acceptance / Bevis
 
-- [ ] Kör i Docker: `docker compose exec api python _verify/verify_event_no_content_policy.py`
-- [ ] Verifiera i browser mode att UI fortfarande fungerar och events laddar
+- [x] Kör i Docker: `docker compose exec api python _verify/verify_event_no_content_policy.py`
+- [x] Verifiera i browser mode att UI fortfarande fungerar och events laddar
 
 ### Milestone 2 — Secure Delete (Project + Allt innehåll) med Verifiering
 
 #### 2.1 Inventory: vad ingår i "Project delete"?
 
-- [ ] Lista alla data som måste bort när projekt raderas:
+- [x] Lista alla data som måste bort när projekt raderas:
   - documents + deras filer
   - recordings + audio + transcript-filer
   - notes (inkl ev. attachments/bilder om ni har)
   - events
-- [ ] Identifiera var filerna ligger (upload dir / filstore paths)
-- [ ] Bekräfta befintlig `delete_project()` i `apps/api/main.py` (rad ~219) och vad den gör idag
+- [x] Identifiera var filerna ligger (upload dir / filstore paths)
+- [x] Bekräfta befintlig `delete_project()` i `apps/api/main.py` (rad ~219) och vad den gör idag
 
 #### 2.2 Implementera "wipe + orphan detection + idempotency"
 
-- [ ] Före delete: räkna antal filer som tillhör projektet (utan att logga filnamn)
-- [ ] Radera DB-rader i rätt ordning / via cascade så att allt kopplat försvinner
-- [ ] Wipe filstore:
+- [x] Före delete: räkna antal filer som tillhör projektet (utan att logga filnamn)
+- [x] Radera DB-rader i rätt ordning / via cascade så att allt kopplat försvinner
+- [x] Wipe filstore:
   - ta bort filer kopplade till projektet (documents/recordings/notes)
   - verifiera att filerna faktiskt är borta
-- [ ] Orphan detection:
+- [x] Orphan detection:
   - hitta filer i projektets filområde som inte längre har DB-referens
   - efter wipe: ska det vara 0
-- [ ] Fail-closed:
+- [x] Fail-closed:
   - om wipe/verifiering misslyckas → returnera error och blockera delete (ingen "silent success")
-- [ ] Loggpolicy:
+- [x] Loggpolicy:
   - logga bara antal (counts), inga paths eller filenames
-- [ ] Idempotent:
+- [x] Idempotent:
   - kör delete igen på samma projekt → ska inte krascha / ska ge kontrollerat svar
 
 #### 2.3 Verifieringsscript: secure delete
 
-- [ ] Skapa: `apps/api/_verify/verify_secure_delete.py`
-- [ ] Scriptet ska:
+- [x] Skapa: `apps/api/_verify/verify_secure_delete.py`
+- [x] Scriptet ska:
   - skapa projekt
   - ladda upp minst 1 document
   - skapa 1 recording (eller ladda upp) så det blir filer på disk
@@ -141,25 +141,25 @@ En punkt i denna plan är inte klar förrän:
     - DB: inga rader kvar kopplade till projektet
     - filsystem: inga filer kvar kopplade till projektet
     - orphan count = 0
-- [ ] Scriptet ska vara körbart i Docker och skriva PASS/FAIL
+- [x] Scriptet ska vara körbart i Docker och skriva PASS/FAIL
 
 #### 2.4 Delete-confirmation UX (minimal, för demo-trovärdighet)
 
-- [ ] UI: Delete kräver bekräftelse (skriv projektnamn / "RADERA" eller liknande)
-- [ ] UI visar efter delete en "Deleted project" bekräftelse (utan att återge namn/filer)
-- [ ] Detta är inte "ny funktionalitet" – det är ett UX-skal för att visa att deletion är seriöst
+- [x] UI: Delete kräver bekräftelse (skriv projektnamn / "RADERA" eller liknande)
+- [x] UI visar efter delete en "Deleted project" bekräftelse (utan att återge namn/filer)
+- [x] Detta är inte "ny funktionalitet" – det är ett UX-skal för att visa att deletion är seriöst
 
 #### 2.5 Acceptance / Bevis
 
-- [ ] Kör i Docker: `docker compose exec api python _verify/verify_secure_delete.py`
-- [ ] Verifiera i UI: skapa projekt + fyll med material + delete → projektet försvinner och går inte att nå via URL efteråt
-- [ ] Verifiera delete-confirmation flow i browser mode
+- [x] Kör i Docker: `docker compose exec api python _verify/verify_secure_delete.py`
+- [x] Verifiera i UI: skapa projekt + fyll med material + delete → projektet försvinner och går inte att nå via URL efteråt
+- [x] Verifiera delete-confirmation flow i browser mode
 
 ### Milestone 3 — "Verify Suite" + Make target
 
 #### 3.1 Samla Phase 1 verifieringar
 
-- [ ] Säkerställ att följande scripts finns och kör:
+- [x] Säkerställ att följande scripts finns och kör:
   - `verify_event_no_content_policy.py`
   - `verify_secure_delete.py`
   - (befintliga) `verify_recording_sanitization.py`
@@ -168,19 +168,19 @@ En punkt i denna plan är inte klar förrän:
 
 #### 3.2 Lägg till "one command"
 
-- [ ] Lägg till `make verify-security-phase1` (eller motsvarande) som kör samtliga scripts i rätt ordning i Docker
-- [ ] Output ska tydligt visa PASS/FAIL per script
+- [x] Lägg till `make verify-security-phase1` (eller motsvarande) som kör samtliga scripts i rätt ordning i Docker
+- [x] Output ska tydligt visa PASS/FAIL per script
 
 #### 3.3 Acceptance / Bevis
 
-- [ ] Kör: `make verify-security-phase1` → allt PASS i Docker
+- [x] Kör: `make verify-security-phase1` → allt PASS i Docker
 
 ### Definition of Done (Phase 1)
 
-- [ ] Events kan inte råka innehålla content eller source identifiers (bevisat via verify-script)
-- [ ] Secure delete tar bort DB + filstore och lämnar 0 orphans (bevisat via verify-script)
-- [ ] Allt går att verifiera med ett kommando i Docker
-- [ ] Browser-mode smoke test: skapa → arbeta → delete → inte nåbart efteråt
+- [x] Events kan inte råka innehålla content eller source identifiers (bevisat via verify-script)
+- [x] Secure delete tar bort DB + filstore och lämnar 0 orphans (bevisat via verify-script)
+- [x] Allt går att verifiera med ett kommando i Docker
+- [x] Browser-mode smoke test: skapa → arbeta → delete → inte nåbart efteråt
 
 ### "No guessing" regler (som Cursor måste följa)
 
