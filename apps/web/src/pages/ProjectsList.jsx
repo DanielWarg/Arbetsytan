@@ -229,13 +229,6 @@ function ProjectsList() {
         <Card className="overview-card">
           <div className="overview-card-header">
             <h3 className="overview-card-title">Dina Projekt</h3>
-            <button 
-              className="btn-create-project-small"
-              onClick={() => setShowCreateModal(true)}
-              title="Nytt projekt"
-            >
-              <FolderPlus size={14} />
-            </button>
           </div>
           <div className="overview-card-content">
             {filteredProjects.length === 0 ? (
