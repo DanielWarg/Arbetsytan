@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Input, Textarea } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Badge } from '../ui/Badge'
-import { Info } from 'lucide-react'
+import { Info, Trash2 } from 'lucide-react'
 import './CreateProject.css'
 
 function CreateProject({ onClose, onSuccess, project = null }) {
   const isEditMode = project !== null
+  const navigate = useNavigate()
   
   const [name, setName] = useState(project?.name || '')
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
@@ -17,6 +19,8 @@ function CreateProject({ onClose, onSuccess, project = null }) {
   const [classification, setClassification] = useState(project?.classification || 'normal')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   
   // Update state when project prop changes (for edit mode)
   useEffect(() => {
@@ -114,6 +118,41 @@ function CreateProject({ onClose, onSuccess, project = null }) {
     }
   }
 
+  const handleDelete = async () => {
+    if (!isEditMode || !project) return
+    
+    setDeleting(true)
+    setError(null)
+    
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const response = await fetch(`http://localhost:8000/api/projects/${project.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Basic ${auth}`
+        }
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to delete project')
+      }
+      
+      // Close modal and navigate to projects list
+      if (onClose) {
+        onClose()
+      }
+      navigate('/projects')
+    } catch (err) {
+      setError(err.message)
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="create-project-form">
       {error && (
@@ -201,13 +240,59 @@ function CreateProject({ onClose, onSuccess, project = null }) {
       </div>
 
       <div className="form-actions">
-        <Button type="button" variant="secondary" onClick={onClose}>
-          Avbryt
-        </Button>
-        <Button type="submit" variant="success" disabled={!name.trim() || creating}>
-          {creating ? (isEditMode ? 'Uppdaterar...' : 'Skapar...') : (isEditMode ? 'Spara ändringar' : 'Skapa projekt')}
-        </Button>
+        <div className="form-actions-left">
+          {isEditMode && !showDeleteConfirm && (
+            <Button 
+              type="button" 
+              variant="error" 
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={creating || deleting}
+            >
+              <Trash2 size={16} />
+              <span>Radera projekt</span>
+            </Button>
+          )}
+        </div>
+        <div className="form-actions-right">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={creating || deleting}>
+            Avbryt
+          </Button>
+          <Button type="submit" variant="success" disabled={!name.trim() || creating || deleting}>
+            {creating ? (isEditMode ? 'Uppdaterar...' : 'Skapar...') : (isEditMode ? 'Spara ändringar' : 'Skapa projekt')}
+          </Button>
+        </div>
       </div>
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="delete-confirm-section">
+          <div className="delete-confirm-warning">
+            <p className="delete-confirm-title">⚠️ Radera projekt permanent?</p>
+            <p className="delete-confirm-text">
+              Alla dokument, anteckningar och källor kommer att raderas permanent. 
+              Denna åtgärd kan inte ångras.
+            </p>
+          </div>
+          <div className="delete-confirm-actions">
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+            >
+              Avbryt radering
+            </Button>
+            <Button 
+              type="button" 
+              variant="error" 
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Raderar...' : 'Radera permanent'}
+            </Button>
+          </div>
+        </div>
+      )}
     </form>
   )
 }

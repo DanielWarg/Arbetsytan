@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
-from models import Classification, NoteCategory
+from models import Classification, NoteCategory, SourceType, ProjectStatus
 
 
 class ProjectCreate(BaseModel):
@@ -20,11 +20,16 @@ class ProjectUpdate(BaseModel):
     tags: Optional[List[str]] = None
 
 
+class ProjectStatusUpdate(BaseModel):
+    status: ProjectStatus
+
+
 class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
     classification: str
+    status: str
     due_date: Optional[datetime] = None
     tags: Optional[List[str]] = None
     created_at: datetime
@@ -161,6 +166,25 @@ class JournalistNoteImageResponse(BaseModel):
     note_id: int
     filename: str
     mime_type: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Project Sources schemas
+class ProjectSourceCreate(BaseModel):
+    title: str = Field(..., max_length=200)
+    type: SourceType
+    comment: Optional[str] = Field(None, max_length=500)
+
+
+class ProjectSourceResponse(BaseModel):
+    id: int
+    project_id: int
+    title: str
+    type: str
+    comment: Optional[str]
     created_at: datetime
 
     class Config:

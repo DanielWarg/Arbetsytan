@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 import os
 import uuid
 import shutil
@@ -34,13 +35,13 @@ def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
     return sanitized
 
 from database import get_db, engine
-from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, Base, Classification, SanitizeLevel, NoteCategory
+from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
 from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
     DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse,
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
-    JournalistNoteImageResponse
+    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -232,6 +233,46 @@ async def update_project(
         )
         db.add(event)
         db.commit()
+    
+    return project
+
+
+@app.patch("/api/projects/{project_id}/status", response_model=ProjectResponse)
+async def update_project_status(
+    project_id: int,
+    status_update: ProjectStatusUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Update project status and log event."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    old_status = project.status.value
+    new_status = status_update.status.value
+    
+    # Update status
+    project.status = status_update.status
+    db.commit()
+    db.refresh(project)
+    
+    # Log event (metadata only, via Privacy Guard)
+    event_metadata = _safe_event_metadata({
+        "from": old_status,
+        "to": new_status
+    }, context="audit")
+    
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="project_status_changed",
+        actor=username,
+        event_metadata=event_metadata
+    )
+    db.add(event)
+    db.commit()
+    
+    logger.info(f"Project {project_id} status changed: {old_status} -> {new_status}")
     
     return project
 
@@ -593,6 +634,53 @@ async def get_document(
         pii_gate_reasons=document.pii_gate_reasons,
         created_at=document.created_at
     )
+
+
+@app.delete("/api/documents/{document_id}", status_code=204)
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Delete a document and its associated files.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete associated files if they exist
+    import os
+    if document.file_path and os.path.exists(document.file_path):
+        try:
+            os.remove(document.file_path)
+        except Exception as e:
+            logger.error(f"Failed to delete file {document.file_path}: {e}")
+    
+    # Delete audio file if it exists (for recordings)
+    if hasattr(document, 'audio_path') and document.audio_path and os.path.exists(document.audio_path):
+        try:
+            os.remove(document.audio_path)
+        except Exception as e:
+            logger.error(f"Failed to delete audio file {document.audio_path}: {e}")
+    
+    # Delete from database
+    db.delete(document)
+    db.commit()
+    
+    # Log event
+    log_event(
+        db=db,
+        project_id=document.project_id,
+        event_type="document_deleted",
+        actor=username,
+        metadata={
+            "document_id": document_id,
+            "filename": document.filename
+        }
+    )
+    
+    return Response(status_code=204)
 
 
 # Recordings endpoint
@@ -1273,3 +1361,103 @@ async def get_journalist_note_image(
         media_type=image.mime_type,
         filename=image.filename
     )
+
+
+# ===== PROJECT SOURCES ENDPOINTS =====
+
+@app.post("/api/projects/{project_id}/sources", response_model=ProjectSourceResponse, status_code=201)
+async def create_project_source(
+    project_id: int,
+    source_data: ProjectSourceCreate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Create a new source/reference for a project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Create source
+    source = ProjectSource(
+        project_id=project_id,
+        title=source_data.title,
+        type=source_data.type,
+        comment=source_data.comment
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+    
+    # Log event (metadata only: type + timestamp, NO title/comment)
+    event_metadata = _safe_event_metadata({
+        "type": source_data.type.value
+    }, context="audit")
+    
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="source_added",
+        actor=username,
+        event_metadata=event_metadata
+    )
+    db.add(event)
+    db.commit()
+    
+    logger.info(f"Source added to project {project_id}: type={source_data.type.value}")
+    
+    return source
+
+
+@app.get("/api/projects/{project_id}/sources", response_model=List[ProjectSourceResponse])
+async def get_project_sources(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Get all sources for a project."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    sources = db.query(ProjectSource).filter(ProjectSource.project_id == project_id).order_by(ProjectSource.created_at.desc()).all()
+    return sources
+
+
+@app.delete("/api/projects/{project_id}/sources/{source_id}", status_code=204)
+async def delete_project_source(
+    project_id: int,
+    source_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Delete a source (hard delete)."""
+    source = db.query(ProjectSource).filter(
+        ProjectSource.id == source_id,
+        ProjectSource.project_id == project_id
+    ).first()
+    
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    
+    source_type = source.type.value
+    
+    # Delete source
+    db.delete(source)
+    db.commit()
+    
+    # Log event (metadata only: type, NO title/comment)
+    event_metadata = _safe_event_metadata({
+        "type": source_type
+    }, context="audit")
+    
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="source_removed",
+        actor=username,
+        event_metadata=event_metadata
+    )
+    db.add(event)
+    db.commit()
+    
+    logger.info(f"Source removed from project {project_id}: type={source_type}")
+    
+    return None

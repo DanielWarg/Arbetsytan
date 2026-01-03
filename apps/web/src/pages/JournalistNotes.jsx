@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
-import { FileText, Plus, AlertCircle, HelpCircle, AlertTriangle, Image as ImageIcon, X } from 'lucide-react'
+import { FileText, Plus, AlertCircle, HelpCircle, AlertTriangle, Image as ImageIcon, X, Edit, Trash2 } from 'lucide-react'
 import './JournalistNotes.css'
 
 function JournalistNotes({ projectId }) {
@@ -20,6 +20,10 @@ function JournalistNotes({ projectId }) {
   const [imageUrls, setImageUrls] = useState({}) // Map image_id -> blob URL
   const [selectedImage, setSelectedImage] = useState(null)
   const [pasteFeedback, setPasteFeedback] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
   
   const categoryOptions = [
     { value: 'raw', label: 'Råanteckning' },
@@ -258,6 +262,57 @@ function JournalistNotes({ projectId }) {
     }
   }
 
+  const handleDeleteNote = (noteId, noteTitle) => {
+    setDeleteTarget({ id: noteId, title: noteTitle || 'Ingen titel' })
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDeleteNote = async () => {
+    if (!deleteTarget) return
+    
+    setDeleting(true)
+    let success = false
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/journalist-notes/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Basic ${auth}`
+        },
+        credentials: 'omit'
+      })
+      
+      // 204 No Content is success, don't try to parse body
+      if (!response.ok && response.status !== 204) {
+        throw new Error(`Failed to delete note: ${response.status}`)
+      }
+      
+      success = true
+      
+      // If we deleted the active note, clear selection
+      if (activeNoteId === deleteTarget.id) {
+        setActiveNoteId(null)
+        setActiveNote(null)
+      }
+      
+      // Close modal
+      setShowDeleteConfirm(false)
+      setDeleteTarget(null)
+      setDeleting(false)
+      
+      // Refresh notes list
+      await fetchNotes()
+    } catch (err) {
+      console.error('Error deleting note:', err)
+      alert('Kunde inte radera anteckning: ' + err.message)
+    } finally {
+      // Only reset deleting state if delete failed
+      if (!success) {
+        setDeleting(false)
+      }
+    }
+  }
+
   const handlePaste = (e) => {
     e.preventDefault()
     
@@ -441,156 +496,86 @@ function JournalistNotes({ projectId }) {
           </div>
         </div>
 
-        {/* Right Column: Editor */}
+        {/* Right Column: Read View */}
         <div className="notes-editor-column">
           {activeNote ? (
             <>
-              <div className="editor-header">
-                <div className="editor-header-left">
-                  <h3 className="editor-title">Redigera anteckning</h3>
-                  {saveStatus && (
-                    <span className={`save-status save-status-${saveStatus}`}>
-                      {saveStatus === 'saving' && 'Sparas...'}
-                      {saveStatus === 'saved' && 'Sparad'}
-                      {saveStatus === 'error' && 'Fel vid sparande'}
-                    </span>
-                  )}
-                </div>
-                <div className="editor-header-meta">
-                  <span className="editor-date-info">
-                    {saveStatus === 'saved' ? (
-                      <>✓ Sparad {formatDate(activeNote.updated_at)}</>
+              {/* Read-only view header with fixed height */}
+              <div className="note-read-header">
+                <div className="note-read-header-top">
+                  <div className="note-read-title-section">
+                    {noteTitle ? (
+                      <h3 className="note-read-title">{noteTitle}</h3>
                     ) : (
-                      <>Skapad: {formatDate(activeNote.created_at)} • Uppdaterad: {formatDate(activeNote.updated_at)}</>
+                      <h3 className="note-read-title note-read-title-empty">Ingen titel</h3>
                     )}
+                    <span className="note-read-category">
+                      {categoryOptions.find(c => c.value === noteCategory)?.label || noteCategory}
+                    </span>
+                  </div>
+                  <div className="note-read-actions">
+                    <button
+                      className="btn-edit-note"
+                      onClick={() => setShowEditModal(true)}
+                      title="Redigera anteckning"
+                    >
+                      <Edit size={16} />
+                      <span>Redigera</span>
+                    </button>
+                    <button
+                      className="btn-delete-note"
+                      onClick={() => handleDeleteNote(activeNote.id, noteTitle)}
+                      title="Radera anteckning"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                {/* Fixed height meta row - prevents layout jump */}
+                <div className="note-read-meta">
+                  <span className="note-read-date">
+                    Uppdaterad: {formatDate(activeNote.updated_at)}
                   </span>
                 </div>
-                <div className="editor-header-actions">
-                  <button
-                    className="btn-save-note"
-                    onClick={handleManualSave}
-                    disabled={saving}
-                    title="Spara anteckning"
-                  >
-                    {saving ? (
-                      <>
-                        <span className="save-spinner"></span>
-                        <span>Sparar...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>💾</span>
-                        <span>Spara</span>
-                      </>
-                    )}
-                  </button>
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    style={{ display: 'none' }}
-                  />
-                  <button
-                    className="btn-editor-action"
-                    onClick={() => imageInputRef.current?.click()}
-                    title="Ladda upp bild"
-                  >
-                    <ImageIcon size={16} />
-                  </button>
-                </div>
               </div>
 
-              <div className="editor-title-section">
-                <input
-                  type="text"
-                  className="editor-title-input"
-                  placeholder="Titel på anteckningen (valfritt)"
-                  value={noteTitle}
-                  onChange={(e) => setNoteTitle(e.target.value)}
-                />
-                <select
-                  className="editor-category-select"
-                  value={noteCategory}
-                  onChange={(e) => setNoteCategory(e.target.value)}
-                >
-                  {categoryOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="editor-prefix-buttons">
-                <button
-                  className="btn-prefix"
-                  onClick={() => insertPrefix('❗')}
-                  title="Viktigt"
-                >
-                  <AlertCircle size={14} />
-                  <span>Viktigt</span>
-                </button>
-                <button
-                  className="btn-prefix"
-                  onClick={() => insertPrefix('❓')}
-                  title="Fråga"
-                >
-                  <HelpCircle size={14} />
-                  <span>Fråga</span>
-                </button>
-                <button
-                  className="btn-prefix"
-                  onClick={() => insertPrefix('⚠️')}
-                  title="Osäkert"
-                >
-                  <AlertTriangle size={14} />
-                  <span>Osäkert</span>
-                </button>
-              </div>
-
-              <div className={`editor-textarea-container ${pasteFeedback ? 'paste-feedback' : ''}`}>
-                <textarea
-                  ref={textareaRef}
-                  className="editor-textarea"
-                  value={noteBody}
-                  onChange={(e) => setNoteBody(e.target.value)}
-                  onPaste={handlePaste}
-                  placeholder="Skriv anteckningar här..."
-                />
+              {/* Read-only body */}
+              <div className="note-read-body">
+                {noteBody ? (
+                  <pre className="note-read-text">{noteBody}</pre>
+                ) : (
+                  <p className="note-read-empty">Ingen text ännu. Klicka "Redigera" för att lägga till innehåll.</p>
+                )}
                 
                 {/* Display images inline */}
                 {images.length > 0 && (
-                  <div className="editor-images">
-                    <p className="editor-images-label">Bilder i anteckningen:</p>
-                    <div className="editor-images-grid">
+                  <div className="note-read-images">
+                    <p className="note-read-images-label">Bilder i anteckningen:</p>
+                    <div className="note-read-images-grid">
                       {images.map(image => (
-                        <div key={image.id} className="editor-image-item">
+                        <div key={image.id} className="note-read-image-item">
                           {imageUrls[image.id] ? (
                             <img
                               src={imageUrls[image.id]}
                               alt={image.filename}
-                              className="editor-image-thumb"
+                              className="note-read-image-thumb"
                               onClick={() => setSelectedImage(image)}
                             />
                           ) : (
-                            <div className="editor-image-thumb editor-image-loading">
+                            <div className="note-read-image-thumb note-read-image-loading">
                               Laddar...
                             </div>
                           )}
-                          <p className="editor-image-filename">{image.filename}</p>
+                          <p className="note-read-image-filename">{image.filename}</p>
                         </div>
                       ))}
                     </div>
-                    <p className="editor-images-footer">
-                      Bilder i anteckningar är privata referenser och bearbetas inte automatiskt.
-                    </p>
                   </div>
                 )}
               </div>
 
-              <div className="editor-footer">
-                <p className="editor-footer-text">
+              <div className="note-read-footer">
+                <p className="note-read-footer-text">
                   Anteckningar är interna arbetsanteckningar och bearbetas inte automatiskt.
                 </p>
               </div>
@@ -654,6 +639,149 @@ function JournalistNotes({ projectId }) {
           )}
         </div>
       </div>
+
+      {/* Edit Modal - toolbar only in modal */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Redigera anteckning"
+      >
+        <div className="edit-modal-content">
+          {/* Fixed height status bar - prevents layout jump */}
+          <div className="edit-modal-status-bar">
+            {saveStatus && (
+              <span className={`save-status save-status-${saveStatus}`}>
+                {saveStatus === 'saving' && '⏳ Sparas...'}
+                {saveStatus === 'saved' && '✓ Sparad'}
+                {saveStatus === 'error' && '✗ Fel vid sparande'}
+              </span>
+            )}
+          </div>
+
+          <div className="edit-modal-title-section">
+            <input
+              type="text"
+              className="edit-modal-title-input"
+              placeholder="Titel på anteckningen (valfritt)"
+              value={noteTitle}
+              onChange={(e) => setNoteTitle(e.target.value)}
+            />
+            <select
+              className="edit-modal-category-select"
+              value={noteCategory}
+              onChange={(e) => setNoteCategory(e.target.value)}
+            >
+              {categoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="edit-modal-toolbar">
+            <button
+              className="btn-prefix"
+              onClick={() => insertPrefix('❗')}
+              title="Viktigt"
+            >
+              <AlertCircle size={14} />
+              <span>Viktigt</span>
+            </button>
+            <button
+              className="btn-prefix"
+              onClick={() => insertPrefix('❓')}
+              title="Fråga"
+            >
+              <HelpCircle size={14} />
+              <span>Fråga</span>
+            </button>
+            <button
+              className="btn-prefix"
+              onClick={() => insertPrefix('⚠️')}
+              title="Osäkert"
+            >
+              <AlertTriangle size={14} />
+              <span>Osäkert</span>
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              style={{ display: 'none' }}
+            />
+            <button
+              className="btn-prefix"
+              onClick={() => imageInputRef.current?.click()}
+              title="Ladda upp bild"
+            >
+              <ImageIcon size={14} />
+              <span>Bild</span>
+            </button>
+          </div>
+
+          <div className={`edit-modal-textarea-container ${pasteFeedback ? 'paste-feedback' : ''}`}>
+            <textarea
+              ref={textareaRef}
+              className="edit-modal-textarea"
+              value={noteBody}
+              onChange={(e) => setNoteBody(e.target.value)}
+              onPaste={handlePaste}
+              placeholder="Skriv anteckningar här..."
+            />
+          </div>
+
+          <div className="edit-modal-footer">
+            <p className="edit-modal-footer-text">
+              Anteckningar sparas automatiskt var 2:a sekund.
+            </p>
+            <button
+              className="btn-close-edit"
+              onClick={() => setShowEditModal(false)}
+            >
+              Stäng
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal 
+        isOpen={showDeleteConfirm} 
+        onClose={() => !deleting && setShowDeleteConfirm(false)}
+      >
+        <div className="delete-confirmation-modal">
+          <div className="delete-confirmation-icon">
+            <Trash2 size={48} />
+          </div>
+          <h3 className="delete-confirmation-title">
+            Radera anteckning?
+          </h3>
+          <p className="delete-confirmation-text">
+            Är du säker på att du vill radera <strong>{deleteTarget?.title}</strong>?
+          </p>
+          <p className="delete-confirmation-warning">
+            Denna åtgärd kan inte ångras.
+          </p>
+          <div className="delete-confirmation-actions">
+            <button 
+              className="btn-cancel-delete"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+            >
+              Avbryt
+            </button>
+            <button 
+              className="btn-confirm-delete"
+              onClick={confirmDeleteNote}
+              disabled={deleting}
+            >
+              {deleting ? 'Raderar...' : 'Radera permanent'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Image Modal */}
       {selectedImage && (

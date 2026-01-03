@@ -128,7 +128,7 @@ Detta är inte tasks eller workflow, utan ett redaktionellt läge.
 * Event innehåller endast metadata (old/new, user, timestamp)
 * Påverkar inget innehåll, ingen AI, ingen sanitering
 
-Status: **SKA BYGGAS (steg 1)**
+Status: **✅ KLART**
 
 ---
 

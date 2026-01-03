@@ -291,9 +291,15 @@
 
 .project-item-compact-content {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--spacing-xs);
   padding: var(--spacing-xs) 0;
+}
+
+.project-item-main {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 .project-item-icon {
@@ -310,6 +316,43 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-item-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-left: calc(14px + var(--spacing-xs)); /* Align with name */
+  font-size: var(--font-size-xs);
+}
+
+.project-status-badge {
+  padding: 2px 6px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xs);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+
+.project-due-date-badge {
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+}
+
+.project-due-date-badge.warning {
+  color: var(--color-accent-warning);
+  font-weight: var(--font-weight-semibold);
+}
+
+.project-due-date-badge.danger {
+  color: var(--color-brand-red);
+  font-weight: var(--font-weight-semibold);
 }
 
 .deadline-badge-small {

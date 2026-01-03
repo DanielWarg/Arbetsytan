@@ -21,10 +21,14 @@ function ProjectDetail() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const [ingestMode, setIngestMode] = useState('document') // document, note, audio
-  const [contextCollapsed, setContextCollapsed] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [sources, setSources] = useState([])
+  const [showAddSourceModal, setShowAddSourceModal] = useState(false)
+  const [addingSource, setAddingSource] = useState(false)
+  const [newSource, setNewSource] = useState({ title: '', type: 'link', comment: '' })
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: null, id: null, name: '' })
   const [deleting, setDeleting] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
   const fileInputRef = useRef(null)
   
   // Recording states
@@ -52,7 +56,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const [projectRes, eventsRes, documentsRes] = await Promise.all([
+      const [projectRes, eventsRes, documentsRes, sourcesRes] = await Promise.all([
         fetch(`http://localhost:8000/api/projects/${id}`, {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
@@ -60,6 +64,9 @@ function ProjectDetail() {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
         fetch(`http://localhost:8000/api/projects/${id}/documents`, {
+          headers: { 'Authorization': `Basic ${auth}` }
+        }),
+        fetch(`http://localhost:8000/api/projects/${id}/sources`, {
           headers: { 'Authorization': `Basic ${auth}` }
         })
       ])
@@ -70,10 +77,12 @@ function ProjectDetail() {
       const projectData = await projectRes.json()
       const eventsData = await eventsRes.json()
       const documentsData = documentsRes.ok ? await documentsRes.json() : []
+      const sourcesData = sourcesRes.ok ? await sourcesRes.json() : []
       
       setProject(projectData)
       setEvents(eventsData)
       setDocuments(documentsData)
+      setSources(sourcesData)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -418,32 +427,143 @@ function ProjectDetail() {
     return 'normal'
   }
 
-  const handleDeleteProject = async () => {
-    setDeleting(true)
+
+  const handleAddSource = async (e) => {
+    e.preventDefault()
+    setAddingSource(true)
+    
     try {
       const username = 'admin'
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}`, {
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/sources`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newSource)
+      })
+      
+      if (!response.ok) throw new Error('Failed to add source')
+      
+      // Reset form and close modal
+      setNewSource({ title: '', type: 'link', comment: '' })
+      setShowAddSourceModal(false)
+      
+      // Refresh data
+      await fetchProject()
+    } catch (err) {
+      console.error('Error adding source:', err)
+      alert('Kunde inte lägga till källa')
+    } finally {
+      setAddingSource(false)
+    }
+  }
+
+  const handleDeleteSource = async (sourceId, sourceName) => {
+    setDeleteConfirm({ 
+      show: true, 
+      type: 'source', 
+      id: sourceId, 
+      name: sourceName 
+    })
+  }
+
+  const handleDeleteDocument = async (e, documentId, documentName) => {
+    e.stopPropagation() // Prevent navigation to document
+    setDeleteConfirm({ 
+      show: true, 
+      type: 'document', 
+      id: documentId, 
+      name: documentName 
+    })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.id) return
+    
+    setDeleting(true)
+    let success = false
+    
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const endpoint = deleteConfirm.type === 'document' 
+        ? `http://localhost:8000/api/documents/${deleteConfirm.id}`
+        : `http://localhost:8000/api/projects/${id}/sources/${deleteConfirm.id}`
+      
+      const response = await fetch(endpoint, {
         method: 'DELETE',
         headers: {
           'Authorization': `Basic ${auth}`
         }
       })
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to delete project')
+      // 204 No Content is success, don't try to parse body
+      if (!response.ok && response.status !== 204) {
+        throw new Error(`Failed to delete: ${response.status}`)
       }
       
-      // DELETE returns 204 No Content - do NOT call .json()
-      // Redirect to projects list
-      navigate('/projects')
-    } catch (err) {
-      alert(`Fel vid radering: ${err.message}`)
+      success = true
+      
+      // Close modal first for better UX
+      setDeleteConfirm({ show: false, type: null, id: null, name: '' })
       setDeleting(false)
+      
+      // Refresh project data
+      await fetchProject()
+    } catch (err) {
+      console.error('Error deleting:', err)
+      alert('Kunde inte radera: ' + err.message)
+    } finally {
+      // Only reset deleting state if delete failed
+      if (!success) {
+        setDeleting(false)
+      }
     }
+  }
+
+  const handleStatusChange = async (newStatus) => {
+    setUpdatingStatus(true)
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: newStatus })
+      })
+      
+      if (!response.ok) throw new Error('Failed to update status')
+      
+      const updatedProject = await response.json()
+      setProject(updatedProject)
+      await fetchProject() // Refresh events
+    } catch (err) {
+      console.error('Error updating status:', err)
+      alert('Kunde inte uppdatera status')
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
+  const getSourceTypeLabel = (type) => {
+    const labels = {
+      'link': 'Länk',
+      'person': 'Person',
+      'document': 'Dokument',
+      'other': 'Övrigt'
+    }
+    return labels[type] || type
   }
 
   if (loading) return <div className="project-detail-page">Laddar...</div>
@@ -472,6 +592,21 @@ function ProjectDetail() {
               )
             })()}
           </div>
+          <div className="project-status-section">
+            <label className="project-status-label">Status:</label>
+            <select 
+              className="project-status-select"
+              value={project.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={updatingStatus}
+            >
+              <option value="research">Research</option>
+              <option value="processing">Bearbetning</option>
+              <option value="fact_check">Faktakoll</option>
+              <option value="ready">Klar</option>
+              <option value="archived">Arkiverad</option>
+            </select>
+          </div>
           <div className="project-header-actions">
             <button 
               className="project-action-btn"
@@ -479,20 +614,14 @@ function ProjectDetail() {
               title="Redigera projekt"
             >
               <Edit size={18} />
-            </button>
-            <button 
-              className="project-action-btn project-action-btn-delete"
-              onClick={() => setShowDeleteModal(true)}
-              title="Radera projekt"
-            >
-              <Trash2 size={18} />
+              <span>Redigera</span>
             </button>
           </div>
         </div>
 
       <div className="project-workspace">
-        {/* Left Column: Workspace / Material */}
-        <div className={`workspace-main ${contextCollapsed ? 'workspace-main-expanded' : ''}`}>
+        {/* Main Workspace - Full Width */}
+        <div className="workspace-main workspace-main-full">
           <div className="material-section">
             {/* Toolbar - Small, secondary */}
             <div className="ingest-toolbar">
@@ -735,27 +864,24 @@ function ProjectDetail() {
               </div>
             )}
 
-            {/* Journalist Notes View - Only when note mode is active */}
-            {ingestMode === 'note' && (
-              <JournalistNotes projectId={id} />
-            )}
-
-            {/* Material List - Always visible when not in note mode */}
-            {ingestMode !== 'note' && documents.length > 0 && (
+            {/* Material List - Documents section */}
+            {ingestMode === 'document' && documents.length > 0 && (
               <div className="material-list">
-                <h3 className="material-list-title">Material</h3>
+                <h3 className="material-list-title">Dokument</h3>
                 <div className="material-list-items">
                   {documents.map(doc => (
                     <div
                       key={doc.id}
                       className="material-list-item"
-                      onClick={() => navigate(`/projects/${id}/documents/${doc.id}`)}
-                      style={{ cursor: 'pointer' }}
                     >
                       <div className="material-item-icon">
                         <File size={16} />
                       </div>
-                      <div className="material-item-content">
+                      <div 
+                        className="material-item-content"
+                        onClick={() => navigate(`/projects/${id}/documents/${doc.id}`)}
+                        style={{ cursor: 'pointer', flex: 1 }}
+                      >
                         <div className="material-item-header">
                           <span className="material-item-filename">{doc.filename}</span>
                           <div className="material-item-badges">
@@ -799,133 +925,38 @@ function ProjectDetail() {
                           )}
                         </div>
                       </div>
+                      <button
+                        className="material-item-delete-btn"
+                        onClick={(e) => handleDeleteDocument(e, doc.id, doc.filename)}
+                        title="Radera dokument"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Anteckningar - Always under documents in document mode */}
+            {ingestMode === 'document' && (
+              <div className="material-notes-section">
+                <JournalistNotes projectId={id} />
+              </div>
+            )}
+
+            {/* Journalist Notes View - Full view when in note mode */}
+            {ingestMode === 'note' && (
+              <JournalistNotes projectId={id} />
+            )}
           </div>
         </div>
 
-        {/* Right Column: Context */}
-        <div className={`workspace-context ${contextCollapsed ? 'workspace-context-collapsed' : ''}`}>
-          {/* Toggle button - positioned on divider line */}
-          <button 
-            className="context-toggle-btn"
-            onClick={() => setContextCollapsed(!contextCollapsed)}
-            aria-label={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
-            title={contextCollapsed ? 'Visa projektinfo' : 'Dölj projektinfo'}
-          >
-            <div className="panel-toggle-container">
-              <svg className="panel-toggle-arrow panel-toggle-arrow-left" width="8" height="8" viewBox="0 0 8 8" fill="none">
-                <path d="M5 1L2 4L5 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <div className="panel-toggle-icon">
-                <div className="panel-toggle-box">
-                  {!contextCollapsed && <div className="panel-toggle-sidebar"></div>}
-                </div>
-              </div>
-              <svg className="panel-toggle-arrow panel-toggle-arrow-right" width="8" height="8" viewBox="0 0 8 8" fill="none">
-                <path d="M3 1L6 4L3 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          </button>
-          {!contextCollapsed && (
-            <>
-              <Card className="context-card">
-                <div className="context-section">
-                  <h3 className="context-title">Projektinfo</h3>
-                  <div className="context-info">
-                    <div className="context-item">
-                      <span className="context-label">Klassificering:</span>
-                      <Badge variant={project.classification === 'normal' ? 'normal' : project.classification === 'sensitive' ? 'sensitive' : 'source-sensitive'}>
-                        {getClassificationLabel(project.classification)}
-                      </Badge>
-                    </div>
-                    <div className="context-item">
-                      <span className="context-label">Skapad:</span>
-                      <span className="context-value">{new Date(project.created_at).toLocaleDateString('sv-SE')}</span>
-                    </div>
-                    <div className="context-item">
-                      <span className="context-label">Uppdaterad:</span>
-                      <span className="context-value">{new Date(project.updated_at).toLocaleDateString('sv-SE')}</span>
-                    </div>
-                    {project.due_date && (
-                      <div className="context-item">
-                        <span className="context-label">Deadline:</span>
-                        <span className={`context-value context-due-date context-due-date-${getDueDateStatus(project.due_date)}`}>
-                          {new Date(project.due_date).toLocaleDateString('sv-SE')}
-                          {getDueDateStatus(project.due_date) === 'due-soon' && ' ⚠️'}
-                          {getDueDateStatus(project.due_date) === 'overdue' && ' 🔴'}
-                        </span>
-                      </div>
-                    )}
-                    {project.description && (
-                      <div className="context-item context-description">
-                        <span className="context-label">Beskrivning:</span>
-                        <p className="context-value">{project.description}</p>
-                      </div>
-                    )}
-                    {project.tags && project.tags.length > 0 && (
-                      <div className="context-item">
-                        <span className="context-label">Taggar:</span>
-                        <div className="context-tags">
-                          {project.tags.map((tag, index) => (
-                            <Badge key={index} variant="normal" className="tag-badge">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="context-card context-timeline">
-                <div className="context-section">
-                  <h3 className="context-title context-title-muted">Händelser</h3>
-                  {events.length === 0 ? (
-                    <p className="timeline-empty">Inga händelser ännu.</p>
-                  ) : (
-                    <div className="timeline-list">
-                      {events.map(event => (
-                        <div key={event.id} className="timeline-item">
-                          <div className="timeline-time">
-                            {new Date(event.timestamp).toLocaleDateString('sv-SE', { 
-                              month: 'short', 
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                          <div className="timeline-content">
-                            <div className="timeline-header">
-                              <span className="timeline-type">{event.event_type}</span>
-                              {event.actor && (
-                                <span className="timeline-actor">av {event.actor}</span>
-                              )}
-                            </div>
-                            {event.metadata && (
-                              <div className="timeline-metadata">
-                                <pre>{JSON.stringify(event.metadata, null, 2)}</pre>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            </>
-          )}
-        </div>
         </div>
       </div>
       
-      {/* Edit Project Modal */}
-      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)}>
+      {/* Edit Project Modal (includes delete functionality) */}
+      <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Redigera projekt">
         <CreateProject
           project={project}
           onClose={() => setShowEditModal(false)}
@@ -937,34 +968,108 @@ function ProjectDetail() {
           }}
         />
       </Modal>
-      
+
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)}>
-          <div className="delete-confirmation">
-            <h3 className="delete-confirmation-title">Radera projekt permanent</h3>
-            <p className="delete-confirmation-text">
-              Är du säker på att du vill radera detta projekt? Alla dokument och händelser kommer att raderas permanent från systemet. Denna åtgärd kan inte ångras.
-            </p>
-            <div className="delete-confirmation-actions">
-              <Button 
-                type="button" 
-                variant="secondary" 
-                onClick={() => setShowDeleteModal(false)}
-                disabled={deleting}
-              >
-                Avbryt
-              </Button>
-              <Button 
-                type="button" 
-                variant="error" 
-                onClick={handleDeleteProject}
-                disabled={deleting}
-              >
-                {deleting ? 'Raderar...' : 'Radera permanent'}
-              </Button>
-            </div>
+      <Modal 
+        isOpen={deleteConfirm.show} 
+        onClose={() => !deleting && setDeleteConfirm({ show: false, type: null, id: null, name: '' })}
+      >
+        <div className="delete-confirmation-modal">
+          <div className="delete-confirmation-icon">
+            <Trash2 size={48} />
           </div>
-        </Modal>
+          <h3 className="delete-confirmation-title">
+            Radera {deleteConfirm.type === 'document' ? 'dokument' : 'källa'}?
+          </h3>
+          <p className="delete-confirmation-text">
+            Är du säker på att du vill radera <strong>{deleteConfirm.name}</strong>?
+          </p>
+          <p className="delete-confirmation-warning">
+            Denna åtgärd kan inte ångras.
+          </p>
+          <div className="delete-confirmation-actions">
+            <Button 
+              type="button" 
+              variant="secondary" 
+              onClick={() => setDeleteConfirm({ show: false, type: null, id: null, name: '' })}
+              disabled={deleting}
+            >
+              Avbryt
+            </Button>
+            <Button 
+              type="button" 
+              variant="error" 
+              onClick={confirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Raderar...' : 'Radera permanent'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Source Modal */}
+      <Modal isOpen={showAddSourceModal} onClose={() => setShowAddSourceModal(false)} title="Lägg till källa">
+        <form onSubmit={handleAddSource} className="add-source-form">
+          <div className="form-group">
+            <label htmlFor="source-title">Titel *</label>
+            <input
+              id="source-title"
+              type="text"
+              value={newSource.title}
+              onChange={(e) => setNewSource({...newSource, title: e.target.value})}
+              maxLength={200}
+              required
+              placeholder="T.ex. 'Regeringens pressmeddelande'"
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="source-type">Typ *</label>
+            <select
+              id="source-type"
+              value={newSource.type}
+              onChange={(e) => setNewSource({...newSource, type: e.target.value})}
+              required
+            >
+              <option value="link">Länk</option>
+              <option value="person">Person</option>
+              <option value="document">Dokument</option>
+              <option value="other">Övrigt</option>
+            </select>
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="source-comment">Kommentar</label>
+            <textarea
+              id="source-comment"
+              value={newSource.comment}
+              onChange={(e) => setNewSource({...newSource, comment: e.target.value})}
+              maxLength={500}
+              rows={3}
+              placeholder="Valfri beskrivning eller URL"
+            />
+          </div>
+          
+          <div className="modal-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAddSourceModal(false)}
+              disabled={addingSource}
+            >
+              Avbryt
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={addingSource}
+            >
+              {addingSource ? 'Lägger till...' : 'Lägg till källa'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

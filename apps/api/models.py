@@ -17,6 +17,21 @@ class SanitizeLevel(str, enum.Enum):
     PARANOID = "paranoid"
 
 
+class ProjectStatus(str, enum.Enum):
+    RESEARCH = "research"
+    PROCESSING = "processing"
+    FACT_CHECK = "fact_check"
+    READY = "ready"
+    ARCHIVED = "archived"
+
+
+class SourceType(str, enum.Enum):
+    LINK = "link"          # Länk
+    PERSON = "person"      # Person
+    DOCUMENT = "document"  # Dokument
+    OTHER = "other"        # Övrigt
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -24,6 +39,7 @@ class Project(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     classification = Column(SQLEnum(Classification), default=Classification.NORMAL, nullable=False)
+    status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.RESEARCH, nullable=False)
     due_date = Column(DateTime(timezone=True), nullable=True)
     tags = Column(JSON, nullable=True)  # List of strings
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,6 +49,7 @@ class Project(Base):
     documents = relationship("Document", back_populates="project", order_by="Document.created_at.desc()")
     notes = relationship("ProjectNote", back_populates="project", order_by="ProjectNote.created_at.desc()")
     journalist_notes = relationship("JournalistNote", back_populates="project", order_by="JournalistNote.updated_at.desc()")
+    sources = relationship("ProjectSource", back_populates="project", order_by="ProjectSource.created_at.desc()")
 
 
 class ProjectEvent(Base):
@@ -118,3 +135,17 @@ class JournalistNoteImage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     note = relationship("JournalistNote", back_populates="images")
+
+
+class ProjectSource(Base):
+    """Källor/Referenser - manuella metadata för journalistisk försvarbarhet."""
+    __tablename__ = "project_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String, nullable=False)  # Kort, manuell titel
+    type = Column(SQLEnum(SourceType), nullable=False)
+    comment = Column(String, nullable=True)  # Valfri, kort kommentar
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    project = relationship("Project", back_populates="sources")

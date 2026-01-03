@@ -246,29 +246,42 @@ function ProjectsList() {
               </div>
             ) : (
               <div className="projects-list-compact">
-                {filteredProjects.map(project => (
-                  <Link 
-                    key={project.id} 
-                    to={`/projects/${project.id}`} 
-                    className="project-item-compact"
-                  >
-                    <div className="project-item-compact-content">
-                      <Folder size={14} className="project-item-icon" />
-                      <span className="project-item-name">{project.name}</span>
-                      {(() => {
-                        const u = getDueUrgency(project.due_date)
-                        if (u.label) {
-                          return (
-                            <Badge variant="normal" className={`deadline-badge-small ${u.variant}`}>
-                              {u.label}
-                            </Badge>
-                          )
-                        }
-                        return null
-                      })()}
-                    </div>
-                  </Link>
-                ))}
+                {filteredProjects.map(project => {
+                  const statusLabels = {
+                    'research': 'Research',
+                    'processing': 'Bearbetning',
+                    'fact_check': 'Faktakoll',
+                    'ready': 'Klar',
+                    'archived': 'Arkiverad'
+                  }
+                  const urgency = getDueUrgency(project.due_date)
+                  
+                  return (
+                    <Link 
+                      key={project.id} 
+                      to={`/projects/${project.id}`} 
+                      className="project-item-compact"
+                    >
+                      <div className="project-item-compact-content">
+                        <div className="project-item-main">
+                          <Folder size={14} className="project-item-icon" />
+                          <span className="project-item-name">{project.name}</span>
+                        </div>
+                        <div className="project-item-meta">
+                          <span className="project-status-badge">
+                            {statusLabels[project.status] || 'Research'}
+                          </span>
+                          {project.due_date && (
+                            <span className={`project-due-date-badge ${urgency.variant}`}>
+                              {urgency.normalizedDate}
+                              {urgency.label && ` • ${urgency.label}`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             )}
           </div>

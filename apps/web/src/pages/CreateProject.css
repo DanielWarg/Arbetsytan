@@ -40,10 +40,22 @@
 .form-actions {
   display: flex;
   gap: var(--spacing-lg);
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-top: var(--spacing-3xl);
   padding-top: var(--spacing-2xl);
   border-top: 1px solid var(--color-border-default);
+}
+
+.form-actions-left {
+  display: flex;
+  gap: var(--spacing-md);
+}
+
+.form-actions-right {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-left: auto;
 }
 
 .form-error {
@@ -70,4 +82,43 @@
 
 .classification-info-icon {
   color: var(--color-text-muted);
+}
+
+/* Delete Confirmation Section */
+.delete-confirm-section {
+  margin-top: var(--spacing-2xl);
+  padding: var(--spacing-xl);
+  border: 2px solid var(--color-accent-error);
+  border-radius: var(--radius-default);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.dark .delete-confirm-section {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.delete-confirm-warning {
+  margin-bottom: var(--spacing-lg);
+}
+
+.delete-confirm-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-accent-error);
+  margin: 0 0 var(--spacing-sm) 0;
+  font-family: var(--font-sans);
+}
+
+.delete-confirm-text {
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  margin: 0;
+  font-family: var(--font-sans);
+}
+
+.delete-confirm-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-end;
 }
