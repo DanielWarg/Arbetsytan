@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
@@ -10,6 +10,7 @@ import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText } from 'lucid
 import './ProjectsList.css'
 
 function ProjectsList() {
+  const navigate = useNavigate()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -46,8 +47,7 @@ function ProjectsList() {
   const handleCreateSuccess = (project) => {
     setShowCreateModal(false)
     fetchProjects()
-    // Optionally navigate to project detail
-    // navigate(`/projects/${project.id}`)
+    navigate(`/projects/${project.id}`)
   }
 
   if (loading) return <div className="projects-list-page">Laddar...</div>
