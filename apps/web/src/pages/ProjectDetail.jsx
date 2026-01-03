@@ -56,6 +56,9 @@ function ProjectDetail() {
   const timerRef = useRef(null)
   const streamRef = useRef(null)
   const audioChunksRef = useRef([])
+  
+  // Drag and drop state for audio
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false)
 
   const fetchProject = async () => {
     try {
@@ -178,6 +181,49 @@ function ProjectDetail() {
         audioInputRef.current.value = ''
       }
     }
+  }
+
+  // Drag and drop handlers for audio
+  const handleAudioDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!recordingUploading && !recordingProcessing) {
+      setIsDraggingAudio(true)
+    }
+  }
+
+  const handleAudioDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingAudio(false)
+  }
+
+  const handleAudioDrop = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingAudio(false)
+    
+    if (recordingUploading || recordingProcessing) {
+      return
+    }
+    
+    const files = e.dataTransfer.files
+    if (files.length === 0) return
+    
+    const file = files[0]
+    
+    // Validate file type
+    if (!file.type.startsWith('audio/')) {
+      setRecordingError('Endast ljudfiler är tillåtna')
+      return
+    }
+    
+    // Create a synthetic event for handleAudioSelect
+    const syntheticEvent = {
+      target: { files: [file] }
+    }
+    
+    await handleAudioSelect(syntheticEvent)
   }
 
   const formatTime = (seconds) => {
@@ -724,40 +770,45 @@ function ProjectDetail() {
               </div>
             </div>
 
-            {/* Primary CTA for Audio Transcription - Only when audio mode is active - MUST be before Material List */}
+            {/* Audio Recorder Card - Only when audio mode is active */}
             {ingestMode === 'audio' && (
-              <div className="audio-primary-cta">
-                <div className="audio-cta-buttons">
+              <div className="audio-recorder-card">
+                <div className="audio-recorder-header">
+                  <h3 className="audio-recorder-title">Röstmemo</h3>
+                  <p className="audio-recorder-help">Spela in direkt eller ladda upp en ljudfil för transkribering.</p>
+                </div>
+
+                <div className="audio-recorder-actions">
                   <button
-                    className={`audio-cta-btn ${recordingMode === 'record' ? 'active' : ''}`}
+                    className={`audio-action-btn audio-action-primary ${recordingMode === 'record' ? 'active' : ''}`}
                     onClick={() => {
                       setRecordingMode('record')
                       setMicPermissionError(null)
                     }}
                     disabled={isRecording || recordingUploading || recordingProcessing}
                   >
-                    <Mic size={20} />
+                    <Mic size={18} />
                     <span>Spela in</span>
                   </button>
                   <button
-                    className={`audio-cta-btn ${recordingMode === 'upload' ? 'active' : ''}`}
+                    className={`audio-action-btn audio-action-secondary ${recordingMode === 'upload' ? 'active' : ''}`}
                     onClick={() => {
                       setRecordingMode('upload')
                       setMicPermissionError(null)
+                      // Open file picker immediately when clicking upload button
+                      setTimeout(() => {
+                        audioInputRef.current?.click()
+                      }, 0)
                     }}
                     disabled={isRecording || recordingUploading || recordingProcessing}
                   >
-                    <Upload size={20} />
+                    <Upload size={18} />
                     <span>Ladda upp fil</span>
                   </button>
                 </div>
-                <p className="audio-cta-help">Spela in direkt eller ladda upp en ljudfil för automatisk transkribering.</p>
-              </div>
-            )}
 
-            {/* Audio Recording Controls and Upload - MUST be before Material List */}
-            {ingestMode === 'audio' && (
-              <div className="audio-recording-container">
+                <div className="audio-recorder-content">
+                  <div className="audio-recording-container">
                 {/* Recording mode */}
                 {recordingMode === 'record' ? (
                   <div className="recording-controls">
@@ -776,14 +827,25 @@ function ProjectDetail() {
                       </div>
                     )}
                     {!isRecording && !recordingUploading && !recordingProcessing && !micPermissionError && (
-                      <button
-                        className="record-start-btn"
-                        onClick={startRecording}
-                        disabled={!navigator.mediaDevices || !window.MediaRecorder}
-                      >
-                        <Mic size={24} />
-                        <span>Starta inspelning</span>
-                      </button>
+                      <div className="audio-idle-placeholder">
+                        <div className="audio-idle-waveform">
+                          <div className="waveform-bar"></div>
+                          <div className="waveform-bar"></div>
+                          <div className="waveform-bar"></div>
+                          <div className="waveform-bar"></div>
+                          <div className="waveform-bar"></div>
+                        </div>
+                        <h4 className="audio-idle-title">Inspelning</h4>
+                        <p className="audio-idle-status">Redo att spela in</p>
+                        <button
+                          className="record-start-btn"
+                          onClick={startRecording}
+                          disabled={!navigator.mediaDevices || !window.MediaRecorder}
+                        >
+                          <Mic size={24} />
+                          <span>Starta inspelning</span>
+                        </button>
+                      </div>
                     )}
                     {isRecording && (
                       <div className="recording-active">
@@ -852,15 +914,25 @@ function ProjectDetail() {
                 ) : (
                   /* Upload mode - existing file input */
                   <div 
-                    className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''}`}
+                    className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''} ${isDraggingAudio ? 'dragging' : ''}`}
                     onClick={() => audioInputRef.current?.click()}
+                    onDragOver={handleAudioDragOver}
+                    onDragLeave={handleAudioDragLeave}
+                    onDrop={handleAudioDrop}
                   >
                     <input
                       ref={audioInputRef}
                       type="file"
                       accept="audio/*"
                       onChange={handleAudioSelect}
-                      style={{ display: 'none' }}
+                      style={{ 
+                        position: 'absolute',
+                        width: '1px',
+                        height: '1px',
+                        opacity: 0,
+                        overflow: 'hidden',
+                        zIndex: -1
+                      }}
                     />
                     <div className="dropzone-content">
                       {recordingUploading || recordingProcessing ? (
@@ -880,22 +952,24 @@ function ProjectDetail() {
                   </div>
                 )}
                 
-                {/* Success message */}
-                {recordingSuccess && (
-                  <div className="recording-success">
-                    <p>Inspelning sparad!</p>
-                    <Link to={`/projects/${id}/documents/${recordingSuccess.documentId}`}>
-                      Öppna dokument
-                    </Link>
+                    {/* Success message */}
+                    {recordingSuccess && (
+                      <div className="recording-success">
+                        <p>Klart</p>
+                        <Link to={`/projects/${id}/documents/${recordingSuccess.documentId}`}>
+                          Öppna dokument
+                        </Link>
+                      </div>
+                    )}
+                    
+                    {/* Error message */}
+                    {recordingError && (
+                      <div className="recording-error">
+                        <p>{recordingError}</p>
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                {/* Error message */}
-                {recordingError && (
-                  <div className="recording-error">
-                    <p>{recordingError}</p>
-                  </div>
-                )}
+                </div>
               </div>
             )}
 
