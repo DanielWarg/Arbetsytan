@@ -164,7 +164,7 @@ Svarar på frågan:
 * Innehåller inget råmaterial
 * Kan visas utan att röja innehåll
 
-Status: **SKA BYGGAS (steg 2)**
+Status: **✅ KLART**
 
 ---
 
