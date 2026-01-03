@@ -462,12 +462,12 @@ function ProjectDetail() {
     }
   }
 
-  const handleDeleteSource = async (sourceId, sourceName) => {
+  const handleDeleteSource = async (sourceId) => {
     setDeleteConfirm({ 
       show: true, 
       type: 'source', 
       id: sourceId, 
-      name: sourceName 
+      name: '' // Titel hämtas från state i render-lagret
     })
   }
 
@@ -484,6 +484,9 @@ function ProjectDetail() {
   const confirmDelete = async () => {
     if (!deleteConfirm.id) return
     
+    const apiBase = import.meta.env.VITE_API_URL || 
+      (import.meta.env.DEV ? 'http://localhost:8000' : '')
+    
     setDeleting(true)
     let success = false
     
@@ -492,9 +495,18 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const endpoint = deleteConfirm.type === 'document' 
-        ? `http://localhost:8000/api/documents/${deleteConfirm.id}`
-        : `http://localhost:8000/api/projects/${id}/sources/${deleteConfirm.id}`
+      let endpoint = ''
+      
+      switch (deleteConfirm.type) {
+        case 'document':
+          endpoint = `${apiBase}/api/documents/${deleteConfirm.id}`
+          break
+        case 'source':
+          endpoint = `${apiBase}/api/projects/${id}/sources/${deleteConfirm.id}`
+          break
+        default:
+          throw new Error('Unknown delete type')
+      }
       
       const response = await fetch(endpoint, {
         method: 'DELETE',
@@ -572,56 +584,55 @@ function ProjectDetail() {
 
   return (
     <div className="project-detail-page">
-      <div className="workspace-container">
-        <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
-        <div className="projects-header">
-          <div className="project-title-section">
-            <h2 className="projects-title">{project.name}</h2>
-            {(() => {
-              const u = getDueUrgency(project.due_date)
-              if (!u.normalizedDate) return null
-              return (
-                <div className="project-header-due-date">
-                  <span className="project-due-date-muted">{u.normalizedDate}</span>
-                  {u.label && (
-                    <Badge variant="normal" className={`deadline-badge ${u.variant}`}>
-                      {u.label}
-                    </Badge>
-                  )}
-                </div>
-              )
-            })()}
-          </div>
-          <div className="project-status-section">
-            <label className="project-status-label">Status:</label>
-            <select 
-              className="project-status-select"
-              value={project.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              disabled={updatingStatus}
-            >
-              <option value="research">Research</option>
-              <option value="processing">Bearbetning</option>
-              <option value="fact_check">Faktakoll</option>
-              <option value="ready">Klar</option>
-              <option value="archived">Arkiverad</option>
-            </select>
-          </div>
-          <div className="project-header-actions">
-            <button 
-              className="project-action-btn"
-              onClick={() => setShowEditModal(true)}
-              title="Redigera projekt"
-            >
-              <Edit size={18} />
-              <span>Redigera</span>
-            </button>
-          </div>
+      <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
+      <div className="projects-header">
+        <div className="project-title-section">
+          <h2 className="projects-title">{project.name}</h2>
+          {(() => {
+            const u = getDueUrgency(project.due_date)
+            if (!u.normalizedDate) return null
+            return (
+              <div className="project-header-due-date">
+                <span className="project-due-date-muted">{u.normalizedDate}</span>
+                {u.label && (
+                  <Badge variant="normal" className={`deadline-badge ${u.variant}`}>
+                    {u.label}
+                  </Badge>
+                )}
+              </div>
+            )
+          })()}
         </div>
+        <div className="project-status-section">
+          <label className="project-status-label">Status:</label>
+          <select 
+            className="project-status-select"
+            value={project.status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={updatingStatus}
+          >
+            <option value="research">Research</option>
+            <option value="processing">Bearbetning</option>
+            <option value="fact_check">Faktakoll</option>
+            <option value="ready">Klar</option>
+            <option value="archived">Arkiverad</option>
+          </select>
+        </div>
+        <div className="project-header-actions">
+          <button 
+            className="project-action-btn"
+            onClick={() => setShowEditModal(true)}
+            title="Redigera projekt"
+          >
+            <Edit size={18} />
+            <span>Redigera</span>
+          </button>
+        </div>
+      </div>
 
-      <div className="project-workspace">
-        {/* Main Workspace - Full Width */}
-        <div className="workspace-main workspace-main-full">
+      <div className="workspace-container">
+        {/* Main Workspace */}
+        <div className="workspace-main">
           <div className="material-section">
             {/* Toolbar - Small, secondary */}
             <div className="ingest-toolbar">
@@ -952,7 +963,52 @@ function ProjectDetail() {
           </div>
         </div>
 
+        {/* Sidebar - Källor */}
+        <div className="workspace-sidebar">
+          <div className="sidebar-section">
+            <div className="sidebar-section-header">
+              <h3 className="sidebar-section-title">Källor</h3>
+              <button 
+                className="btn-add-source" 
+                onClick={() => setShowAddSourceModal(true)}
+                title="Lägg till källa"
+              >
+                + Lägg till
+              </button>
+            </div>
+
+            {sources.length === 0 ? (
+              <p className="sources-empty">Inga källor tillagda</p>
+            ) : (
+              <div className="sources-list">
+                {sources.map(source => (
+                  <div key={source.id} className="source-item">
+                    <div className="source-header">
+                      <span className="source-type-badge">
+                        {getSourceTypeLabel(source.type)}
+                      </span>
+                      <button 
+                        className="source-delete-btn"
+                        onClick={() => handleDeleteSource(source.id)}
+                        title="Radera källa"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="source-title">{source.title}</div>
+                    {source.comment && (
+                      <div className="source-comment">{source.comment}</div>
+                    )}
+                    <div className="source-date">
+                      {new Date(source.created_at).toLocaleDateString('sv-SE')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
       </div>
       
       {/* Edit Project Modal (includes delete functionality) */}
@@ -982,7 +1038,11 @@ function ProjectDetail() {
             Radera {deleteConfirm.type === 'document' ? 'dokument' : 'källa'}?
           </h3>
           <p className="delete-confirmation-text">
-            Är du säker på att du vill radera <strong>{deleteConfirm.name}</strong>?
+            Är du säker på att du vill radera <strong>{
+              deleteConfirm.type === 'source' 
+                ? sources.find(s => s.id === deleteConfirm.id)?.title || 'denna källa'
+                : deleteConfirm.name
+            }</strong>?
           </p>
           <p className="delete-confirmation-warning">
             Denna åtgärd kan inte ångras.
