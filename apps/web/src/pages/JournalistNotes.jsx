@@ -455,15 +455,6 @@ function JournalistNotes({ projectId }) {
         <div className="notes-list-column">
           <div className="notes-list-header">
             <h3 className="notes-list-title">Anteckningar</h3>
-            {notes.length > 0 && (
-              <button 
-                className="btn-create-note"
-                onClick={createNote}
-                title="Ny anteckning"
-              >
-                <Plus size={16} />
-              </button>
-            )}
           </div>
           
           <div className="notes-list">
@@ -628,11 +619,6 @@ function JournalistNotes({ projectId }) {
               {notes.length === 0 && (
                 <div className="editor-empty">
                   <FileText size={48} className="editor-empty-icon" />
-                  <p className="editor-empty-text">Välj en anteckning eller skapa en ny</p>
-                  <button className="btn-create-note-large" onClick={createNote}>
-                    <Plus size={20} />
-                    <span>Ny anteckning</span>
-                  </button>
                 </div>
               )}
             </>

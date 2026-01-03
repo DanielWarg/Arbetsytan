@@ -1079,13 +1079,6 @@ function ProjectDetail() {
               </div>
             )}
 
-            {/* Anteckningar - Always under documents in document mode */}
-            {ingestMode === 'document' && (
-              <div className="material-notes-section">
-                <JournalistNotes projectId={id} />
-              </div>
-            )}
-
             {/* Journalist Notes View - Full view when in note mode */}
             {ingestMode === 'note' && (
               <JournalistNotes projectId={id} />
