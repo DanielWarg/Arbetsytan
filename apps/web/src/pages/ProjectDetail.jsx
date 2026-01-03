@@ -29,6 +29,13 @@ function ProjectDetail() {
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: null, id: null, name: '' })
   const [deleting, setDeleting] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportSettings, setExportSettings] = useState({
+    includeMetadata: true,
+    includeTranscripts: false,
+    includeNotes: false
+  })
+  const [exporting, setExporting] = useState(false)
   const fileInputRef = useRef(null)
   
   // Recording states
@@ -481,6 +488,47 @@ function ProjectDetail() {
     })
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const params = new URLSearchParams({
+        include_metadata: exportSettings.includeMetadata,
+        include_transcripts: exportSettings.includeTranscripts,
+        include_notes: exportSettings.includeNotes
+      })
+      
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/export?${params}`, {
+        headers: {
+          'Authorization': `Basic ${auth}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Exporten misslyckades')
+      }
+      
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `project_${id}_export.md`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      setShowExportModal(false)
+    } catch (err) {
+      alert('Kunde inte skapa exportfilen. Försök igen.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const confirmDelete = async () => {
     if (!deleteConfirm.id) return
     
@@ -626,6 +674,14 @@ function ProjectDetail() {
           >
             <Edit size={18} />
             <span>Redigera</span>
+          </button>
+          <button 
+            className="project-action-btn"
+            onClick={() => setShowExportModal(true)}
+            title="Ladda ner projektet som fil"
+          >
+            <FileText size={18} />
+            <span>Exportera</span>
           </button>
         </div>
       </div>
@@ -1129,6 +1185,82 @@ function ProjectDetail() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Export Modal */}
+      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Exportera projekt">
+        <div className="export-modal">
+            <p className="export-description">
+              Ladda ner en Markdown-fil som kan lämnas vidare eller arkiveras.
+            </p>
+            
+            <h3 className="export-section-title">Innehåll</h3>
+            
+            <div className="export-toggles">
+              <div className="export-toggle-item">
+                <label>
+                  <input 
+                    type="checkbox"
+                    checked={exportSettings.includeMetadata}
+                    onChange={(e) => setExportSettings({...exportSettings, includeMetadata: e.target.checked})}
+                  />
+                  <div className="export-toggle-text">
+                    <span className="export-toggle-label">Inkludera metadata</span>
+                    <span className="export-toggle-help">Projektinfo, status och källor.</span>
+                  </div>
+                </label>
+              </div>
+              
+              <div className="export-toggle-item">
+                <label>
+                  <input 
+                    type="checkbox"
+                    checked={exportSettings.includeTranscripts}
+                    onChange={(e) => setExportSettings({...exportSettings, includeTranscripts: e.target.checked})}
+                  />
+                  <div className="export-toggle-text">
+                    <span className="export-toggle-label">Inkludera röstmemo och transkript</span>
+                    <span className="export-toggle-help">Sanerat material. Endast om du aktivt väljer det.</span>
+                  </div>
+                </label>
+              </div>
+              
+              <div className="export-toggle-item export-toggle-sensitive">
+                <label>
+                  <input 
+                    type="checkbox"
+                    checked={exportSettings.includeNotes}
+                    onChange={(e) => setExportSettings({...exportSettings, includeNotes: e.target.checked})}
+                  />
+                  <div className="export-toggle-text">
+                    <span className="export-toggle-label">Inkludera privata anteckningar</span>
+                    <span className="export-toggle-help export-toggle-help-warning">Privat material. Ingår inte som standard.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+            
+            <p className="export-privacy-notice">
+              <strong>Integritet:</strong> Export påverkar inte originalet. Systemets loggar och händelser innehåller aldrig innehåll, endast metadata.
+            </p>
+            
+            <div className="export-modal-actions">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowExportModal(false)}
+                disabled={exporting}
+              >
+                Avbryt
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleExport}
+                disabled={exporting}
+              >
+                {exporting ? 'Exporterar…' : 'Ladda ner'}
+              </button>
+            </div>
+          </div>
       </Modal>
     </div>
   )

@@ -195,7 +195,7 @@ Ge känslan av att projektet kan **lämnas vidare**.
 * Ingen CMS-integration
 * Ingen delning i systemet
 
-Status: **SKA BYGGAS (steg 3)**
+Status: **✅ KLART**
 
 ---
 

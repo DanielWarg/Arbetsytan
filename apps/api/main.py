@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Query
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 import os
@@ -1255,6 +1256,144 @@ async def delete_journalist_note(
     
     db.commit()
     return None
+
+
+@app.get("/api/projects/{project_id}/export")
+async def export_project_markdown(
+    project_id: int,
+    include_metadata: bool = Query(True),
+    include_transcripts: bool = Query(False),
+    include_notes: bool = Query(False),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Export project as Markdown. Notes OFF by default for privacy."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Fetch data
+    documents = db.query(Document).filter(Document.project_id == project_id).order_by(Document.created_at).all()
+    transcripts = db.query(ProjectNote).filter(ProjectNote.project_id == project_id).order_by(ProjectNote.created_at).all()
+    sources = db.query(ProjectSource).filter(ProjectSource.project_id == project_id).order_by(ProjectSource.created_at).all()
+    journalist_notes = db.query(JournalistNote).filter(JournalistNote.project_id == project_id).order_by(JournalistNote.created_at).all()
+    
+    # Build Markdown (follow template exactly)
+    md = f"# Projekt: {project.name}\n\n"
+    
+    # Project metadata (only if include_metadata=true)
+    if include_metadata:
+        md += f"Projekt-ID: {project.id}\n"
+        md += f"Status: {project.status.value}\n"
+        md += f"Skapad: {project.created_at.strftime('%Y-%m-%d')}\n"
+        md += f"Uppdaterad: {project.updated_at.strftime('%Y-%m-%d')}\n\n"
+    else:
+        md += "\n"
+    
+    # Export settings
+    md += "## Exportinställningar\n\n"
+    md += f"Inkludera metadata: {include_metadata}\n"
+    md += f"Inkludera röstmemo/transkript: {include_transcripts}\n"
+    md += f"Inkludera anteckningar: {include_notes}\n"
+    if include_metadata:
+        md += f"Skapad av: {username}\n"
+    md += f"Exportdatum: {datetime.now().strftime('%Y-%m-%d')}\n\n"
+    
+    # Sources (only if include_metadata=true)
+    md += "## Källor\n\n"
+    if include_metadata:
+        md += "(Detta är metadata som journalisten manuellt har lagt till.)\n\n"
+        if sources:
+            for src in sources:
+                type_label = {"link": "Länk", "person": "Person", "document": "Dokument", "other": "Övrigt"}.get(src.type.value, src.type.value)
+                md += f"**{type_label}** — {src.title}\n"
+                if src.comment:
+                    md += f"Kommentar: {src.comment}\n"
+                md += f"Skapad: {src.created_at.strftime('%Y-%m-%d')}\n\n"
+        else:
+            md += "*(Inget att visa)*\n\n"
+    else:
+        md += "*(Ej inkluderat i denna export)*\n\n"
+    
+    # Documents (always included)
+    md += "## Dokument\n\n"
+    if documents:
+        for doc in documents:
+            md += f"### {doc.filename}\n\n"
+            if include_metadata:
+                md += f"Dokument-ID: {doc.id}\n"
+            md += f"Skapad: {doc.created_at.strftime('%Y-%m-%d')}\n\n"
+            md += f"{doc.masked_text}\n\n"
+    else:
+        md += "*(Inget att visa)*\n\n"
+    
+    # Transcripts (only if toggled)
+    md += "## Röstmemo / Transkript\n\n"
+    if include_transcripts:
+        if transcripts:
+            for trans in transcripts:
+                title = trans.title if trans.title else "Namnlöst transkript"
+                md += f"### {title}\n\n"
+                if include_metadata:
+                    md += f"Transkript-ID: {trans.id}\n"
+                md += f"Skapad: {trans.created_at.strftime('%Y-%m-%d')}\n\n"
+                md += f"{trans.masked_body}\n\n"
+        else:
+            md += "*(Inget att visa)*\n\n"
+    else:
+        md += "*(Ej inkluderat i denna export)*\n\n"
+    
+    # Notes (only if explicitly toggled, OFF by default)
+    md += "## Anteckningar\n\n"
+    if include_notes:
+        if journalist_notes:
+            for note in journalist_notes:
+                title = note.title if note.title else "Namnlös anteckning"
+                md += f"### {title}\n\n"
+                if include_metadata:
+                    md += f"Antecknings-ID: {note.id}\n"
+                    md += f"Kategori: {note.category.value}\n"
+                md += f"Skapad: {note.created_at.strftime('%Y-%m-%d')}\n"
+                md += f"Uppdaterad: {note.updated_at.strftime('%Y-%m-%d')}\n\n"
+                md += f"{note.body}\n\n"
+        else:
+            md += "*(Inget att visa)*\n\n"
+    else:
+        md += "*(Ej inkluderat i denna export)*\n\n"
+    
+    # Footer
+    md += "---\n\n"
+    md += "## Integritetsnotis\n\n"
+    md += "Denna export kan innehålla sanerat material från dokument och (om valt) transkript.\n"
+    md += "Privata anteckningar inkluderas inte som standard.\n"
+    md += "Systemets events/loggar innehåller aldrig innehåll, endast metadata.\n"
+    
+    # Log event (metadata only, NO CONTENT)
+    event_metadata = _safe_event_metadata({
+        "format": "markdown",
+        "include_metadata": include_metadata,
+        "include_transcripts": include_transcripts,
+        "include_notes": include_notes
+    }, context="audit")
+    
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="export_created",
+        actor=username,
+        event_metadata=event_metadata
+    )
+    db.add(event)
+    db.commit()
+    
+    logger.info(f"Project {project_id} exported (format=markdown, notes={include_notes}, transcripts={include_transcripts})")
+    
+    # Return as downloadable file
+    filename = f"project_{project_id}_export.md"
+    return PlainTextResponse(
+        content=md,
+        media_type="text/markdown",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @app.post("/api/journalist-notes/{note_id}/images", response_model=JournalistNoteImageResponse, status_code=201)
