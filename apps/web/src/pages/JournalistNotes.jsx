@@ -455,6 +455,13 @@ function JournalistNotes({ projectId }) {
         <div className="notes-list-column">
           <div className="notes-list-header">
             <h3 className="notes-list-title">Anteckningar</h3>
+            <button
+              className="btn-create-note"
+              onClick={createNote}
+              title="Skapa ny anteckning"
+            >
+              <Plus size={16} />
+            </button>
           </div>
           
           <div className="notes-list">
