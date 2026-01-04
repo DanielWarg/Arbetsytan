@@ -256,6 +256,9 @@ function JournalistNotes({ projectId }) {
       const newNote = await response.json()
       setActiveNoteId(newNote.id)
       await fetchNotes()
+      // Öppna redigeringsläget direkt för ny anteckning
+      await fetchNote(newNote.id)
+      setShowEditModal(true)
     } catch (err) {
       console.error('Error creating note:', err)
       alert(err.message || 'Kunde inte skapa anteckning')
