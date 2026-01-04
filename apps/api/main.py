@@ -1983,7 +1983,7 @@ async def create_project_from_scout_item(
     Create a project from a single Scout item.
     Creates a project with the item's title and imports the item as a document.
     """
-    from text_processing import normalize_text, mask_text, pii_gate_check, SanitizeLevel
+    from text_processing import normalize_text, mask_text, pii_gate_check
     
     try:
         # Get Scout item
