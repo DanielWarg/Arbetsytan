@@ -153,7 +153,7 @@ function ProjectsList() {
   const fetchScoutModalItems = useCallback(async () => {
     setScoutModalLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=50', {
+      const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
         headers: {
           'Authorization': `Basic ${scoutAuth}`
         }
@@ -343,7 +343,7 @@ function ProjectsList() {
       {/* Scout - Full Width */}
       <Card className="overview-card overview-card-fullwidth scout-card-fullwidth">
         <div className="overview-card-header">
-          <h3 className="overview-card-title">Scout – senaste 24h</h3>
+          <h3 className="overview-card-title">Scout – senaste 7 dagar</h3>
         </div>
         <div className="overview-card-content">
             {scoutItems.length > 0 ? (
@@ -592,7 +592,7 @@ function ProjectsList() {
       <Modal
         isOpen={showScoutModal}
         onClose={() => setShowScoutModal(false)}
-        title="Scout"
+        title="Scout – Senaste 7 dagar"
       >
         <div className="scout-modal-content">
           <div className="scout-modal-tabs">
@@ -600,7 +600,7 @@ function ProjectsList() {
               className={`scout-modal-tab ${scoutModalActiveTab === 'items' ? 'active' : ''}`}
               onClick={() => setScoutModalActiveTab('items')}
             >
-              Senaste 24h
+              Senaste 7 dagar
             </button>
             <button
               className={`scout-modal-tab ${scoutModalActiveTab === 'feeds' ? 'active' : ''}`}
@@ -653,7 +653,7 @@ function ProjectsList() {
                   ))}
                 </div>
               ) : (
-                <p className="scout-modal-empty">Inga leads hittades för de senaste 24 timmarna.</p>
+                <p className="scout-modal-empty">Inga leads hittades för de senaste 7 dagarna.</p>
               )}
             </div>
           )}
