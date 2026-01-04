@@ -6,7 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -172,7 +172,7 @@ function ProjectsList() {
       </Card>
 
       {/* Dina Projekt - Full Width */}
-      <Card className="overview-card overview-card-fullwidth">
+      <Card className="overview-card overview-card-fullwidth projects-card-fullwidth">
         <div className="overview-card-header">
           <h3 className="overview-card-title">Dina Projekt</h3>
         </div>
@@ -223,6 +223,10 @@ function ProjectsList() {
               })}
             </div>
           )}
+          <Link to="/projects" className="btn-overview">
+            <Eye size={16} />
+            <span>Visa alla</span>
+          </Link>
         </div>
       </Card>
 

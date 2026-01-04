@@ -102,6 +102,35 @@
   background: var(--color-text-muted);
 }
 
+/* Dina Projekt box - tight, same as Scout */
+.projects-card-fullwidth {
+  min-height: 240px;
+  max-height: 260px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.projects-card-fullwidth .overview-card-header {
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
+}
+
+.projects-card-fullwidth .overview-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-xs);
+}
+
+.projects-card-fullwidth .projects-list-compact {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  gap: 2px;
+  padding-right: var(--spacing-xs);
+  margin-bottom: 0;
+}
+
 .overview-card-header {
   display: flex;
   align-items: center;
@@ -317,6 +346,11 @@
   min-height: 0;
 }
 
+/* Override for fullwidth projects card */
+.projects-card-fullwidth .projects-list-compact {
+  gap: 2px;
+}
+
 .projects-list-compact::-webkit-scrollbar {
   width: 4px;
 }
@@ -350,6 +384,11 @@
   flex-direction: column;
   gap: var(--spacing-xs);
   padding: var(--spacing-xs) 0;
+}
+
+.projects-card-fullwidth .project-item-compact-content {
+  padding: 4px 0;
+  gap: 2px;
 }
 
 .project-item-main {
