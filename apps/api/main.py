@@ -1610,19 +1610,26 @@ async def list_scout_feeds(
     db: Session = Depends(get_db),
     username: str = Depends(verify_basic_auth)
 ):
-    """List all Scout feeds. Lazy seed: creates 3 defaults if table is empty."""
+    """List all Scout feeds. Lazy seed: creates default feeds if table is empty."""
     # Lazy seed: if no feeds exist, create defaults
     feed_count = db.query(ScoutFeed).count()
     if feed_count == 0:
         defaults = [
-            ScoutFeed(name="Göteborgs tingsrätt", url="", is_enabled=False),
-            ScoutFeed(name="Polisen Göteborg", url="", is_enabled=False),
-            ScoutFeed(name="TT", url="", is_enabled=False)
+            ScoutFeed(
+                name="Polisen – Händelser Västra Götaland",
+                url="https://polisen.se/aktuellt/rss/vastra-gotaland/handelser-rss---vastra-gotaland/",
+                is_enabled=True
+            ),
+            ScoutFeed(
+                name="Polisen – Pressmeddelanden Västra Götaland",
+                url="https://polisen.se/aktuellt/rss/vastra-gotaland/pressmeddelanden-rss---vastra-gotaland/",
+                is_enabled=True
+            )
         ]
         for feed in defaults:
             db.add(feed)
         db.commit()
-        logger.info("Scout: Created 3 default feeds (disabled)")
+        logger.info("Scout: Created 2 default feeds (both enabled)")
     
     feeds = db.query(ScoutFeed).all()
     return feeds
@@ -1690,12 +1697,11 @@ async def list_scout_items(
 
 @app.post("/api/scout/fetch")
 async def fetch_scout_feeds(
-    mode: str = Query("fixture", regex="^(fixture|live)$"),
     db: Session = Depends(get_db),
     username: str = Depends(verify_basic_auth)
 ):
     """Manually trigger RSS feed fetch."""
     from scout import fetch_all_feeds
     
-    results = fetch_all_feeds(db, mode=mode)
+    results = fetch_all_feeds(db)
     return {"feeds_processed": len(results), "results": results}
