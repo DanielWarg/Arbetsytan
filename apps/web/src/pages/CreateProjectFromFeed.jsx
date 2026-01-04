@@ -51,8 +51,8 @@ function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectNam
       }
       autoPreview()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialFeedUrl])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFeedUrl, feedUrl])
 
   const username = 'admin'
   const password = 'password'
