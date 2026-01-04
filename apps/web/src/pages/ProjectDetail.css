@@ -1742,7 +1742,9 @@
 
 /* Export Modal */
 .export-modal {
-  min-width: 520px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .export-description {
@@ -1832,4 +1834,5 @@
   gap: var(--spacing-md);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
