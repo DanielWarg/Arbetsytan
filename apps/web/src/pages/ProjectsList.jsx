@@ -136,10 +136,100 @@ function ProjectsList() {
         <h2 className="projects-title">Kontrollrum</h2>
       </div>
 
-      {/* Overview Grid */}
+      {/* Scout - Full Width */}
+      <Card className="overview-card overview-card-fullwidth scout-card-fullwidth">
+        <div className="overview-card-header">
+          <h3 className="overview-card-title">Scout – senaste 24h</h3>
+        </div>
+        <div className="overview-card-content">
+            {scoutItems.length > 0 ? (
+              <div className="scout-widget-list">
+                {scoutItems.slice(0, 6).map(item => (
+                <div key={item.id} className="scout-widget-item">
+                  <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
+                  <span className="scout-widget-title">{item.title}</span>
+                  <span className="scout-widget-time">
+                    {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
+                      month: 'short', 
+                      day: 'numeric', 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="overview-empty-state">
+              <p className="overview-empty-text">Inga leads</p>
+            </div>
+          )}
+          <Link to="/scout" className="btn-overview">
+            <Eye size={16} />
+            <span>Visa alla</span>
+          </Link>
+        </div>
+      </Card>
+
+      {/* Dina Projekt - Full Width */}
+      <Card className="overview-card overview-card-fullwidth">
+        <div className="overview-card-header">
+          <h3 className="overview-card-title">Dina Projekt</h3>
+        </div>
+        <div className="overview-card-content">
+          {filteredProjects.length === 0 ? (
+            <div className="overview-empty-state">
+              <p className="overview-empty-text">
+                {searchQuery ? 'Inga matchningar' : 'Inga projekt'}
+              </p>
+            </div>
+          ) : (
+            <div className="projects-list-compact">
+              {filteredProjects.map(project => {
+                const statusLabels = {
+                  'research': 'Research',
+                  'processing': 'Bearbetning',
+                  'fact_check': 'Faktakoll',
+                  'ready': 'Klar',
+                  'archived': 'Arkiverad'
+                }
+                const urgency = getDueUrgency(project.due_date)
+                
+                return (
+                  <Link 
+                    key={project.id} 
+                    to={`/projects/${project.id}`} 
+                    className="project-item-compact"
+                  >
+                    <div className="project-item-compact-content">
+                      <div className="project-item-main">
+                        <Folder size={14} className="project-item-icon" />
+                        <span className="project-item-name">{project.name}</span>
+                      </div>
+                      <div className="project-item-meta">
+                        <span className="project-status-badge">
+                          {statusLabels[project.status] || 'Research'}
+                        </span>
+                        {project.due_date && (
+                          <span className={`project-due-date-badge ${urgency.variant}`}>
+                            {urgency.normalizedDate}
+                            {urgency.label && ` • ${urgency.label}`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Overview Grid - Other Widgets */}
       <div className="overview-grid">
-        {/* Projekt Widget (Large) */}
-        <Card className="overview-card overview-card-large">
+        {/* Projekt Widget */}
+        <Card className="overview-card">
           <div className="overview-card-header">
             <h3 className="overview-card-title">Projekt</h3>
           </div>
@@ -213,41 +303,6 @@ function ProjectsList() {
           </div>
         </Card>
 
-        {/* Scout Widget */}
-        <Card className="overview-card">
-          <div className="overview-card-header">
-            <h3 className="overview-card-title">Scout – senaste 24h</h3>
-          </div>
-          <div className="overview-card-content">
-            {scoutItems.length > 0 ? (
-              <div className="scout-widget-list">
-                {scoutItems.slice(0, 5).map(item => (
-                  <div key={item.id} className="scout-widget-item">
-                    <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
-                    <span className="scout-widget-title">{item.title}</span>
-                    <span className="scout-widget-time">
-                      {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="overview-empty-state">
-                <p className="overview-empty-text">Inga leads</p>
-              </div>
-            )}
-            <Link to="/scout" className="btn-overview">
-              <Eye size={16} />
-              <span>Visa alla</span>
-            </Link>
-          </div>
-        </Card>
-
         {/* Fort Knox Widget (Placeholder) */}
         <Card className="overview-card">
           <div className="overview-card-header">
@@ -265,61 +320,6 @@ function ProjectsList() {
               <Lock size={16} />
               <span>Öppna Fort Knox</span>
             </button>
-          </div>
-        </Card>
-
-        {/* Dina Projekt Widget */}
-        <Card className="overview-card">
-          <div className="overview-card-header">
-            <h3 className="overview-card-title">Dina Projekt</h3>
-          </div>
-          <div className="overview-card-content">
-            {filteredProjects.length === 0 ? (
-              <div className="overview-empty-state">
-                <p className="overview-empty-text">
-                  {searchQuery ? 'Inga matchningar' : 'Inga projekt'}
-                </p>
-              </div>
-            ) : (
-              <div className="projects-list-compact">
-                {filteredProjects.map(project => {
-                  const statusLabels = {
-                    'research': 'Research',
-                    'processing': 'Bearbetning',
-                    'fact_check': 'Faktakoll',
-                    'ready': 'Klar',
-                    'archived': 'Arkiverad'
-                  }
-                  const urgency = getDueUrgency(project.due_date)
-                  
-                  return (
-                    <Link 
-                      key={project.id} 
-                      to={`/projects/${project.id}`} 
-                      className="project-item-compact"
-                    >
-                      <div className="project-item-compact-content">
-                        <div className="project-item-main">
-                          <Folder size={14} className="project-item-icon" />
-                          <span className="project-item-name">{project.name}</span>
-                        </div>
-                        <div className="project-item-meta">
-                          <span className="project-status-badge">
-                            {statusLabels[project.status] || 'Research'}
-                          </span>
-                          {project.due_date && (
-                            <span className={`project-due-date-badge ${urgency.variant}`}>
-                              {urgency.normalizedDate}
-                              {urgency.label && ` • ${urgency.label}`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
           </div>
         </Card>
 

@@ -46,6 +46,55 @@
   }
 }
 
+/* Full width cards (Scout and Dina Projekt) */
+.overview-card-fullwidth {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: var(--spacing-xl);
+  min-height: auto;
+  max-height: none;
+  height: auto;
+}
+
+/* Scout box - tight, shows 6 items */
+.scout-card-fullwidth {
+  min-height: 280px;
+  max-height: 300px;
+}
+
+.scout-card-fullwidth .overview-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.scout-card-fullwidth .scout-widget-list {
+  flex: 1;
+  overflow: hidden;
+  margin-bottom: var(--spacing-sm);
+  padding-right: var(--spacing-xs);
+}
+
+/* Custom scrollbar for scout list */
+.scout-card-fullwidth .scout-widget-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scout-card-fullwidth .scout-widget-list::-webkit-scrollbar-track {
+  background: var(--color-bg-subtle);
+  border-radius: 3px;
+}
+
+.scout-card-fullwidth .scout-widget-list::-webkit-scrollbar-thumb {
+  background: var(--color-border-default);
+  border-radius: 3px;
+}
+
+.scout-card-fullwidth .scout-widget-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
 .overview-card-header {
   display: flex;
   align-items: center;
@@ -691,7 +740,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .scout-widget-item {
@@ -702,7 +751,13 @@
   overflow: hidden;
   font-size: var(--font-size-xs);
   font-family: var(--font-sans);
-  padding: var(--spacing-xs) 0;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.2s;
+}
+
+.scout-widget-item:hover {
+  background-color: var(--color-bg-subtle);
 }
 
 .scout-widget-badge {
@@ -726,25 +781,28 @@
 }
 
 .btn-overview {
-  margin-top: auto;
-  padding: var(--spacing-md) var(--spacing-lg);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-sm);
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-sm);
-  background: var(--color-interactive-default);
-  color: var(--color-interactive-text);
-  border: none;
+  gap: var(--spacing-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
   text-decoration: none;
   font-family: var(--font-sans);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-normal);
+  align-self: flex-start;
 }
 
 .btn-overview:hover {
-  opacity: 0.9;
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+  background-color: var(--color-bg-subtle);
 }
