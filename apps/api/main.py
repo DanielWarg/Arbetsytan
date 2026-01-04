@@ -9,7 +9,7 @@ import os
 import uuid
 import shutil
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -54,6 +54,64 @@ from text_processing import (
     transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
     sanitize_journalist_note
 )
+
+
+def run_sanitize_pipeline(raw_text: str) -> Dict:
+    """
+    Run full sanitization pipeline on raw text (same as document ingest).
+    
+    Returns:
+        Dict with keys: ok (bool), masked_text (str), sanitize_level (SanitizeLevel),
+        pii_gate_reasons (dict or None), usage_restrictions (dict)
+        
+    Raises:
+        Exception if pipeline fails (fail-closed)
+    """
+    # Normalize
+    normalized_text = normalize_text(raw_text)
+    
+    # Progressive sanitization
+    pii_gate_reasons = {}
+    sanitize_level = SanitizeLevel.NORMAL
+    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+    masked_text = None
+    
+    # Try normal masking
+    masked_text = mask_text(normalized_text, level="normal")
+    is_safe, reasons = pii_gate_check(masked_text)
+    if is_safe:
+        sanitize_level = SanitizeLevel.NORMAL
+        pii_gate_reasons = None
+    else:
+        pii_gate_reasons["normal"] = reasons
+        
+        # Try strict masking
+        masked_text = mask_text(normalized_text, level="strict")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.STRICT
+            usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+        else:
+            pii_gate_reasons["strict"] = reasons
+            
+            # Use paranoid masking
+            masked_text = mask_text(normalized_text, level="paranoid")
+            is_safe, reasons = pii_gate_check(masked_text)
+            
+            if not is_safe:
+                # Fail-closed: this should never happen, but if it does, raise
+                raise Exception(f"Paranoid masking failed PII gate: {reasons}")
+            
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    return {
+        "ok": True,
+        "masked_text": masked_text,
+        "sanitize_level": sanitize_level,
+        "pii_gate_reasons": pii_gate_reasons,
+        "usage_restrictions": usage_restrictions
+    }
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -1739,11 +1797,11 @@ async def preview_feed(
     Preview a feed without creating a project.
     Returns feed metadata and items (no storage).
     """
-    from feeds import validate_and_fetch, parse_feed
+    from feeds import fetch_feed_url, parse_feed
     
     try:
         # Fetch and validate URL (SSRF protection)
-        content = validate_and_fetch(url)
+        content = fetch_feed_url(url)
         
         # Parse feed
         feed_data = parse_feed(content)
@@ -1781,28 +1839,37 @@ async def create_project_from_feed(
 ):
     """
     Create a project from a feed URL.
-    Imports feed items as documents using the same ingest pipeline as regular documents.
+    Creates Project with description/tags, ProjectSource with URL, ProjectNote with fulltext,
+    and Document - all using the same ingest pipeline.
     """
-    from feeds import validate_and_fetch, parse_feed
+    from feeds import fetch_feed_url, parse_feed, fetch_article_text, derive_tags
+    import hashlib
     
     try:
         # Fetch and parse feed
-        content = validate_and_fetch(request.url)
+        content = fetch_feed_url(request.url)
         feed_data = parse_feed(content)
         
         # Determine project name
         project_name = request.project_name or feed_data['title'] or "Feed Import"
         
-        # Check if project with same name already exists (for dedupe within same project)
+        # Derive tags
+        tags = derive_tags(feed_data['title'], request.url)
+        
+        # Create project description
+        description = f"Imported from RSS feed: {feed_data['title']}. Feed URL: {request.url}"
+        
+        # Check if project with same name already exists
         db_project = db.query(Project).filter(Project.name == project_name).first()
         
         if not db_project:
             # Create new project
             db_project = Project(
                 name=project_name,
-                description=feed_data.get('description'),
+                description=description,
                 classification=Classification.NORMAL,
-                status=ProjectStatus.RESEARCH
+                status=ProjectStatus.RESEARCH,
+                tags=tags
             )
             db.add(db_project)
             db.commit()
@@ -1817,130 +1884,155 @@ async def create_project_from_feed(
             )
             db.add(event)
             db.commit()
+        else:
+            # Update existing project description/tags if needed
+            if not db_project.description or "Imported from RSS" not in db_project.description:
+                db_project.description = description
+            if not db_project.tags:
+                db_project.tags = tags
+            db.commit()
         
-        # Create initial event
-        event = ProjectEvent(
-            project_id=db_project.id,
-            event_type="project_created",
-            actor=username,
-            event_metadata=_safe_event_metadata({"name": project_name, "source": "feed_import"}, context="audit")
-        )
         # Process feed items
-        created_count = 0
+        created_documents = 0
+        created_notes = 0
+        created_sources = 0
         skipped_duplicates = 0
         items_to_process = feed_data['items'][:request.limit]
         
         for item in items_to_process:
+            item_guid = item.get('guid') or None
+            item_link = item.get('link') or ''
+            
             # Dedupe: check if document with same guid or link already exists in project
             existing_doc = None
-            if item['guid']:
+            if item_guid:
                 # Check by guid first (PostgreSQL JSONB query)
                 from sqlalchemy import func
                 existing_doc = db.query(Document).filter(
                     Document.project_id == db_project.id,
                     Document.document_metadata.isnot(None),
-                    func.jsonb_extract_path_text(Document.document_metadata, 'item_guid') == item['guid']
+                    func.jsonb_extract_path_text(Document.document_metadata, 'item_guid') == item_guid
                 ).first()
             
-            if not existing_doc and item['link']:
+            if not existing_doc and item_link:
                 # Check by link if guid didn't match
                 existing_doc = db.query(Document).filter(
                     Document.project_id == db_project.id,
                     Document.document_metadata.isnot(None),
-                    func.jsonb_extract_path_text(Document.document_metadata, 'item_link') == item['link']
+                    func.jsonb_extract_path_text(Document.document_metadata, 'item_link') == item_link
                 ).first()
             
             if existing_doc:
                 skipped_duplicates += 1
                 continue
             
-            # Build raw content
-            published_str = item['published'] or ''
-            raw_content = f"{item['title']}\n{published_str}\n{item['link']}\n\n{item['summary_text']}"
+            # Fetch article text (fulltext or summary)
+            article_text = ""
+            mode = request.mode or "fulltext"  # Default to fulltext if not specified
+            logger.info(f"Processing item with mode={mode}, link={item_link}")
             
-            # Run ingest pipeline (same as document upload)
-            normalized_text = normalize_text(raw_content)
+            if mode == "fulltext" and item_link:
+                logger.info(f"Fetching fulltext for item: {item_link}")
+                try:
+                    article_text = fetch_article_text(item_link)
+                    logger.info(f"Fetched article text length: {len(article_text)} chars")
+                except Exception as e:
+                    logger.error(f"Failed to fetch article text: {e}")
+                    article_text = ""
             
-            # Progressive sanitization pipeline
-            pii_gate_reasons = {}
-            sanitize_level = SanitizeLevel.NORMAL
-            usage_restrictions = {"ai_allowed": True, "export_allowed": True}
-            masked_text = None
+            # Fallback to summary if fulltext is empty
+            if not article_text:
+                logger.warning(f"Fulltext extraction returned empty, using summary for: {item_link}")
+                article_text = item.get('summary_text', '')
+                logger.info(f"Using summary text length: {len(article_text)} chars")
             
-            # Try normal masking
-            masked_text = mask_text(normalized_text, level="normal")
-            is_safe, reasons = pii_gate_check(masked_text)
-            if is_safe:
-                sanitize_level = SanitizeLevel.NORMAL
-                pii_gate_reasons = None
-            else:
-                pii_gate_reasons["normal"] = reasons
-                
-                # Try strict masking
-                masked_text = mask_text(normalized_text, level="strict")
-                is_safe, reasons = pii_gate_check(masked_text)
-                if is_safe:
-                    sanitize_level = SanitizeLevel.STRICT
-                    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
-                else:
-                    pii_gate_reasons["strict"] = reasons
-                    
-                    # Use paranoid masking
-                    masked_text = mask_text(normalized_text, level="paranoid")
-                    is_safe, reasons = pii_gate_check(masked_text)
-                    
-                    if not is_safe:
-                        # This should never happen - paranoid must guarantee gate pass
-                        logger.error(f"Paranoid masking failed PII gate for feed item: {item['guid']}")
-                        continue  # Skip this item
-                    
-                    sanitize_level = SanitizeLevel.PARANOID
-                    usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+            # Build raw content (deterministic format)
+            published_str = item.get('published') or ''
+            raw_content = f"{item['title']}\n{published_str}\n{item_link}\n\n{article_text}\n\nKälla: {item_link}"
             
-            # Create a temporary file (required by Document model)
-            file_id = str(uuid.uuid4())
-            temp_txt_path = UPLOAD_DIR / f"{file_id}.txt"
+            # Run sanitize pipeline (fail-closed)
             try:
-                with open(temp_txt_path, 'w', encoding='utf-8') as f:
-                    f.write(raw_content)
+                pipeline_result = run_sanitize_pipeline(raw_content)
             except Exception as e:
-                logger.error(f"Failed to create temp file for feed item: {str(e)}")
-                continue
+                logger.error(f"Pipeline failed for feed item {item_link}: {e}")
+                continue  # Skip this item (fail-closed)
             
-            # Move to permanent location
+            # Generate stable filename
+            if item_guid:
+                filename = f"feed_{item_guid[:8]}.txt"
+            else:
+                # Hash link for stable filename
+                link_hash = hashlib.sha256(item_link.encode()).hexdigest()[:8]
+                filename = f"feed_{link_hash}.txt"
+            
+            # Create file on disk (required by Document model)
+            file_id = str(uuid.uuid4())
             permanent_path = UPLOAD_DIR / f"{file_id}.txt"
             try:
-                shutil.move(str(temp_txt_path), str(permanent_path))
+                with open(permanent_path, 'w', encoding='utf-8') as f:
+                    f.write(raw_content)
             except Exception as e:
-                logger.error(f"Failed to move temp file: {str(e)}")
-                if temp_txt_path.exists():
-                    os.remove(temp_txt_path)
+                logger.error(f"Failed to create file for feed item: {str(e)}")
                 continue
             
-            # Create document with metadata
-            guid_short = item['guid'][:8] if item['guid'] else str(uuid.uuid4())[:8]
+            # Create Document
+            doc_metadata = {
+                "source_type": "feed",
+                "feed_url": request.url,
+                "feed_title": feed_data['title'],
+                "item_guid": item_guid,
+                "item_link": item_link,
+                "published": published_str
+            }
+            
             db_document = Document(
                 project_id=db_project.id,
-                filename=f"feed_item_{guid_short}.txt",
+                filename=filename,
                 file_type="txt",
-                classification=db_project.classification,
-                masked_text=masked_text,
+                classification=Classification.NORMAL,
+                masked_text=pipeline_result["masked_text"],
                 file_path=str(permanent_path),
-                sanitize_level=sanitize_level,
-                usage_restrictions=usage_restrictions,
-                pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None,
-                document_metadata={
-                    "source_type": "feed",
-                    "feed_url": request.url,
-                    "item_guid": item['guid'],
-                    "item_link": item['link'],
-                    "published": item['published']
-                }
+                sanitize_level=pipeline_result["sanitize_level"],
+                usage_restrictions=pipeline_result["usage_restrictions"],
+                pii_gate_reasons=pipeline_result["pii_gate_reasons"],
+                document_metadata=doc_metadata
             )
             db.add(db_document)
-            created_count += 1
-        
-        db.commit()
+            db.flush()  # Get document ID
+            
+            created_documents += 1
+            
+            # Create ProjectSource (dedupe on URL)
+            existing_source = db.query(ProjectSource).filter(
+                ProjectSource.project_id == db_project.id,
+                ProjectSource.url == item_link
+            ).first()
+            
+            if not existing_source and item_link:
+                db_source = ProjectSource(
+                    project_id=db_project.id,
+                    title=item['title'],
+                    type=SourceType.LINK,
+                    url=item_link,
+                    comment="Imported from RSS"
+                )
+                db.add(db_source)
+                created_sources += 1
+            
+            # Create ProjectNote
+            db_note = ProjectNote(
+                project_id=db_project.id,
+                title=item['title'],
+                masked_body=pipeline_result["masked_text"],
+                sanitize_level=pipeline_result["sanitize_level"],
+                pii_gate_reasons=pipeline_result["pii_gate_reasons"],
+                usage_restrictions=pipeline_result["usage_restrictions"]
+            )
+            db.add(db_note)
+            created_notes += 1
+            
+            # Commit after each item (or batch commit - but safer per-item for now)
+            db.commit()
         
         # Log import event (metadata only)
         import_event = ProjectEvent(
@@ -1949,7 +2041,9 @@ async def create_project_from_feed(
             actor=username,
             event_metadata=_safe_event_metadata({
                 "feed_url": request.url,
-                "created_count": created_count,
+                "created_documents": created_documents,
+                "created_notes": created_notes,
+                "created_sources": created_sources,
                 "skipped_duplicates": skipped_duplicates,
                 "limit": request.limit
             }, context="audit")
@@ -1957,11 +2051,13 @@ async def create_project_from_feed(
         db.add(import_event)
         db.commit()
         
-        logger.info(f"Feed import completed: project_id={db_project.id}, created={created_count}, skipped={skipped_duplicates}")
+        logger.info(f"Feed import completed: project_id={db_project.id}, documents={created_documents}, notes={created_notes}, sources={created_sources}, skipped={skipped_duplicates}")
         
         return CreateProjectFromFeedResponse(
             project_id=db_project.id,
-            created_count=created_count,
+            created_count=created_documents,
+            created_notes=created_notes,
+            created_sources=created_sources,
             skipped_duplicates=skipped_duplicates
         )
         
@@ -2022,47 +2118,36 @@ async def create_project_from_scout_item(
         )
         db.add(event)
         
+        # Fetch fulltext from article link if available
+        article_text = ""
+        if scout_item.link:
+            logger.info(f"Fetching fulltext for scout item: {scout_item.link}")
+            try:
+                from feeds import fetch_article_text
+                article_text = fetch_article_text(scout_item.link)
+                logger.info(f"Fetched article text length: {len(article_text)} chars")
+            except Exception as e:
+                logger.warning(f"Failed to fetch article text: {e}")
+                article_text = ""
+        
         # Build raw content from Scout item
         published_str = scout_item.published_at.isoformat() if scout_item.published_at else ""
-        raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\nKälla: {scout_item.raw_source}"
+        if article_text:
+            raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\n{article_text}\n\nKälla: {scout_item.raw_source}"
+        else:
+            raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\nKälla: {scout_item.raw_source}"
         
         # Run ingest pipeline (same as document upload)
-        normalized_text = normalize_text(raw_content)
+        try:
+            pipeline_result = run_sanitize_pipeline(raw_content)
+        except Exception as e:
+            logger.error(f"Pipeline failed for scout item {scout_item.link}: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to process content: {str(e)}")
         
-        # Progressive sanitization pipeline
-        pii_gate_reasons = {}
-        sanitize_level = SanitizeLevel.NORMAL
-        usage_restrictions = {"ai_allowed": True, "export_allowed": True}
-        masked_text = None
-        
-        # Try normal masking
-        masked_text = mask_text(normalized_text, level="normal")
-        is_safe, reasons = pii_gate_check(masked_text)
-        if is_safe:
-            sanitize_level = SanitizeLevel.NORMAL
-            pii_gate_reasons = None
-        else:
-            pii_gate_reasons["normal"] = reasons
-            
-            # Try strict masking
-            masked_text = mask_text(normalized_text, level="strict")
-            is_safe, reasons = pii_gate_check(masked_text)
-            if is_safe:
-                sanitize_level = SanitizeLevel.STRICT
-                usage_restrictions = {"ai_allowed": True, "export_allowed": True}
-            else:
-                pii_gate_reasons["strict"] = reasons
-                
-                # Use paranoid masking
-                masked_text = mask_text(normalized_text, level="paranoid")
-                is_safe, reasons = pii_gate_check(masked_text)
-                
-                if not is_safe:
-                    logger.error(f"Paranoid masking failed PII gate for scout item: {scout_item.id}")
-                    raise HTTPException(status_code=500, detail="Failed to process scout item content")
-                
-                sanitize_level = SanitizeLevel.PARANOID
-                usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+        masked_text = pipeline_result["masked_text"]
+        sanitize_level = pipeline_result["sanitize_level"]
+        pii_gate_reasons = pipeline_result["pii_gate_reasons"]
+        usage_restrictions = pipeline_result["usage_restrictions"]
         
         # Create document from Scout item
         db_document = Document(
@@ -2087,6 +2172,28 @@ async def create_project_from_scout_item(
             }
         )
         db.add(db_document)
+        
+        # Create ProjectSource
+        db_source = ProjectSource(
+            project_id=db_project.id,
+            title=scout_item.raw_source or "Scout Feed",
+            type=SourceType.LINK,
+            url=scout_item.link,
+            comment="RSS-import via Scout"
+        )
+        db.add(db_source)
+        
+        # Create ProjectNote with fulltext
+        db_note = ProjectNote(
+            project_id=db_project.id,
+            title=scout_item.title,
+            masked_body=masked_text,
+            sanitize_level=sanitize_level,
+            pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None,
+            usage_restrictions=usage_restrictions
+        )
+        db.add(db_note)
+        
         db.commit()
         db.refresh(db_document)
         

@@ -184,6 +184,7 @@ class ProjectSourceResponse(BaseModel):
     project_id: int
     title: str
     type: str
+    url: Optional[str]
     comment: Optional[str]
     created_at: datetime
 
@@ -240,11 +241,14 @@ class CreateProjectFromFeedRequest(BaseModel):
     url: str
     project_name: Optional[str] = None
     limit: int = Field(default=10, ge=1, le=100)
+    mode: Optional[str] = Field(default="fulltext")  # "fulltext" or "summary"
 
 
 class CreateProjectFromFeedResponse(BaseModel):
     project_id: int
-    created_count: int
+    created_count: int  # Documents created
+    created_notes: int  # ProjectNotes created
+    created_sources: int  # ProjectSources created
     skipped_duplicates: int
 
 
