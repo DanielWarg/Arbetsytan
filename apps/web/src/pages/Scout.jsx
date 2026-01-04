@@ -65,7 +65,7 @@ function Scout() {
   const handleFetch = async () => {
     setFetching(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/fetch?mode=fixture', {
+      const response = await fetch('http://localhost:8000/api/scout/fetch', {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -77,13 +77,45 @@ function ProjectsList() {
       }
     }
     
+    // Fetch immediately
     fetchScoutItems()
+    
+    // Auto-update items every 5 minutes
+    const itemsInterval = setInterval(fetchScoutItems, 5 * 60 * 1000)
+    
+    // Auto-fetch feeds every 30 minutes
+    const fetchFeeds = async () => {
+      try {
+        const username = 'admin'
+        const password = 'password'
+        const auth = btoa(`${username}:${password}`)
+        
+        await fetch('http://localhost:8000/api/scout/fetch', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`
+          }
+        })
+        // Refresh items after fetching feeds
+        fetchScoutItems()
+      } catch (err) {
+        console.error('Error auto-fetching feeds:', err)
+      }
+    }
+    
+    // Fetch feeds every 30 minutes
+    const feedsInterval = setInterval(fetchFeeds, 30 * 60 * 1000)
+    
+    return () => {
+      clearInterval(itemsInterval)
+      clearInterval(feedsInterval)
+    }
   }, [])
 
   // Scout modal functions
   const scoutAuth = btoa('admin:password')
 
-  const fetchScoutModalItems = async () => {
+  const fetchScoutModalItems = useCallback(async () => {
     setScoutModalLoading(true)
     try {
       const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=50', {
@@ -100,7 +132,7 @@ function ProjectsList() {
     } finally {
       setScoutModalLoading(false)
     }
-  }
+  }, [scoutAuth])
 
   const fetchScoutModalFeeds = async () => {
     setScoutModalLoading(true)
@@ -125,11 +157,15 @@ function ProjectsList() {
     if (showScoutModal) {
       if (scoutModalActiveTab === 'items') {
         fetchScoutModalItems()
+        
+        // Auto-update items every 2 minutes when modal is open
+        const itemsInterval = setInterval(fetchScoutModalItems, 2 * 60 * 1000)
+        return () => clearInterval(itemsInterval)
       } else {
         fetchScoutModalFeeds()
       }
     }
-  }, [showScoutModal, scoutModalActiveTab])
+  }, [showScoutModal, scoutModalActiveTab, fetchScoutModalItems])
 
   const handleScoutModalFetch = async () => {
     setScoutModalFetching(true)
