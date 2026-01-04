@@ -1770,3 +1770,190 @@ async def preview_feed(
     except Exception as e:
         logger.error(f"Feed preview failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to preview feed: {str(e)}")
+
+
+@app.post("/api/projects/from-feed", response_model=CreateProjectFromFeedResponse, status_code=201)
+async def create_project_from_feed(
+    request: CreateProjectFromFeedRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Create a project from a feed URL.
+    Imports feed items as documents using the same ingest pipeline as regular documents.
+    """
+    from feeds import validate_and_fetch, parse_feed
+    
+    try:
+        # Fetch and parse feed
+        content = validate_and_fetch(request.url)
+        feed_data = parse_feed(content)
+        
+        # Create project
+        project_name = request.project_name or feed_data['title'] or "Feed Import"
+        db_project = Project(
+            name=project_name,
+            description=feed_data.get('description'),
+            classification=Classification.NORMAL,
+            status=ProjectStatus.RESEARCH
+        )
+        db.add(db_project)
+        db.commit()
+        db.refresh(db_project)
+        
+        # Create initial event
+        event = ProjectEvent(
+            project_id=db_project.id,
+            event_type="project_created",
+            actor=username,
+            event_metadata=_safe_event_metadata({"name": project_name, "source": "feed_import"}, context="audit")
+        )
+        db.add(event)
+        db.commit()
+        
+        # Process feed items
+        created_count = 0
+        skipped_duplicates = 0
+        items_to_process = feed_data['items'][:request.limit]
+        
+        for item in items_to_process:
+            # Dedupe: check if document with same guid or link already exists in project
+            existing_doc = None
+            if item['guid']:
+                # Check by guid first (PostgreSQL JSONB query)
+                from sqlalchemy import func
+                existing_doc = db.query(Document).filter(
+                    Document.project_id == db_project.id,
+                    Document.document_metadata.isnot(None),
+                    func.jsonb_extract_path_text(Document.document_metadata, 'item_guid') == item['guid']
+                ).first()
+            
+            if not existing_doc and item['link']:
+                # Check by link if guid didn't match
+                existing_doc = db.query(Document).filter(
+                    Document.project_id == db_project.id,
+                    Document.document_metadata.isnot(None),
+                    func.jsonb_extract_path_text(Document.document_metadata, 'item_link') == item['link']
+                ).first()
+            
+            if existing_doc:
+                skipped_duplicates += 1
+                continue
+            
+            # Build raw content
+            published_str = item['published'] or ''
+            raw_content = f"{item['title']}\n{published_str}\n{item['link']}\n\n{item['summary_text']}"
+            
+            # Run ingest pipeline (same as document upload)
+            normalized_text = normalize_text(raw_content)
+            
+            # Progressive sanitization pipeline
+            pii_gate_reasons = {}
+            sanitize_level = SanitizeLevel.NORMAL
+            usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+            masked_text = None
+            
+            # Try normal masking
+            masked_text = mask_text(normalized_text, level="normal")
+            is_safe, reasons = pii_gate_check(masked_text)
+            if is_safe:
+                sanitize_level = SanitizeLevel.NORMAL
+                pii_gate_reasons = None
+            else:
+                pii_gate_reasons["normal"] = reasons
+                
+                # Try strict masking
+                masked_text = mask_text(normalized_text, level="strict")
+                is_safe, reasons = pii_gate_check(masked_text)
+                if is_safe:
+                    sanitize_level = SanitizeLevel.STRICT
+                    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+                else:
+                    pii_gate_reasons["strict"] = reasons
+                    
+                    # Use paranoid masking
+                    masked_text = mask_text(normalized_text, level="paranoid")
+                    is_safe, reasons = pii_gate_check(masked_text)
+                    
+                    if not is_safe:
+                        # This should never happen - paranoid must guarantee gate pass
+                        logger.error(f"Paranoid masking failed PII gate for feed item: {item['guid']}")
+                        continue  # Skip this item
+                    
+                    sanitize_level = SanitizeLevel.PARANOID
+                    usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+            
+            # Create a temporary file (required by Document model)
+            file_id = str(uuid.uuid4())
+            temp_txt_path = UPLOAD_DIR / f"{file_id}.txt"
+            try:
+                with open(temp_txt_path, 'w', encoding='utf-8') as f:
+                    f.write(raw_content)
+            except Exception as e:
+                logger.error(f"Failed to create temp file for feed item: {str(e)}")
+                continue
+            
+            # Move to permanent location
+            permanent_path = UPLOAD_DIR / f"{file_id}.txt"
+            try:
+                shutil.move(str(temp_txt_path), str(permanent_path))
+            except Exception as e:
+                logger.error(f"Failed to move temp file: {str(e)}")
+                if temp_txt_path.exists():
+                    os.remove(temp_txt_path)
+                continue
+            
+            # Create document with metadata
+            guid_short = item['guid'][:8] if item['guid'] else str(uuid.uuid4())[:8]
+            db_document = Document(
+                project_id=db_project.id,
+                filename=f"feed_item_{guid_short}.txt",
+                file_type="txt",
+                classification=db_project.classification,
+                masked_text=masked_text,
+                file_path=str(permanent_path),
+                sanitize_level=sanitize_level,
+                usage_restrictions=usage_restrictions,
+                pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None,
+                document_metadata={
+                    "source_type": "feed",
+                    "feed_url": request.url,
+                    "item_guid": item['guid'],
+                    "item_link": item['link'],
+                    "published": item['published']
+                }
+            )
+            db.add(db_document)
+            created_count += 1
+        
+        db.commit()
+        
+        # Log import event (metadata only)
+        import_event = ProjectEvent(
+            project_id=db_project.id,
+            event_type="feed_imported",
+            actor=username,
+            event_metadata=_safe_event_metadata({
+                "feed_url": request.url,
+                "created_count": created_count,
+                "skipped_duplicates": skipped_duplicates,
+                "limit": request.limit
+            }, context="audit")
+        )
+        db.add(import_event)
+        db.commit()
+        
+        logger.info(f"Feed import completed: project_id={db_project.id}, created={created_count}, skipped={skipped_duplicates}")
+        
+        return CreateProjectFromFeedResponse(
+            project_id=db_project.id,
+            created_count=created_count,
+            skipped_duplicates=skipped_duplicates
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Feed import failed: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to import feed: {str(e)}")

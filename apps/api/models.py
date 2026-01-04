@@ -78,6 +78,7 @@ class Document(Base):
     sanitize_level = Column(SQLEnum(SanitizeLevel), default=SanitizeLevel.NORMAL, nullable=False)
     usage_restrictions = Column(JSON, nullable=False, default=lambda: {"ai_allowed": True, "export_allowed": True})
     pii_gate_reasons = Column(JSON, nullable=True)  # {"normal": [...], "strict": [...]}
+    document_metadata = Column("metadata", JSON, nullable=True)  # {"source_type": "feed", "feed_url": "...", "item_guid": "...", "item_link": "...", "published": "..."}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="documents")

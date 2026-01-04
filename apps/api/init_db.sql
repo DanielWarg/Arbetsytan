@@ -58,5 +58,10 @@ BEGIN
                    WHERE table_name='documents' AND column_name='pii_gate_reasons') THEN
         ALTER TABLE documents ADD COLUMN pii_gate_reasons JSONB;
     END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='documents' AND column_name='metadata') THEN
+        ALTER TABLE documents ADD COLUMN metadata JSONB;
+    END IF;
 END $$;
 
