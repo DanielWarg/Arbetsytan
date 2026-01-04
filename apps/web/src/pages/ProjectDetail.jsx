@@ -678,7 +678,7 @@ function ProjectDetail() {
 
   return (
     <div className="project-detail-page">
-      <Link to="/projects" className="back-link">← Tillbaka till projekt</Link>
+      <Link to="/projects" className="back-link">← Tillbaka till kontrollrum</Link>
       <div className="projects-header">
         <div className="project-title-section">
           <h2 className="projects-title">{project.name}</h2>

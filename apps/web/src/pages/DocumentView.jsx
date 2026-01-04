@@ -62,7 +62,7 @@ function DocumentView() {
         <div className="document-header-sticky">
           <Link to={`/projects/${projectId}`} className="document-back-link">
             <ArrowLeft size={16} />
-            <span>Tillbaka till projekt</span>
+            <span>Tillbaka till kontrollrum</span>
           </Link>
           <div className="document-header-info">
             <div className="document-title-row">
