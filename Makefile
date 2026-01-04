@@ -251,3 +251,17 @@ benchmark-stt:
 	@echo "Transcripts: apps/api/test_results/transcripts/"
 	@echo ""
 
+verify-feed-import:
+	@echo "======================================================================"
+	@echo "FEED IMPORT VERIFICATION"
+	@echo "======================================================================"
+	@docker-compose exec -T api python3 /app/_verify/verify_feed_import.py || \
+		(echo "" && \
+		 echo "Note: If containers are not running, start with 'make dev' first" && \
+		 exit 1)
+	@echo ""
+	@echo "======================================================================"
+	@echo "✅ FEED IMPORT VERIFICATION COMPLETE"
+	@echo "======================================================================"
+	@echo "Results: apps/api/test_results/feed_import_verify.json"
+	@echo ""
