@@ -246,3 +246,13 @@ class CreateProjectFromFeedResponse(BaseModel):
     project_id: int
     created_count: int
     skipped_duplicates: int
+
+
+class CreateProjectFromScoutItemRequest(BaseModel):
+    scout_item_id: int
+    project_name: Optional[str] = None
+
+
+class CreateProjectFromScoutItemResponse(BaseModel):
+    project_id: int
+    document_id: int

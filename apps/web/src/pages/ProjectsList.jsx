@@ -7,7 +7,7 @@ import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import CreateProjectFromFeed from './CreateProjectFromFeed'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss, X, Loader2 } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -20,6 +20,8 @@ function ProjectsList() {
   const [createFromFeedUrl, setCreateFromFeedUrl] = useState('')
   const [createFromFeedName, setCreateFromFeedName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenScoutItems, setHiddenScoutItems] = useState(new Set())
+  const [creatingFromScoutItem, setCreatingFromScoutItem] = useState(null)
   const [scoutItems, setScoutItems] = useState([])
   const [scoutFetching, setScoutFetching] = useState(false)
   const [showScoutModal, setShowScoutModal] = useState(false)
@@ -281,6 +283,37 @@ function ProjectsList() {
     setShowCreateFromFeedModal(true)
   }
 
+  const handleCreateProjectFromScoutItem = async (itemId) => {
+    setCreatingFromScoutItem(itemId)
+    try {
+      const auth = btoa('admin:password')
+      const response = await fetch('http://localhost:8000/api/projects/from-scout-item', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ scout_item_id: itemId })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Kunde inte skapa projekt från scout-item')
+      }
+      
+      const data = await response.json()
+      navigate(`/projects/${data.project_id}`)
+    } catch (err) {
+      alert(`Fel: ${err.message}`)
+    } finally {
+      setCreatingFromScoutItem(null)
+    }
+  }
+
+  const handleHideScoutItem = (itemId) => {
+    setHiddenScoutItems(prev => new Set([...prev, itemId]))
+  }
+
   if (loading) return <div className="projects-list-page">Laddar...</div>
   if (error) return <div className="projects-list-page">Fel: {error}</div>
 
@@ -357,32 +390,54 @@ function ProjectsList() {
           <h3 className="overview-card-title">Scout – senaste 7 dagar</h3>
         </div>
         <div className="overview-card-content">
-            {scoutItems.length > 0 ? (
+            {scoutItems.filter(item => !hiddenScoutItems.has(item.id)).length > 0 ? (
               <div className="scout-widget-list">
-                {scoutItems.map(item => (
-                <a
-                  key={item.id}
-                  href={item.link || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="scout-widget-item scout-widget-item-link"
-                  onClick={(e) => {
-                    if (!item.link) {
-                      e.preventDefault()
-                    }
-                  }}
-                >
-                  <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
-                  <span className="scout-widget-title">{item.title}</span>
-                  <span className="scout-widget-time">
-                    {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
-                      month: 'short', 
-                      day: 'numeric', 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </span>
-                </a>
+                {scoutItems.filter(item => !hiddenScoutItems.has(item.id)).map(item => (
+                <div key={item.id} className="scout-widget-item">
+                  <a
+                    href={item.link || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="scout-widget-item-link"
+                    onClick={(e) => {
+                      if (!item.link) {
+                        e.preventDefault()
+                      }
+                    }}
+                  >
+                    <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
+                    <span className="scout-widget-title">{item.title}</span>
+                    <span className="scout-widget-time">
+                      {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </span>
+                  </a>
+                  <div className="scout-widget-item-actions">
+                    <button
+                      className="scout-widget-item-create-btn"
+                      onClick={() => handleCreateProjectFromScoutItem(item.id)}
+                      disabled={creatingFromScoutItem === item.id}
+                      title="Skapa projekt från detta item"
+                    >
+                      {creatingFromScoutItem === item.id ? (
+                        <Loader2 size={14} className="spinning" />
+                      ) : (
+                        <FolderPlus size={14} />
+                      )}
+                    </button>
+                    <button
+                      className="scout-widget-item-hide-btn"
+                      onClick={() => handleHideScoutItem(item.id)}
+                      title="Göm detta item"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -661,9 +716,9 @@ function ProjectsList() {
 
               {scoutModalLoading ? (
                 <p className="scout-modal-loading">Laddar...</p>
-              ) : scoutModalItems.length > 0 ? (
+              ) : scoutModalItems.filter(item => !hiddenScoutItems.has(item.id)).length > 0 ? (
                 <div className="scout-modal-items-list">
-                  {scoutModalItems.map(item => (
+                  {scoutModalItems.filter(item => !hiddenScoutItems.has(item.id)).map(item => (
                     <div key={item.id} className="scout-modal-item">
                       <div className="scout-modal-item-header">
                         <Badge variant="normal">{item.raw_source}</Badge>
@@ -676,15 +731,39 @@ function ProjectsList() {
                           })}
                         </span>
                       </div>
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="scout-modal-item-link"
-                      >
-                        <span className="scout-modal-item-title">{item.title}</span>
-                        <ExternalLink size={14} />
-                      </a>
+                      <div className="scout-modal-item-content">
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="scout-modal-item-link"
+                        >
+                          <span className="scout-modal-item-title">{item.title}</span>
+                          <ExternalLink size={14} />
+                        </a>
+                        <div className="scout-modal-item-actions">
+                          <button
+                            className="scout-modal-item-create-btn"
+                            onClick={() => handleCreateProjectFromScoutItem(item.id)}
+                            disabled={creatingFromScoutItem === item.id}
+                            title="Skapa projekt från detta item"
+                          >
+                            {creatingFromScoutItem === item.id ? (
+                              <Loader2 size={14} className="spinning" />
+                            ) : (
+                              <FolderPlus size={14} />
+                            )}
+                            <span>Skapa projekt</span>
+                          </button>
+                          <button
+                            className="scout-modal-item-hide-btn"
+                            onClick={() => handleHideScoutItem(item.id)}
+                            title="Göm detta item"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

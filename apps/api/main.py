@@ -45,7 +45,8 @@ from schemas import (
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
     JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate,
     ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
-    FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse
+    FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
+    CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -1970,3 +1971,132 @@ async def create_project_from_feed(
         logger.error(f"Feed import failed: {str(e)}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to import feed: {str(e)}")
+
+
+@app.post("/api/projects/from-scout-item", response_model=CreateProjectFromScoutItemResponse, status_code=201)
+async def create_project_from_scout_item(
+    request: CreateProjectFromScoutItemRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Create a project from a single Scout item.
+    Creates a project with the item's title and imports the item as a document.
+    """
+    from text_processing import normalize_text, mask_text, pii_gate_check, SanitizeLevel
+    
+    try:
+        # Get Scout item
+        scout_item = db.query(ScoutItem).filter(ScoutItem.id == request.scout_item_id).first()
+        if not scout_item:
+            raise HTTPException(status_code=404, detail="Scout item not found")
+        
+        # Get feed URL from ScoutFeed
+        scout_feed = db.query(ScoutFeed).filter(ScoutFeed.id == scout_item.feed_id).first()
+        feed_url = scout_feed.url if scout_feed else None
+        
+        # Determine project name
+        project_name = request.project_name or scout_item.title[:200]  # Limit length
+        
+        # Create new project
+        db_project = Project(
+            name=project_name,
+            description=f"Skapad från Scout: {scout_item.raw_source}",
+            classification=Classification.NORMAL,
+            status=ProjectStatus.RESEARCH
+        )
+        db.add(db_project)
+        db.commit()
+        db.refresh(db_project)
+        
+        # Create initial event
+        event = ProjectEvent(
+            project_id=db_project.id,
+            event_type="project_created",
+            actor=username,
+            event_metadata=_safe_event_metadata({
+                "name": project_name,
+                "source": "scout_item",
+                "scout_item_id": request.scout_item_id
+            }, context="audit")
+        )
+        db.add(event)
+        
+        # Build raw content from Scout item
+        published_str = scout_item.published_at.isoformat() if scout_item.published_at else ""
+        raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\nKälla: {scout_item.raw_source}"
+        
+        # Run ingest pipeline (same as document upload)
+        normalized_text = normalize_text(raw_content)
+        
+        # Progressive sanitization pipeline
+        pii_gate_reasons = {}
+        sanitize_level = SanitizeLevel.NORMAL
+        usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+        masked_text = None
+        
+        # Try normal masking
+        masked_text = mask_text(normalized_text, level="normal")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.NORMAL
+            pii_gate_reasons = None
+        else:
+            pii_gate_reasons["normal"] = reasons
+            
+            # Try strict masking
+            masked_text = mask_text(normalized_text, level="strict")
+            is_safe, reasons = pii_gate_check(masked_text)
+            if is_safe:
+                sanitize_level = SanitizeLevel.STRICT
+                usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+            else:
+                pii_gate_reasons["strict"] = reasons
+                
+                # Use paranoid masking
+                masked_text = mask_text(normalized_text, level="paranoid")
+                is_safe, reasons = pii_gate_check(masked_text)
+                
+                if not is_safe:
+                    logger.error(f"Paranoid masking failed PII gate for scout item: {scout_item.id}")
+                    raise HTTPException(status_code=500, detail="Failed to process scout item content")
+                
+                sanitize_level = SanitizeLevel.PARANOID
+                usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+        
+        # Create document from Scout item
+        db_document = Document(
+            project_id=db_project.id,
+            filename=f"scout_item_{scout_item.id}.txt",
+            file_type="txt",
+            classification=db_project.classification,
+            masked_text=masked_text,
+            file_path=f"scout_import_{uuid.uuid4()}.txt",  # Placeholder, no actual file storage
+            sanitize_level=sanitize_level,
+            usage_restrictions=usage_restrictions,
+            pii_gate_reasons=pii_gate_reasons if pii_gate_reasons else None,
+            document_metadata={
+                "source_type": "scout_item",
+                "scout_item_id": scout_item.id,
+                "scout_feed_id": scout_item.feed_id,
+                "feed_url": feed_url,
+                "item_link": scout_item.link,
+                "item_guid": scout_item.guid_hash,
+                "published": published_str,
+                "raw_source": scout_item.raw_source
+            }
+        )
+        db.add(db_document)
+        db.commit()
+        db.refresh(db_document)
+        
+        return CreateProjectFromScoutItemResponse(
+            project_id=db_project.id,
+            document_id=db_document.id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating project from scout item {request.scout_item_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create project from scout item: {str(e)}")
