@@ -77,3 +77,28 @@
 - **Dedupe:** guid prioriteras, annars link (per projekt)
 
 - **Ingen ändring i PII-gate/sanitization:** Använd exakt samma pipeline som befintliga dokument
+
+---
+
+## Implementation Status
+
+### Backend
+- [x] **A) Inventory** - Dokumenterat nuvarande system
+- [x] **B) Backend – feeds.py + preview** - Skapat `apps/api/feeds.py` med SSRF-skydd, parse_feed, html_to_text
+- [x] **B) Backend – preview endpoint** - Lagt till `GET /api/feeds/preview` i `main.py`
+- [x] **C) Backend – document metadata** - Lagt till `document_metadata` (JSON) i Document model
+- [x] **C) Backend – create endpoint** - Lagt till `POST /api/projects/from-feed` med dedupe och ingest-pipeline
+- [x] **C) Backend – DB migration** - Idempotent schema patch i `init_db.sql`
+
+### Frontend
+- [x] **D) Frontend – modal** - Skapat `CreateProjectFromFeed.jsx` med URL input, preview, limit selector
+- [x] **D) Frontend – button** - Lagt till "Skapa projekt från feed" knapp i `ProjectsList.jsx`
+- [x] **D) Frontend – Scout integration** - Lagt till "Skapa projekt" knapp i Scout modal feeds-tab
+
+### Verifiering
+- [x] **E) Verifiering – script** - Skapat `verify_feed_import.py` med fixture och dedupe-verifiering
+- [x] **E) Verifiering – fixture** - Skapat `tests/fixtures/sample.rss`
+- [x] **E) Verifiering – make target** - Lagt till `make verify-feed-import`
+- [x] **E) Verifiering – körning** - Alla tester går grönt
+
+### Status: ✅ KOMPLETT
