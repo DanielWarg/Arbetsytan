@@ -735,7 +735,7 @@ function ProjectsList() {
                       </div>
                       <div className="scout-modal-feed-actions">
                         {!feed.is_enabled && <Badge variant="danger">Inaktiverad</Badge>}
-                        {feed.is_enabled && feed.url && (
+                        {feed.url && (
                           <button
                             className="scout-modal-feed-create-project-btn"
                             onClick={() => handleCreateProjectFromFeed(feed.url, feed.name)}
