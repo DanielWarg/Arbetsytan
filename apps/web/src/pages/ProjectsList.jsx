@@ -6,7 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -17,6 +17,14 @@ function ProjectsList() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [scoutItems, setScoutItems] = useState([])
+  const [showScoutModal, setShowScoutModal] = useState(false)
+  const [scoutModalActiveTab, setScoutModalActiveTab] = useState('items')
+  const [scoutModalItems, setScoutModalItems] = useState([])
+  const [scoutModalFeeds, setScoutModalFeeds] = useState([])
+  const [scoutModalLoading, setScoutModalLoading] = useState(false)
+  const [scoutModalFetching, setScoutModalFetching] = useState(false)
+  const [newFeedName, setNewFeedName] = useState('')
+  const [newFeedUrl, setNewFeedUrl] = useState('')
 
   const fetchProjects = async () => {
     try {
@@ -52,7 +60,7 @@ function ProjectsList() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=5', {
+        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=6', {
           headers: {
             'Authorization': `Basic ${auth}`
           },
@@ -71,6 +79,119 @@ function ProjectsList() {
     
     fetchScoutItems()
   }, [])
+
+  // Scout modal functions
+  const scoutAuth = btoa('admin:password')
+
+  const fetchScoutModalItems = async () => {
+    setScoutModalLoading(true)
+    try {
+      const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=50', {
+        headers: {
+          'Authorization': `Basic ${scoutAuth}`
+        }
+      })
+      if (!response.ok) throw new Error('Failed to fetch items')
+      const data = await response.json()
+      setScoutModalItems(data)
+    } catch (err) {
+      console.error('Error fetching scout items:', err)
+      setScoutModalItems([])
+    } finally {
+      setScoutModalLoading(false)
+    }
+  }
+
+  const fetchScoutModalFeeds = async () => {
+    setScoutModalLoading(true)
+    try {
+      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+        headers: {
+          'Authorization': `Basic ${scoutAuth}`
+        }
+      })
+      if (!response.ok) throw new Error('Failed to fetch feeds')
+      const data = await response.json()
+      setScoutModalFeeds(data)
+    } catch (err) {
+      console.error('Error fetching feeds:', err)
+      setScoutModalFeeds([])
+    } finally {
+      setScoutModalLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (showScoutModal) {
+      if (scoutModalActiveTab === 'items') {
+        fetchScoutModalItems()
+      } else {
+        fetchScoutModalFeeds()
+      }
+    }
+  }, [showScoutModal, scoutModalActiveTab])
+
+  const handleScoutModalFetch = async () => {
+    setScoutModalFetching(true)
+    try {
+      const response = await fetch('http://localhost:8000/api/scout/fetch', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${scoutAuth}`
+        }
+      })
+      if (!response.ok) throw new Error('Failed to fetch feeds')
+      await fetchScoutModalItems()
+    } catch (err) {
+      console.error('Error fetching feeds:', err)
+      alert('Kunde inte uppdatera feeds')
+    } finally {
+      setScoutModalFetching(false)
+    }
+  }
+
+  const handleScoutModalAddFeed = async () => {
+    if (!newFeedName || !newFeedUrl) {
+      alert('Fyll i både namn och URL')
+      return
+    }
+    try {
+      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${scoutAuth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: newFeedName,
+          url: newFeedUrl
+        })
+      })
+      if (!response.ok) throw new Error('Failed to create feed')
+      setNewFeedName('')
+      setNewFeedUrl('')
+      await fetchScoutModalFeeds()
+    } catch (err) {
+      console.error('Error creating feed:', err)
+      alert('Kunde inte skapa feed')
+    }
+  }
+
+  const handleScoutModalDisableFeed = async (feedId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/scout/feeds/${feedId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Basic ${scoutAuth}`
+        }
+      })
+      if (!response.ok) throw new Error('Failed to disable feed')
+      await fetchScoutModalFeeds()
+    } catch (err) {
+      console.error('Error disabling feed:', err)
+      alert('Kunde inte inaktivera feed')
+    }
+  }
 
   const handleCreateSuccess = (project) => {
     setShowCreateModal(false)
@@ -120,10 +241,22 @@ function ProjectsList() {
     .slice(0, 4) // Limit to 4 most important
 
   // Filter projects by search query
-  const filteredProjects = projects.filter(project => 
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  const filteredProjects = projects
+    .filter(project => 
+      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (project.description && project.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+    .sort((a, b) => {
+      // Sort by due_date: projects with due_date first, then by date (earliest first)
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1 // a without due_date goes last
+      if (!b.due_date) return -1 // b without due_date goes last
+      
+      // Both have due_date, sort by date (earliest first)
+      const dateA = new Date(a.due_date).getTime()
+      const dateB = new Date(b.due_date).getTime()
+      return dateA - dateB
+    })
 
   // Get last updated project
   const lastUpdatedProject = projects.length > 0 
@@ -164,10 +297,13 @@ function ProjectsList() {
               <p className="overview-empty-text">Inga leads</p>
             </div>
           )}
-          <Link to="/scout" className="btn-overview">
+          <button 
+            className="btn-overview"
+            onClick={() => setShowScoutModal(true)}
+          >
             <Eye size={16} />
             <span>Visa alla</span>
-          </Link>
+          </button>
         </div>
       </Card>
 
@@ -358,6 +494,136 @@ function ProjectsList() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
         />
+      </Modal>
+
+      <Modal
+        isOpen={showScoutModal}
+        onClose={() => setShowScoutModal(false)}
+        title="Scout"
+      >
+        <div className="scout-modal-content">
+          <div className="scout-modal-tabs">
+            <button
+              className={`scout-modal-tab ${scoutModalActiveTab === 'items' ? 'active' : ''}`}
+              onClick={() => setScoutModalActiveTab('items')}
+            >
+              Senaste 24h
+            </button>
+            <button
+              className={`scout-modal-tab ${scoutModalActiveTab === 'feeds' ? 'active' : ''}`}
+              onClick={() => setScoutModalActiveTab('feeds')}
+            >
+              Källor
+            </button>
+          </div>
+
+          {scoutModalActiveTab === 'items' && (
+            <div className="scout-modal-tab-content">
+              <div className="scout-modal-actions">
+                <button
+                  className="scout-modal-fetch-btn"
+                  onClick={handleScoutModalFetch}
+                  disabled={scoutModalFetching}
+                >
+                  <RefreshCw size={14} />
+                  <span>{scoutModalFetching ? 'Uppdaterar...' : 'Uppdatera nu'}</span>
+                </button>
+              </div>
+
+              {scoutModalLoading ? (
+                <p className="scout-modal-loading">Laddar...</p>
+              ) : scoutModalItems.length > 0 ? (
+                <div className="scout-modal-items-list">
+                  {scoutModalItems.map(item => (
+                    <div key={item.id} className="scout-modal-item">
+                      <div className="scout-modal-item-header">
+                        <Badge variant="normal">{item.raw_source}</Badge>
+                        <span className="scout-modal-item-time">
+                          {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      </div>
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="scout-modal-item-link"
+                      >
+                        <span className="scout-modal-item-title">{item.title}</span>
+                        <ExternalLink size={14} />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="scout-modal-empty">Inga leads hittades för de senaste 24 timmarna.</p>
+              )}
+            </div>
+          )}
+
+          {scoutModalActiveTab === 'feeds' && (
+            <div className="scout-modal-tab-content">
+              <div className="scout-modal-feeds-form">
+                <h3 className="scout-modal-feeds-form-title">Lägg till feed</h3>
+                <div className="scout-modal-feeds-form-fields">
+                  <input
+                    type="text"
+                    placeholder="Namn på källa (t.ex. Polisen Göteborg)"
+                    value={newFeedName}
+                    onChange={(e) => setNewFeedName(e.target.value)}
+                    className="scout-modal-feeds-input"
+                  />
+                  <input
+                    type="url"
+                    placeholder="RSS-URL (t.ex. https://polisen.se/rss)"
+                    value={newFeedUrl}
+                    onChange={(e) => setNewFeedUrl(e.target.value)}
+                    className="scout-modal-feeds-input"
+                  />
+                  <button
+                    className="scout-modal-feeds-add-btn"
+                    onClick={handleScoutModalAddFeed}
+                  >
+                    <Plus size={14} />
+                    <span>Lägg till källa</span>
+                  </button>
+                </div>
+              </div>
+
+              {scoutModalLoading ? (
+                <p className="scout-modal-loading">Laddar...</p>
+              ) : scoutModalFeeds.length > 0 ? (
+                <div className="scout-modal-feeds-list">
+                  {scoutModalFeeds.map(feed => (
+                    <div key={feed.id} className={`scout-modal-feed-item ${!feed.is_enabled ? 'disabled' : ''}`}>
+                      <div className="scout-modal-feed-info">
+                        <span className="scout-modal-feed-name">{feed.name}</span>
+                        <span className="scout-modal-feed-url">{feed.url || 'Ingen URL angiven'}</span>
+                      </div>
+                      <div className="scout-modal-feed-actions">
+                        {!feed.is_enabled && <Badge variant="danger">Inaktiverad</Badge>}
+                        <button
+                          className="scout-modal-feed-disable-btn"
+                          onClick={() => handleScoutModalDisableFeed(feed.id)}
+                          title="Inaktivera feed"
+                          disabled={!feed.is_enabled}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="scout-modal-empty">Inga källor tillagda.</p>
+              )}
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   )
