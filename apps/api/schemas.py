@@ -219,3 +219,30 @@ class ScoutItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Feed Import schemas
+class FeedItemPreview(BaseModel):
+    guid: str
+    title: str
+    link: str
+    published: Optional[str] = None
+    summary_text: str
+
+
+class FeedPreviewResponse(BaseModel):
+    title: str
+    description: str
+    items: List[FeedItemPreview]
+
+
+class CreateProjectFromFeedRequest(BaseModel):
+    url: str
+    project_name: Optional[str] = None
+    limit: int = Field(default=10, ge=1, le=100)
+
+
+class CreateProjectFromFeedResponse(BaseModel):
+    project_id: int
+    created_count: int
+    skipped_duplicates: int

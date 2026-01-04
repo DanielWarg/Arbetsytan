@@ -44,7 +44,8 @@ from schemas import (
     DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse,
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
     JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate,
-    ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse
+    ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
+    FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -1724,3 +1725,48 @@ async def fetch_scout_feeds(
     
     results = fetch_all_feeds(db)
     return {"feeds_processed": len(results), "results": results}
+
+
+# ===== FEED IMPORT ENDPOINTS =====
+
+@app.get("/api/feeds/preview", response_model=FeedPreviewResponse)
+async def preview_feed(
+    url: str = Query(..., description="Feed URL to preview"),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Preview a feed without creating a project.
+    Returns feed metadata and items (no storage).
+    """
+    from feeds import validate_and_fetch, parse_feed
+    
+    try:
+        # Fetch and validate URL (SSRF protection)
+        content = validate_and_fetch(url)
+        
+        # Parse feed
+        feed_data = parse_feed(content)
+        
+        # Convert to response format
+        items = [
+            FeedItemPreview(
+                guid=item['guid'],
+                title=item['title'],
+                link=item['link'],
+                published=item['published'],
+                summary_text=item['summary_text']
+            )
+            for item in feed_data['items']
+        ]
+        
+        return FeedPreviewResponse(
+            title=feed_data['title'],
+            description=feed_data['description'],
+            items=items
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Feed preview failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to preview feed: {str(e)}")
