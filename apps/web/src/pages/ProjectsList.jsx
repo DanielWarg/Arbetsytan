@@ -5,6 +5,7 @@ import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
+import CreateProjectFromFeed from './CreateProjectFromFeed'
 import { getDueUrgency } from '../lib/urgency'
 import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink } from 'lucide-react'
 import './ProjectsList.css'
@@ -15,6 +16,7 @@ function ProjectsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showCreateFromFeedModal, setShowCreateFromFeedModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [scoutItems, setScoutItems] = useState([])
   const [scoutFetching, setScoutFetching] = useState(false)
@@ -477,13 +479,22 @@ function ProjectsList() {
                 className="project-search-input"
               />
             </div>
-            <button 
-              className="btn-create-project btn-create-project-inline"
-              onClick={() => setShowCreateModal(true)}
-            >
-              <FolderPlus size={16} />
-              <span>Nytt projekt</span>
-            </button>
+            <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+              <button 
+                className="btn-create-project btn-create-project-inline"
+                onClick={() => setShowCreateModal(true)}
+              >
+                <FolderPlus size={16} />
+                <span>Nytt projekt</span>
+              </button>
+              <button 
+                className="btn-create-project btn-create-project-inline"
+                onClick={() => setShowCreateFromFeedModal(true)}
+              >
+                <Plus size={16} />
+                <span>Skapa projekt från feed</span>
+              </button>
+            </div>
             {lastUpdatedProject && (
               <div className="project-widget-meta">
                 <span className="project-widget-meta-label">Senast uppdaterade:</span>
@@ -586,6 +597,16 @@ function ProjectsList() {
         <CreateProject
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
+        />
+      </Modal>
+
+      <Modal
+        isOpen={showCreateFromFeedModal}
+        onClose={() => setShowCreateFromFeedModal(false)}
+        title="Skapa projekt från feed"
+      >
+        <CreateProjectFromFeed
+          onClose={() => setShowCreateFromFeedModal(false)}
         />
       </Modal>
 
