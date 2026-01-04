@@ -11,10 +11,13 @@ Reporter och redaktörer som arbetar med känsliga tips, källor och material so
 ## Arbetsflöde
 
 1. **Projekt** – Ett projekt skapas för att organisera material med klassificering (Offentlig, Känslig, Källkänslig)
+   - Skapa manuellt eller importera från RSS/Atom feed via Scout
 2. **Ingest** – Material importeras (PDF, textfiler) eller spelas in direkt (röstmemo via webbläsare)
+   - Eller importera feed-items automatiskt som dokument, anteckningar och källor
 3. **Automatisk sanering** – Allt material går genom deterministisk progressive sanitization pipeline (Normal → Strikt → Paranoid)
 4. **Maskad vy** – Standardarbetsmiljö där all känslig information är maskerad; originalmaterial exponeras aldrig
 5. **Redaktionell förädling** – Röstmemo-transkript förädlas deterministiskt till redaktionellt arbetsbart första utkast
+6. **Redigering** – Dokument, anteckningar och källor kan redigeras efter import (går genom samma sanitization-pipeline)
 
 ## Vad gör Arbetsytan INTE?
 

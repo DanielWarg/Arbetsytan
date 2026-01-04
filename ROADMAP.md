@@ -114,6 +114,14 @@ Levererat:
 - **Modell-caching:** Persistent cache via Docker volume (`whisper_cache`) för snabbare efterföljande transkriberingar
 - **Prestanda:** Large-v3 tar ~15-20 min för första transkribering (modellladdning + CPU-inferens), medium tar ~3-5 min
 - **Alternativ STT (framtida):** Arkitekturen är förberedd för motorbyte (t.ex. Silero ASR) utan endpoint-ändringar
+- **Scout feed-import** – RSS/Atom feed-import med automatisk projekt-skapande
+  - Preview feed innan import
+  - Fulltext-extraktion från artikel-länkar (trafilatura)
+  - Automatisk skapande av dokument, anteckningar (ProjectNote) och källor (ProjectSource)
+  - Deduplikation baserat på feed item GUID/länk
+  - SSRF-skydd (endast http/https, blockar privata IPs)
+  - Redigering av dokument, anteckningar och källor efter import
+  - Filnamn genereras från feed-rubrik
 
 Status: **Klar – fryst**
 

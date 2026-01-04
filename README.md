@@ -113,27 +113,45 @@ Security Core är en isolerad, dormant modul förberedd för framtida extern AI-
 
 Se [docs/SECURITY_CORE.md](docs/SECURITY_CORE.md) för detaljer.
 
-## Feed Import
+## Feed Import & Scout
 
-Arbetsytan stödjer import av RSS/Atom feeds för att automatiskt skapa projekt med feed-items som dokument.
+Arbetsytan stödjer import av RSS/Atom feeds för att automatiskt skapa projekt med feed-items som dokument och anteckningar.
 
 **Funktioner:**
 - **Preview feed** – Förhandsgranska feed innan import (visar titel, beskrivning och första 3 items)
 - **Skapa projekt från feed** – Importera feed-items som dokument med automatisk sanering och PII-maskning
+- **Fulltext-extraktion** – Automatisk hämtning av fullständig artikeltext från feed-item länkar (med trafilatura)
+- **Automatiska anteckningar** – Varje feed-item skapar en ProjectNote med strukturerat innehåll (KÄLLA, PUBLICERAD, INNEHÅLL, EXTRAKTION)
+- **Automatiska källor** – Varje feed-item skapar en ProjectSource med URL och metadata
 - **Deduplikation** – Automatisk deduplikation baserat på feed item GUID eller länk
 - **SSRF-skydd** – Robust skydd mot Server-Side Request Forgery (endast http/https, blockar privata IPs, timeout och max storlek)
-- **Scout-integration** – Skapa projekt direkt från feeds i Scout-modal
+- **Scout-integration** – Skapa projekt direkt från feeds i Scout-modal (Kontrollrum → Scout → Källor)
+- **Redigering** – Redigera dokument, anteckningar och källor efter import
+- **Filnamn från feed-rubrik** – Dokument får filnamn baserat på feed-item rubrik (t.ex. "03_januari_21.51_Övrigt_Västra_Götalands_län.txt")
 
 **Användning:**
 1. Gå till Kontrollrum
-2. Klicka på "Skapa projekt från feed" eller öppna Scout-modal → Källor → "Skapa projekt"
+2. Öppna Scout-modal → Källor → Välj feed → "Skapa projekt"
+   - Eller klicka på "Skapa projekt från feed" för manuell feed-URL
 3. Ange feed URL och välj antal items att importera (10 eller 25)
 4. Förhandsgranska feed
-5. Skapa projekt – feed-items importeras automatiskt som dokument genom samma ingest-pipeline som övriga dokument
+5. Skapa projekt – feed-items importeras automatiskt som:
+   - **Dokument** (med fulltext om tillgänglig)
+   - **Anteckningar** (ProjectNote med strukturerat innehåll)
+   - **Källor** (ProjectSource med URL)
+   - Allt går genom samma ingest-pipeline som övriga dokument
+
+**Redigering:**
+- **Dokument** – Klicka på redigeringsikonen i dokumentvyn för att uppdatera innehåll
+- **Anteckningar** – Redigera via redigeringsikonen i källsektionen
+- **Källor** – Redigera titel, typ, URL och kommentar via redigeringsikonen
 
 **API endpoints:**
 - `GET /api/feeds/preview?url=...` – Förhandsgranska feed
-- `POST /api/projects/from-feed` – Skapa projekt från feed
+- `POST /api/projects/from-feed` – Skapa projekt från feed (med `mode: "fulltext"` eller `"summary"`)
+- `PUT /api/documents/{document_id}` – Uppdatera dokument
+- `PUT /api/projects/{project_id}/notes/{note_id}` – Uppdatera anteckning
+- `PUT /api/projects/{project_id}/sources/{source_id}` – Uppdatera källa
 
 Se [docs/FEED_IMPORT_PLAN.md](docs/FEED_IMPORT_PLAN.md) för teknisk dokumentation.
 

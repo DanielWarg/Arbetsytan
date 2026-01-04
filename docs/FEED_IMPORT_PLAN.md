@@ -56,14 +56,45 @@
   - Tests idempotency (re-import yields 0 new items)
 - ✅ **Make target**: `make verify-feed-full`
 
-#### 9. Files Changed
+#### 9. Edit Functionality
+- ✅ **Document editing**: `PUT /api/documents/{document_id}` endpoint for updating document content
+- ✅ **Note editing**: `PUT /api/projects/{project_id}/notes/{note_id}` endpoint for updating ProjectNote
+- ✅ **Source editing**: `PUT /api/projects/{project_id}/sources/{source_id}` endpoint for updating ProjectSource
+- ✅ **Frontend UI**: Edit buttons and modals in DocumentView and ProjectDetail
+- ✅ **Pipeline re-run**: All edits go through same sanitization pipeline (normalize → mask → pii_gate_check)
+
+#### 10. Filename Generation
+- ✅ **Feed-based filenames**: Documents use feed item title as filename (sanitized for filesystem)
+- ✅ **Scout-based filenames**: Scout items use item title as filename
+- ✅ **Sanitization**: Special characters removed, spaces replaced with underscores, max 100 chars
+
+#### 11. UI Improvements
+- ✅ **Notes in sources section**: ProjectNotes displayed in same section as ProjectSources
+- ✅ **Removed separate notes section**: No "Anteckningar (Feed)" section, all in "Källor"
+- ✅ **Edit buttons**: Edit icons for documents, notes, and sources
+- ✅ **Source URLs**: Clickable links for source URLs
+
+#### 12. Files Changed
 - `apps/api/models.py`: Added `ProjectSource.url`, `ProjectNote.usage_restrictions`
-- `apps/api/schemas.py`: Updated feed-related schemas
+- `apps/api/schemas.py`: Updated feed-related schemas, added `DocumentUpdate`, `ProjectSourceUpdate`, `NoteUpdate`
 - `apps/api/init_db.sql`: Added idempotent migrations
 - `apps/api/feeds.py`: Added `fetch_article_text()`, `derive_tags()`, updated `validate_and_fetch()`
-- `apps/api/main.py`: Added `run_sanitize_pipeline()`, updated `create_project_from_feed` endpoint
+- `apps/api/main.py`: 
+  - Added `run_sanitize_pipeline()` helper
+  - Updated `create_project_from_feed` endpoint
+  - Added `PUT /api/documents/{document_id}` for document editing
+  - Added `PUT /api/projects/{project_id}/notes/{note_id}` for note editing
+  - Added `PUT /api/projects/{project_id}/sources/{source_id}` for source editing
+  - Updated filename generation to use feed item titles
 - `apps/api/requirements.txt`: Added trafilatura, beautifulsoup4, html2text
 - `apps/api/_verify/verify_feed_project_full.py`: New verification script
+- `apps/web/src/pages/DocumentView.jsx`: Added edit functionality with modal
+- `apps/web/src/pages/DocumentView.css`: Added styling for edit button
+- `apps/web/src/pages/ProjectDetail.jsx`: 
+  - Integrated ProjectNotes into sources section
+  - Added edit functionality for notes and sources
+  - Removed separate "Anteckningar (Feed)" section
+- `apps/web/src/pages/ProjectDetail.css`: Added styling for edit buttons and source links
 - `Makefile`: Added `verify-feed-full` target
 - `tests/fixtures/sample.rss`: Test RSS fixture
 - `tests/fixtures/sample_article.html`: Test article HTML fixture
