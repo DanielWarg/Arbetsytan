@@ -926,13 +926,7 @@ function ProjectDetail() {
                   </div>
                 ) : (
                   /* Upload mode - existing file input */
-                  <div 
-                    className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''} ${isDraggingAudio ? 'dragging' : ''}`}
-                    onClick={() => audioInputRef.current?.click()}
-                    onDragOver={handleAudioDragOver}
-                    onDragLeave={handleAudioDragLeave}
-                    onDrop={handleAudioDrop}
-                  >
+                  <>
                     <input
                       ref={audioInputRef}
                       type="file"
@@ -947,22 +941,21 @@ function ProjectDetail() {
                         zIndex: -1
                       }}
                     />
-                    <div className="dropzone-content">
-                      {recordingUploading || recordingProcessing ? (
-                        <>
+                    {(recordingUploading || recordingProcessing) && (
+                      <div 
+                        className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''} ${isDraggingAudio ? 'dragging' : ''}`}
+                        onDragOver={handleAudioDragOver}
+                        onDragLeave={handleAudioDragLeave}
+                        onDrop={handleAudioDrop}
+                      >
+                        <div className="dropzone-content">
                           <div className="dropzone-loading">
                             {recordingUploading ? 'Laddar upp ljudfil...' : 'Bearbetar ljudfil...'}
                           </div>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={32} className="dropzone-icon" />
-                          <p className="dropzone-text">Dra hit en ljudfil eller klicka för att välja</p>
-                          <p className="dropzone-hint">Ljudfiler • Max 25MB</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                     
                     {/* Error message */}
