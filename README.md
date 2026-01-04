@@ -7,6 +7,7 @@ Säker arbetsmiljö för journalister som hanterar känsliga tips och källor. A
 Arbetsytan är ett internt arbetsverktyg som:
 
 - **Samlar källmaterial** – Organisera dokument, PDF-filer, textfiler och röstmemo i projekt
+- **Importerar RSS/Atom feeds** – Skapa projekt direkt från RSS/Atom feeds med automatisk import av feed-items som dokument
 - **Sanerar automatiskt** – All känslig information (e-post, telefonnummer, personnummer) maskeras automatiskt
 - **Visar maskad vy** – Standardarbetsmiljö är alltid maskad; originalmaterial exponeras aldrig
 - **Transkriberar röstmemo** – Lokal tal-till-text via openai-whisper (ingen extern tjänst)
@@ -22,7 +23,9 @@ Arbetsytan är ett internt arbetsverktyg som:
 ## Arbetsflöde
 
 1. **Skapa projekt** – Organisera material i ett projekt med klassificering (Offentlig, Känslig, Källkänslig)
+   - Skapa manuellt eller importera från RSS/Atom feed
 2. **Ladda upp material** – PDF, textfiler eller spela in röstmemo direkt i webbläsaren
+   - Eller importera feed-items automatiskt som dokument
 3. **Automatisk sanering** – Systemet maskerar all känslig information enligt progressive sanitization (Normal → Strikt → Paranoid)
 4. **Läs maskad vy** – Alla dokument visas i maskad vy som standard; originalmaterial exponeras aldrig i arbetsytan
 5. **Arbeta säkert** – Maskerad text är redaktionellt arbetsbar och kan användas utan risk för PII-läckage
@@ -46,6 +49,7 @@ Arbetsytan är ett internt arbetsverktyg som:
 - [SECURITY_MODEL.md](SECURITY_MODEL.md) – Säkerhetsmodell och klassificering
 - [ROADMAP.md](ROADMAP.md) – Utvecklingsroadmap med stop/go-punkter
 - [RUNBOOK.md](RUNBOOK.md) – Verifieringsrunbook för alla faser
+- [docs/FEED_IMPORT_PLAN.md](docs/FEED_IMPORT_PLAN.md) – Feed import implementation och status
 
 ## Teknisk stack
 
@@ -109,6 +113,30 @@ Security Core är en isolerad, dormant modul förberedd för framtida extern AI-
 
 Se [docs/SECURITY_CORE.md](docs/SECURITY_CORE.md) för detaljer.
 
+## Feed Import
+
+Arbetsytan stödjer import av RSS/Atom feeds för att automatiskt skapa projekt med feed-items som dokument.
+
+**Funktioner:**
+- **Preview feed** – Förhandsgranska feed innan import (visar titel, beskrivning och första 3 items)
+- **Skapa projekt från feed** – Importera feed-items som dokument med automatisk sanering och PII-maskning
+- **Deduplikation** – Automatisk deduplikation baserat på feed item GUID eller länk
+- **SSRF-skydd** – Robust skydd mot Server-Side Request Forgery (endast http/https, blockar privata IPs, timeout och max storlek)
+- **Scout-integration** – Skapa projekt direkt från feeds i Scout-modal
+
+**Användning:**
+1. Gå till Kontrollrum
+2. Klicka på "Skapa projekt från feed" eller öppna Scout-modal → Källor → "Skapa projekt"
+3. Ange feed URL och välj antal items att importera (10 eller 25)
+4. Förhandsgranska feed
+5. Skapa projekt – feed-items importeras automatiskt som dokument genom samma ingest-pipeline som övriga dokument
+
+**API endpoints:**
+- `GET /api/feeds/preview?url=...` – Förhandsgranska feed
+- `POST /api/projects/from-feed` – Skapa projekt från feed
+
+Se [docs/FEED_IMPORT_PLAN.md](docs/FEED_IMPORT_PLAN.md) för teknisk dokumentation.
+
 ## Run locally
 
 Starta hela stacken (Postgres + API + Web):
@@ -127,10 +155,11 @@ Detta startar:
 ### Andra kommandon
 
 ```bash
-make up      # Starta i bakgrunden (production mode)
-make down    # Stoppa alla services
-make verify  # Kör smoke tests (kräver att services körs)
-make clean   # Stoppa och ta bort volumes
+make up                  # Starta i bakgrunden (production mode)
+make down                # Stoppa alla services
+make verify              # Kör smoke tests (kräver att services körs)
+make verify-feed-import  # Verifiera feed import-funktionalitet
+make clean               # Stoppa och ta bort volumes
 ```
 
 ## Showreel
