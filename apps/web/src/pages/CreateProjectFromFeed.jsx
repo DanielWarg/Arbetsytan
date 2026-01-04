@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -6,17 +6,53 @@ import { Select } from '../ui/Select'
 import { ExternalLink, Loader2 } from 'lucide-react'
 import './CreateProjectFromFeed.css'
 
-function CreateProjectFromFeed({ onClose }) {
+function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectName = '' }) {
   const navigate = useNavigate()
   
-  const [feedUrl, setFeedUrl] = useState('')
-  const [projectName, setProjectName] = useState('')
+  const [feedUrl, setFeedUrl] = useState(initialFeedUrl)
+  const [projectName, setProjectName] = useState(initialProjectName)
   const [limit, setLimit] = useState(10)
   const [previewData, setPreviewData] = useState(null)
   const [previewing, setPreviewing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState(null)
   const [previewError, setPreviewError] = useState(null)
+
+  // Auto-preview if initialFeedUrl is provided
+  useEffect(() => {
+    if (initialFeedUrl && !previewData && !previewing && feedUrl === initialFeedUrl) {
+      const autoPreview = async () => {
+        setPreviewError(null)
+        setPreviewData(null)
+        setPreviewing(true)
+        try {
+          const response = await fetch(
+            `http://localhost:8000/api/feeds/preview?url=${encodeURIComponent(initialFeedUrl.trim())}`,
+            {
+              headers: {
+                'Authorization': `Basic ${auth}`
+              }
+            }
+          )
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            throw new Error(errorData.detail || 'Kunde inte förhandsgranska feed')
+          }
+          const data = await response.json()
+          setPreviewData(data)
+          if (!projectName.trim() && data.title) {
+            setProjectName(data.title)
+          }
+        } catch (err) {
+          setPreviewError(err.message)
+        } finally {
+          setPreviewing(false)
+        }
+      }
+      autoPreview()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFeedUrl])
 
   const username = 'admin'
   const password = 'password'

@@ -7,7 +7,7 @@ import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import CreateProjectFromFeed from './CreateProjectFromFeed'
 import { getDueUrgency } from '../lib/urgency'
-import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink } from 'lucide-react'
+import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss } from 'lucide-react'
 import './ProjectsList.css'
 
 function ProjectsList() {
@@ -17,6 +17,8 @@ function ProjectsList() {
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showCreateFromFeedModal, setShowCreateFromFeedModal] = useState(false)
+  const [createFromFeedUrl, setCreateFromFeedUrl] = useState('')
+  const [createFromFeedName, setCreateFromFeedName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [scoutItems, setScoutItems] = useState([])
   const [scoutFetching, setScoutFetching] = useState(false)
@@ -270,6 +272,13 @@ function ProjectsList() {
     setShowCreateModal(false)
     fetchProjects()
     navigate(`/projects/${project.id}`)
+  }
+
+  const handleCreateProjectFromFeed = (feedUrl, feedName) => {
+    setCreateFromFeedUrl(feedUrl)
+    setCreateFromFeedName(feedName)
+    setShowScoutModal(false)
+    setShowCreateFromFeedModal(true)
   }
 
   if (loading) return <div className="projects-list-page">Laddar...</div>
@@ -606,7 +615,13 @@ function ProjectsList() {
         title="Skapa projekt från feed"
       >
         <CreateProjectFromFeed
-          onClose={() => setShowCreateFromFeedModal(false)}
+          onClose={() => {
+            setShowCreateFromFeedModal(false)
+            setCreateFromFeedUrl('')
+            setCreateFromFeedName('')
+          }}
+          initialFeedUrl={createFromFeedUrl}
+          initialProjectName={createFromFeedName}
         />
       </Modal>
 
@@ -720,6 +735,16 @@ function ProjectsList() {
                       </div>
                       <div className="scout-modal-feed-actions">
                         {!feed.is_enabled && <Badge variant="danger">Inaktiverad</Badge>}
+                        {feed.is_enabled && feed.url && (
+                          <button
+                            className="scout-modal-feed-create-project-btn"
+                            onClick={() => handleCreateProjectFromFeed(feed.url, feed.name)}
+                            title="Skapa projekt från denna feed"
+                          >
+                            <Rss size={16} />
+                            <span>Skapa projekt</span>
+                          </button>
+                        )}
                         <button
                           className="scout-modal-feed-disable-btn"
                           onClick={() => handleScoutModalDisableFeed(feed.id)}

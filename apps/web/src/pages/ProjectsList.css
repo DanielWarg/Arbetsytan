@@ -1160,6 +1160,28 @@
   flex-shrink: 0;
 }
 
+.scout-modal-feed-create-project-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--font-sans);
+}
+
+.scout-modal-feed-create-project-btn:hover {
+  opacity: 0.9;
+  background: var(--color-interactive-hover);
+}
+
 .scout-modal-feed-disable-btn {
   background: transparent;
   border: none;
