@@ -1,4 +1,4 @@
-.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e
+.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import
 
 dev:
 	@echo "Starting development environment..."
