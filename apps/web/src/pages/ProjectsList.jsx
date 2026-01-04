@@ -5,7 +5,6 @@ import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
-import CreateProjectFromFeed from './CreateProjectFromFeed'
 import { getDueUrgency } from '../lib/urgency'
 import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss, X, Loader2 } from 'lucide-react'
 import './ProjectsList.css'
@@ -16,9 +15,6 @@ function ProjectsList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showCreateFromFeedModal, setShowCreateFromFeedModal] = useState(false)
-  const [createFromFeedUrl, setCreateFromFeedUrl] = useState('')
-  const [createFromFeedName, setCreateFromFeedName] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [hiddenScoutItems, setHiddenScoutItems] = useState(new Set())
   const [creatingFromScoutItem, setCreatingFromScoutItem] = useState(null)
@@ -276,11 +272,33 @@ function ProjectsList() {
     navigate(`/projects/${project.id}`)
   }
 
-  const handleCreateProjectFromFeed = (feedUrl, feedName) => {
-    setCreateFromFeedUrl(feedUrl)
-    setCreateFromFeedName(feedName)
-    setShowScoutModal(false)
-    setShowCreateFromFeedModal(true)
+  const handleCreateProjectFromFeed = async (feedUrl, feedName) => {
+    try {
+      const auth = btoa('admin:password')
+      const response = await fetch('http://localhost:8000/api/projects/from-feed', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: feedUrl,
+          project_name: feedName,
+          limit: 10
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Kunde inte skapa projekt från feed')
+      }
+      
+      const data = await response.json()
+      setShowScoutModal(false)
+      navigate(`/projects/${data.project_id}`)
+    } catch (err) {
+      alert(`Fel: ${err.message}`)
+    }
   }
 
   const handleCreateProjectFromScoutItem = async (itemId) => {
@@ -543,22 +561,13 @@ function ProjectsList() {
                 className="project-search-input"
               />
             </div>
-            <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-              <button 
-                className="btn-create-project btn-create-project-inline"
-                onClick={() => setShowCreateModal(true)}
-              >
-                <FolderPlus size={16} />
-                <span>Nytt projekt</span>
-              </button>
-              <button 
-                className="btn-create-project btn-create-project-inline"
-                onClick={() => setShowCreateFromFeedModal(true)}
-              >
-                <Plus size={16} />
-                <span>Skapa projekt från feed</span>
-              </button>
-            </div>
+            <button 
+              className="btn-create-project btn-create-project-inline"
+              onClick={() => setShowCreateModal(true)}
+            >
+              <FolderPlus size={16} />
+              <span>Nytt projekt</span>
+            </button>
             {lastUpdatedProject && (
               <div className="project-widget-meta">
                 <span className="project-widget-meta-label">Senast uppdaterade:</span>
@@ -661,22 +670,6 @@ function ProjectsList() {
         <CreateProject
           onClose={() => setShowCreateModal(false)}
           onSuccess={handleCreateSuccess}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={showCreateFromFeedModal}
-        onClose={() => setShowCreateFromFeedModal(false)}
-        title="Skapa projekt från feed"
-      >
-        <CreateProjectFromFeed
-          onClose={() => {
-            setShowCreateFromFeedModal(false)
-            setCreateFromFeedUrl('')
-            setCreateFromFeedName('')
-          }}
-          initialFeedUrl={createFromFeedUrl}
-          initialProjectName={createFromFeedName}
         />
       </Modal>
 
