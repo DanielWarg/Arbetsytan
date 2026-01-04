@@ -221,7 +221,18 @@ function Dashboard() {
         {scoutItems.length > 0 ? (
           <div className="scout-items-list">
             {scoutItems.slice(0, 5).map(item => (
-              <div key={item.id} className="scout-item">
+              <a
+                key={item.id}
+                href={item.link || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="scout-item-link"
+                onClick={(e) => {
+                  if (!item.link) {
+                    e.preventDefault()
+                  }
+                }}
+              >
                 <Badge variant="normal">{item.raw_source}</Badge>
                 <span className="scout-item-title">{item.title}</span>
                 <span className="scout-item-time">
@@ -232,7 +243,7 @@ function Dashboard() {
                     minute: '2-digit' 
                   })}
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         ) : (

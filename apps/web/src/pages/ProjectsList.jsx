@@ -17,6 +17,7 @@ function ProjectsList() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [scoutItems, setScoutItems] = useState([])
+  const [scoutFetching, setScoutFetching] = useState(false)
   const [showScoutModal, setShowScoutModal] = useState(false)
   const [scoutModalActiveTab, setScoutModalActiveTab] = useState('items')
   const [scoutModalItems, setScoutModalItems] = useState([])
@@ -111,6 +112,40 @@ function ProjectsList() {
       clearInterval(feedsInterval)
     }
   }, [])
+
+  // Scout box fetch function
+  const handleScoutBoxFetch = async () => {
+    setScoutFetching(true)
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      await fetch('http://localhost:8000/api/scout/fetch', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`
+        }
+      })
+      
+      // Refresh items after fetching feeds
+      const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=6', {
+        headers: {
+          'Authorization': `Basic ${auth}`
+        },
+        credentials: 'omit'
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setScoutItems(data)
+      }
+    } catch (err) {
+      console.error('Error fetching scout feeds:', err)
+    } finally {
+      setScoutFetching(false)
+    }
+  }
 
   // Scout modal functions
   const scoutAuth = btoa('admin:password')
@@ -314,7 +349,18 @@ function ProjectsList() {
             {scoutItems.length > 0 ? (
               <div className="scout-widget-list">
                 {scoutItems.slice(0, 6).map(item => (
-                <div key={item.id} className="scout-widget-item">
+                <a
+                  key={item.id}
+                  href={item.link || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="scout-widget-item scout-widget-item-link"
+                  onClick={(e) => {
+                    if (!item.link) {
+                      e.preventDefault()
+                    }
+                  }}
+                >
                   <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
                   <span className="scout-widget-title">{item.title}</span>
                   <span className="scout-widget-time">
@@ -325,7 +371,7 @@ function ProjectsList() {
                       minute: '2-digit' 
                     })}
                   </span>
-                </div>
+                </a>
               ))}
             </div>
           ) : (
@@ -333,13 +379,24 @@ function ProjectsList() {
               <p className="overview-empty-text">Inga leads</p>
             </div>
           )}
-          <button 
-            className="btn-overview"
-            onClick={() => setShowScoutModal(true)}
-          >
-            <Eye size={16} />
-            <span>Visa alla</span>
-          </button>
+          <div className="scout-box-actions">
+            <button 
+              className="btn-scout-refresh"
+              onClick={handleScoutBoxFetch}
+              disabled={scoutFetching}
+              title="Uppdatera feeds"
+            >
+              <RefreshCw size={14} className={scoutFetching ? 'spinning' : ''} />
+              <span>{scoutFetching ? 'Uppdaterar...' : 'Uppdatera'}</span>
+            </button>
+            <button 
+              className="btn-overview"
+              onClick={() => setShowScoutModal(true)}
+            >
+              <Eye size={16} />
+              <span>Visa alla</span>
+            </button>
+          </div>
         </div>
       </Card>
 
