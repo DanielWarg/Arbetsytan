@@ -1789,17 +1789,33 @@ async def create_project_from_feed(
         content = validate_and_fetch(request.url)
         feed_data = parse_feed(content)
         
-        # Create project
+        # Determine project name
         project_name = request.project_name or feed_data['title'] or "Feed Import"
-        db_project = Project(
-            name=project_name,
-            description=feed_data.get('description'),
-            classification=Classification.NORMAL,
-            status=ProjectStatus.RESEARCH
-        )
-        db.add(db_project)
-        db.commit()
-        db.refresh(db_project)
+        
+        # Check if project with same name already exists (for dedupe within same project)
+        db_project = db.query(Project).filter(Project.name == project_name).first()
+        
+        if not db_project:
+            # Create new project
+            db_project = Project(
+                name=project_name,
+                description=feed_data.get('description'),
+                classification=Classification.NORMAL,
+                status=ProjectStatus.RESEARCH
+            )
+            db.add(db_project)
+            db.commit()
+            db.refresh(db_project)
+            
+            # Create initial event
+            event = ProjectEvent(
+                project_id=db_project.id,
+                event_type="project_created",
+                actor=username,
+                event_metadata=_safe_event_metadata({"name": project_name, "source": "feed_import"}, context="audit")
+            )
+            db.add(event)
+            db.commit()
         
         # Create initial event
         event = ProjectEvent(
@@ -1808,9 +1824,6 @@ async def create_project_from_feed(
             actor=username,
             event_metadata=_safe_event_metadata({"name": project_name, "source": "feed_import"}, context="audit")
         )
-        db.add(event)
-        db.commit()
-        
         # Process feed items
         created_count = 0
         skipped_duplicates = 0
