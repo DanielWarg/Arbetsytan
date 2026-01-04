@@ -845,6 +845,19 @@ function ProjectDetail() {
                           <Mic size={24} />
                           <span>Starta inspelning</span>
                         </button>
+                        
+                        {/* Success message */}
+                        {recordingSuccess && (
+                          <div className="recording-success-box">
+                            <p className="recording-success-text">Klart</p>
+                            <Link 
+                              to={`/projects/${id}/documents/${recordingSuccess.documentId}`}
+                              className="recording-success-link"
+                            >
+                              Öppna dokument
+                            </Link>
+                          </div>
+                        )}
                       </div>
                     )}
                     {isRecording && (
@@ -951,16 +964,6 @@ function ProjectDetail() {
                     </div>
                   </div>
                 )}
-                
-                    {/* Success message */}
-                    {recordingSuccess && (
-                      <div className="recording-success">
-                        <p>Klart</p>
-                        <Link to={`/projects/${id}/documents/${recordingSuccess.documentId}`}>
-                          Öppna dokument
-                        </Link>
-                      </div>
-                    )}
                     
                     {/* Error message */}
                     {recordingError && (

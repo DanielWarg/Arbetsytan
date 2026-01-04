@@ -617,26 +617,28 @@
 .audio-action-primary {
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
-  border: 1.5px solid var(--color-brand-red);
+  border: 1px solid var(--color-border-default);
 }
 
 .audio-action-primary svg {
-  stroke: var(--color-brand-red);
+  stroke: var(--color-text-primary);
+  opacity: 0.8;
 }
 
 .audio-action-primary:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.05);
-  border-color: var(--color-brand-red);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
   transform: translateY(-1px);
 }
 
 .audio-action-primary.active {
-  background: rgba(220, 38, 38, 0.1);
-  border-color: var(--color-brand-red);
+  background: var(--color-bg-active);
+  border-color: var(--color-border-hover);
 }
 
 .audio-action-primary.active svg {
-  stroke: var(--color-brand-red);
+  stroke: var(--color-text-primary);
+  opacity: 1;
 }
 
 .audio-action-secondary {
@@ -806,7 +808,7 @@
   padding: 0.875rem 2rem;
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
-  border: 1.5px solid var(--color-brand-red);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-size-base);
@@ -816,15 +818,20 @@
 }
 
 .record-start-btn svg {
-  stroke: var(--color-brand-red);
+  stroke: var(--color-text-primary);
   stroke-width: 2;
+  opacity: 0.8;
 }
 
 .record-start-btn:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.05);
-  border-color: var(--color-brand-red);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-hover);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.record-start-btn:hover:not(:disabled) svg {
+  opacity: 1;
 }
 
 .record-start-btn:disabled {
@@ -907,15 +914,40 @@
   text-align: center;
 }
 
-.recording-success {
+.recording-success-box {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
   text-align: center;
-  padding: var(--spacing-lg);
-  min-height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
+}
+
+.recording-success-text {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  margin: 0;
+}
+
+.recording-success-link {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  text-decoration: none;
+  transition: opacity 0.2s;
+  cursor: pointer;
+}
+
+.recording-success-link:hover {
+  opacity: 0.7;
+  text-decoration: underline;
 }
 
 /* Recording Pipeline - Visual progress indicator */
