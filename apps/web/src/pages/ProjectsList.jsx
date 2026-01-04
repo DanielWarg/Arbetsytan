@@ -61,7 +61,7 @@ function ProjectsList() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=6', {
+        const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
           headers: {
             'Authorization': `Basic ${auth}`
           },
@@ -129,7 +129,7 @@ function ProjectsList() {
       })
       
       // Refresh items after fetching feeds
-      const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=6', {
+      const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
         headers: {
           'Authorization': `Basic ${auth}`
         },
@@ -348,7 +348,7 @@ function ProjectsList() {
         <div className="overview-card-content">
             {scoutItems.length > 0 ? (
               <div className="scout-widget-list">
-                {scoutItems.slice(0, 6).map(item => (
+                {scoutItems.map(item => (
                 <a
                   key={item.id}
                   href={item.link || '#'}

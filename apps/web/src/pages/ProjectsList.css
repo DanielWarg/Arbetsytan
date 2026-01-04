@@ -59,7 +59,7 @@
 /* Scout box - tight, shows 6 items */
 .scout-card-fullwidth {
   min-height: 240px;
-  max-height: 260px;
+  max-height: 260px; /* Same height as "Mina projekt" */
   margin-bottom: var(--spacing-lg);
 }
 
@@ -78,9 +78,11 @@
 
 .scout-card-fullwidth .scout-widget-list {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto; /* Enable scroll */
+  overflow-x: hidden;
   margin-bottom: var(--spacing-xs);
-  padding-right: 0;
+  padding-right: var(--spacing-xs); /* Space for scrollbar */
+  min-height: 0; /* Allow flex shrinking */
 }
 
 /* Custom scrollbar for scout list */
@@ -795,9 +797,9 @@
   gap: var(--spacing-xs);
   white-space: nowrap;
   overflow: hidden;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm); /* Increased from xs to sm */
   font-family: var(--font-sans);
-  padding: 4px var(--spacing-xs);
+  padding: 6px var(--spacing-sm); /* Increased padding */
   border-radius: var(--radius-sm);
   transition: background-color 0.2s;
 }
@@ -815,7 +817,7 @@
 
 .scout-widget-badge {
   flex-shrink: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-xs); /* Keep badge small */
 }
 
 .scout-widget-title {
@@ -824,12 +826,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm); /* Increased from xs to sm */
 }
 
 .scout-widget-time {
   color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-xs); /* Keep time small */
   flex-shrink: 0;
 }
 

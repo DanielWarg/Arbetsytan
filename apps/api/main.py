@@ -1624,12 +1624,31 @@ async def list_scout_feeds(
                 name="Polisen – Pressmeddelanden Västra Götaland",
                 url="https://polisen.se/aktuellt/rss/vastra-gotaland/pressmeddelanden-rss---vastra-gotaland/",
                 is_enabled=True
+            ),
+            ScoutFeed(
+                name="Göteborgs tingsrätt",
+                url="https://www.domstol.se/feed/56/?searchPageId=1139&scope=news",
+                is_enabled=True
             )
         ]
         for feed in defaults:
             db.add(feed)
         db.commit()
-        logger.info("Scout: Created 2 default feeds (both enabled)")
+        logger.info("Scout: Created 3 default feeds (all enabled)")
+    else:
+        # Kontrollera om Göteborgs tingsrätt feed saknas och lägg till den
+        domstol_feed = db.query(ScoutFeed).filter(
+            ScoutFeed.url == "https://www.domstol.se/feed/56/?searchPageId=1139&scope=news"
+        ).first()
+        if not domstol_feed:
+            new_feed = ScoutFeed(
+                name="Göteborgs tingsrätt",
+                url="https://www.domstol.se/feed/56/?searchPageId=1139&scope=news",
+                is_enabled=True
+            )
+            db.add(new_feed)
+            db.commit()
+            logger.info("Scout: Added Göteborgs tingsrätt feed to existing feeds")
     
     feeds = db.query(ScoutFeed).all()
     return feeds
