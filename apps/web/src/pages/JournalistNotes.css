@@ -963,12 +963,82 @@
   border-top: 1px solid var(--color-border-default);
 }
 
+.edit-modal-footer-left {
+  flex: 1;
+}
+
+.edit-modal-footer-right {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
 .edit-modal-footer-text {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-style: italic;
   font-family: var(--font-sans);
   margin: 0;
+}
+
+.edit-modal-images {
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border-default);
+}
+
+.edit-modal-images-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-md);
+  font-family: var(--font-sans);
+}
+
+.edit-modal-images-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.edit-modal-image-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.edit-modal-image-thumb {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-modal-image-thumb:hover {
+  border-color: var(--color-interactive-default);
+  transform: scale(1.02);
+}
+
+.edit-modal-image-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-hover);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.edit-modal-image-filename {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn-close-edit {

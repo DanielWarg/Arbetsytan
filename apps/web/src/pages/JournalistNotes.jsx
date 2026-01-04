@@ -159,28 +159,9 @@ function JournalistNotes({ projectId }) {
     }
   }, [])
 
-  // Autosave with debounce
-  useEffect(() => {
-    if (!activeNoteId) return
-    
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
-    }
-    
-    // Set new timeout (2 seconds)
-    saveTimeoutRef.current = setTimeout(async () => {
-      await saveNote()
-    }, 2000)
-    
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
-      }
-    }
-  }, [noteBody, noteTitle, noteCategory, activeNoteId])
+  // Autosave removed - manual save only
 
-  const saveNote = async (manual = false) => {
+  const saveNote = async () => {
     if (!activeNoteId) return
     
     setSaving(true)
@@ -204,8 +185,7 @@ function JournalistNotes({ projectId }) {
       if (!response.ok) throw new Error('Failed to save note')
       
       setSaveStatus('saved')
-      // Show saved status longer if manually saved
-      setTimeout(() => setSaveStatus(null), manual ? 3000 : 2000)
+      setTimeout(() => setSaveStatus(null), 3000)
       
       // Refresh notes list to update preview (but preserve activeNoteId)
       const currentActiveId = activeNoteId
@@ -216,6 +196,29 @@ function JournalistNotes({ projectId }) {
       }
       // Refresh note to get updated timestamp
       await fetchNote(activeNoteId)
+      
+      // Skapa dokument från anteckningen
+      try {
+        const documentText = noteTitle ? `${noteTitle}\n\n${noteBody}` : noteBody
+        const blob = new Blob([documentText], { type: 'text/plain' })
+        const filename = noteTitle ? `${noteTitle}.txt` : `anteckning-${new Date().toISOString().split('T')[0]}.txt`
+        const file = new File([blob], filename, { type: 'text/plain' })
+        
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        await fetch(`http://localhost:8000/api/projects/${projectId}/documents`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`
+          },
+          body: formData,
+          credentials: 'omit'
+        })
+      } catch (docErr) {
+        console.error('Error creating document from note:', docErr)
+        // Fortsätt även om dokument-skapandet misslyckas
+      }
     } catch (err) {
       console.error('Error saving note:', err)
       setSaveStatus('error')
@@ -223,10 +226,6 @@ function JournalistNotes({ projectId }) {
     } finally {
       setSaving(false)
     }
-  }
-  
-  const handleManualSave = async () => {
-    await saveNote(manual=true)
   }
 
   const createNote = async () => {
@@ -424,6 +423,18 @@ function JournalistNotes({ projectId }) {
       if (!response.ok) throw new Error('Failed to upload image')
       
       const imageData = await response.json()
+      
+      // Visa bilden direkt i edit modal
+      const imgResponse = await fetch(`http://localhost:8000/api/journalist-notes/${activeNoteId}/images/${imageData.id}`, {
+        headers: { 'Authorization': `Basic ${auth}` },
+        credentials: 'omit'
+      })
+      if (imgResponse.ok) {
+        const blob = await imgResponse.blob()
+        const newImageUrl = URL.createObjectURL(blob)
+        setImageUrls(prev => ({ ...prev, [imageData.id]: newImageUrl }))
+        setImages(prev => [...prev, imageData])
+      }
       
       // Refresh note to get updated images list
       await fetchNote(activeNoteId)
@@ -645,13 +656,6 @@ function JournalistNotes({ projectId }) {
         <div className="edit-modal-content">
           {/* Fixed height status bar - prevents layout jump */}
           <div className="edit-modal-status-bar">
-            {saveStatus && (
-              <span className={`save-status save-status-${saveStatus}`}>
-                {saveStatus === 'saving' && '⏳ Sparas...'}
-                {saveStatus === 'saved' && '✓ Sparad'}
-                {saveStatus === 'error' && '✗ Fel vid sparande'}
-              </span>
-            )}
           </div>
 
           <div className="edit-modal-title-section">
@@ -728,16 +732,57 @@ function JournalistNotes({ projectId }) {
             />
           </div>
 
+          {/* Visa bilder direkt i edit modal */}
+          {images.length > 0 && (
+            <div className="edit-modal-images">
+              <p className="edit-modal-images-label">Bilder i anteckningen:</p>
+              <div className="edit-modal-images-grid">
+                {images.map(image => (
+                  <div key={image.id} className="edit-modal-image-item">
+                    {imageUrls[image.id] ? (
+                      <img
+                        src={imageUrls[image.id]}
+                        alt={image.filename}
+                        className="edit-modal-image-thumb"
+                        onClick={() => setSelectedImage(image)}
+                      />
+                    ) : (
+                      <div className="edit-modal-image-thumb edit-modal-image-loading">
+                        Laddar...
+                      </div>
+                    )}
+                    <p className="edit-modal-image-filename">{image.filename}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="edit-modal-footer">
-            <p className="edit-modal-footer-text">
-              Anteckningar sparas automatiskt var 2:a sekund.
-            </p>
-            <button
-              className="btn-close-edit"
-              onClick={() => setShowEditModal(false)}
-            >
-              Stäng
-            </button>
+            <div className="edit-modal-footer-left">
+              {saveStatus && (
+                <span className={`save-status save-status-${saveStatus}`}>
+                  {saveStatus === 'saving' && '⏳ Sparas...'}
+                  {saveStatus === 'saved' && '✓ Sparad'}
+                  {saveStatus === 'error' && '✗ Fel vid sparande'}
+                </span>
+              )}
+            </div>
+            <div className="edit-modal-footer-right">
+              <button
+                className="btn-save-note"
+                onClick={saveNote}
+                disabled={saving}
+              >
+                {saving ? 'Sparar...' : 'Spara'}
+              </button>
+              <button
+                className="btn-close-edit"
+                onClick={() => setShowEditModal(false)}
+              >
+                Stäng
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
