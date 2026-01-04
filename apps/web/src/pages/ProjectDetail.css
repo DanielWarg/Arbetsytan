@@ -24,6 +24,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
+  position: relative;
 }
 
 .sidebar-section {
@@ -44,6 +45,80 @@
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
+}
+
+.sidebar-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: auto;
+}
+
+.sidebar-action-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.sidebar-action-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.sidebar-action-select {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+}
+
+.sidebar-action-select:focus {
+  border-color: var(--color-interactive-default);
+}
+
+.sidebar-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
+  border: 1px solid var(--color-interactive-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-sans);
+  transition: all 0.2s;
+  width: 100%;
+  justify-content: center;
+}
+
+.sidebar-action-btn:hover {
+  background: var(--color-interactive-hover);
+  border-color: var(--color-interactive-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Using projects-page and projects-header from ProjectsList.css for consistency */

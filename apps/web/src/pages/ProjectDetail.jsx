@@ -697,39 +697,6 @@ function ProjectDetail() {
             )
           })()}
         </div>
-        <div className="project-status-section">
-          <label className="project-status-label">Status:</label>
-          <select 
-            className="project-status-select"
-            value={project.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            disabled={updatingStatus}
-          >
-            <option value="research">Research</option>
-            <option value="processing">Bearbetning</option>
-            <option value="fact_check">Faktakoll</option>
-            <option value="ready">Klar</option>
-            <option value="archived">Arkiverad</option>
-          </select>
-        </div>
-        <div className="project-header-actions">
-          <button 
-            className="project-action-btn"
-            onClick={() => setShowEditModal(true)}
-            title="Redigera projekt"
-          >
-            <Edit size={18} />
-            <span>Redigera</span>
-          </button>
-          <button 
-            className="project-action-btn"
-            onClick={() => setShowExportModal(true)}
-            title="Ladda ner projektet som fil"
-          >
-            <FileText size={18} />
-            <span>Exportera</span>
-          </button>
-        </div>
       </div>
 
       <div className="workspace-container">
@@ -1129,6 +1096,45 @@ function ProjectDetail() {
                 ))}
               </div>
             )}
+          </div>
+          
+          {/* Sidebar Actions - Fixed to right */}
+          <div className="sidebar-actions">
+            <div className="sidebar-action-item">
+              <label className="sidebar-action-label">Status:</label>
+              <select 
+                className="sidebar-action-select"
+                value={project.status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={updatingStatus}
+              >
+                <option value="research">Research</option>
+                <option value="processing">Bearbetning</option>
+                <option value="fact_check">Faktakoll</option>
+                <option value="ready">Klar</option>
+                <option value="archived">Arkiverad</option>
+              </select>
+            </div>
+            <div className="sidebar-action-item">
+              <button 
+                className="sidebar-action-btn"
+                onClick={() => setShowEditModal(true)}
+                title="Redigera projekt"
+              >
+                <Edit size={18} />
+                <span>Redigera</span>
+              </button>
+            </div>
+            <div className="sidebar-action-item">
+              <button 
+                className="sidebar-action-btn"
+                onClick={() => setShowExportModal(true)}
+                title="Ladda ner projektet som fil"
+              >
+                <FileText size={18} />
+                <span>Exportera</span>
+              </button>
+            </div>
           </div>
         </div>
 
