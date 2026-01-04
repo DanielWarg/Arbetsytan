@@ -7,6 +7,7 @@ import sys
 import os
 import json
 import requests
+import time
 from pathlib import Path
 
 # Add parent directory to path
@@ -16,6 +17,9 @@ API_BASE = os.getenv("API_URL", "http://localhost:8000")
 AUTH = (os.getenv("AUTH_USER", "admin"), os.getenv("AUTH_PASS", "password"))
 
 os.environ["DEBUG"] = "true"
+
+# Generate unique project name for each test run
+UNIQUE_PROJECT_NAME = f"Feed Import Test {int(time.time())}"
 
 
 def main():
@@ -86,7 +90,7 @@ def main():
             auth=AUTH,
             json={
                 "url": test_url,
-                "project_name": "Feed Import Test",
+                "project_name": UNIQUE_PROJECT_NAME,
                 "limit": 3
             },
             timeout=60
