@@ -8,6 +8,21 @@
   padding: var(--spacing-3xl);
 }
 
+.back-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--spacing-md);
+  display: inline-block;
+  font-family: var(--font-sans);
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+}
+
 .scout-header {
   margin-bottom: var(--spacing-3xl);
 }

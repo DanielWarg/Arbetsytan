@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../ui/Badge'
 import './Scout.css'
 
@@ -126,6 +127,7 @@ function Scout() {
 
   return (
     <div className="scout-page">
+      <Link to="/projects" className="back-link">← Tillbaka till kontrollrum</Link>
       <div className="scout-header">
         <h1 className="scout-title">Scout</h1>
       </div>
