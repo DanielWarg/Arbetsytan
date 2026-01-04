@@ -63,5 +63,28 @@ BEGIN
                    WHERE table_name='documents' AND column_name='metadata') THEN
         ALTER TABLE documents ADD COLUMN metadata JSONB;
     END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='documents' AND column_name='document_metadata') THEN
+        ALTER TABLE documents ADD COLUMN document_metadata JSONB;
+    END IF;
+END $$;
+
+-- Add url column to project_sources (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='project_sources' AND column_name='url') THEN
+        ALTER TABLE project_sources ADD COLUMN url TEXT;
+    END IF;
+END $$;
+
+-- Add usage_restrictions to project_notes (idempotent)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='project_notes' AND column_name='usage_restrictions') THEN
+        ALTER TABLE project_notes ADD COLUMN usage_restrictions JSONB DEFAULT '{"ai_allowed": true, "export_allowed": true}';
+    END IF;
 END $$;
 

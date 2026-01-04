@@ -94,6 +94,7 @@ class ProjectNote(Base):
     masked_body = Column(Text, nullable=False)  # Masked/sanitized body text
     sanitize_level = Column(SQLEnum(SanitizeLevel), default=SanitizeLevel.NORMAL, nullable=False)
     pii_gate_reasons = Column(JSON, nullable=True)
+    usage_restrictions = Column(JSON, nullable=True)  # Same as Document: {"ai_allowed": bool, "export_allowed": bool}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="notes")
@@ -146,6 +147,7 @@ class ProjectSource(Base):
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)  # Kort, manuell titel
     type = Column(SQLEnum(SourceType), nullable=False)
+    url = Column(String, nullable=True)  # URL för länk-källor (first-class field)
     comment = Column(String, nullable=True)  # Valfri, kort kommentar
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

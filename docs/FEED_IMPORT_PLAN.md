@@ -1,5 +1,77 @@
 # Feed Import Implementation Plan
 
+## IMPLEMENTED (Full Feed Import)
+
+### Completed Features
+
+#### 1. Model & Schema Changes
+- ✅ **ProjectSource.url**: Added `url` field (first-class, nullable for backward compatibility)
+- ✅ **ProjectNote.usage_restrictions**: Added `usage_restrictions` JSON field (same as Document)
+- ✅ **Project.tags**: Verified exists (JSON field)
+- ✅ **Schemas**: Updated `ProjectSourceResponse`, `CreateProjectFromFeedRequest` (with `mode`), `CreateProjectFromFeedResponse` (with `created_notes`, `created_sources`)
+
+#### 2. Database Migrations (Idempotent)
+- ✅ **project_sources.url**: Added via `init_db.sql` with idempotent check
+- ✅ **project_notes.usage_restrictions**: Added via `init_db.sql` with idempotent check
+
+#### 3. Fulltext Extraction
+- ✅ **trafilatura**: Primary extraction library (with fallback to BeautifulSoup + html2text)
+- ✅ **fetch_article_text()**: Implements fulltext extraction with SSRF protection
+- ✅ **Fallback chain**: trafilatura → BeautifulSoup+html2text → simple text extraction → RSS summary
+
+#### 4. Tag Derivation
+- ✅ **derive_tags()**: Extracts tags from feed title/URL
+  - Always includes "rss"
+  - Includes "polisen" if found in title/URL
+  - Extracts region from feed title (split on " – " or " - ", slug second part)
+  - Example: "Polisen – Västra Götaland" → ["polisen", "västra-götaland", "rss"]
+
+#### 5. Pipeline Reuse
+- ✅ **run_sanitize_pipeline()**: Helper function that runs full pipeline (normalize → mask_text progressive → pii_gate_check)
+- ✅ **Fail-closed**: If pipeline fails, item is skipped (no partial writes)
+- ✅ **Same pipeline for Document and ProjectNote**: Both use identical sanitization
+
+#### 6. Endpoints
+- ✅ **GET /api/feeds/preview**: Preview feed without creating project
+- ✅ **POST /api/projects/from-feed**: Full implementation with:
+  - Project creation with description/tags
+  - Document creation (with metadata)
+  - ProjectSource creation (with URL, dedupe on URL)
+  - ProjectNote creation (with masked_body, sanitize_level, usage_restrictions)
+  - Fulltext extraction (mode="fulltext") or summary (mode="summary")
+  - Idempotent deduplication (per project on item_guid or item_link)
+
+#### 7. SSRF Protection
+- ✅ **validate_and_fetch()**: Robust SSRF protection for both feed and article URLs
+  - Only http/https allowed
+  - DNS resolution + IP validation (blocks private IPs)
+  - Redirect validation (max 3 redirects, validates each hop)
+  - Timeout 10s, max 5MB
+
+#### 8. Verification
+- ✅ **verify_feed_project_full.py**: Comprehensive test script
+  - Tests preview endpoint
+  - Tests project creation with fulltext
+  - Verifies database state (Project, Document, ProjectNote, ProjectSource)
+  - Tests idempotency (re-import yields 0 new items)
+- ✅ **Make target**: `make verify-feed-full`
+
+#### 9. Files Changed
+- `apps/api/models.py`: Added `ProjectSource.url`, `ProjectNote.usage_restrictions`
+- `apps/api/schemas.py`: Updated feed-related schemas
+- `apps/api/init_db.sql`: Added idempotent migrations
+- `apps/api/feeds.py`: Added `fetch_article_text()`, `derive_tags()`, updated `validate_and_fetch()`
+- `apps/api/main.py`: Added `run_sanitize_pipeline()`, updated `create_project_from_feed` endpoint
+- `apps/api/requirements.txt`: Added trafilatura, beautifulsoup4, html2text
+- `apps/api/_verify/verify_feed_project_full.py`: New verification script
+- `Makefile`: Added `verify-feed-full` target
+- `tests/fixtures/sample.rss`: Test RSS fixture
+- `tests/fixtures/sample_article.html`: Test article HTML fixture
+
+---
+
+# Feed Import Implementation Plan (Original)
+
 ## A) Inventory - Nuvarande System
 
 ### Projekt-skapande

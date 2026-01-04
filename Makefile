@@ -1,4 +1,4 @@
-.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import
+.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import verify-feed-full
 
 dev:
 	@echo "Starting development environment..."
@@ -264,4 +264,19 @@ verify-feed-import:
 	@echo "✅ FEED IMPORT VERIFICATION COMPLETE"
 	@echo "======================================================================"
 	@echo "Results: apps/api/test_results/feed_import_verify.json"
+	@echo ""
+
+verify-feed-full:
+	@echo "======================================================================"
+	@echo "FEED IMPORT FULL VERIFICATION (Project + Note + Source + Document)"
+	@echo "======================================================================"
+	@docker-compose exec -T api python3 /app/_verify/verify_feed_project_full.py || \
+		(echo "" && \
+		 echo "Note: If containers are not running, start with 'make dev' first" && \
+		 exit 1)
+	@echo ""
+	@echo "======================================================================"
+	@echo "✅ FEED IMPORT FULL VERIFICATION COMPLETE"
+	@echo "======================================================================"
+	@echo "Results: test_results/feed_project_full_verify.json"
 	@echo ""

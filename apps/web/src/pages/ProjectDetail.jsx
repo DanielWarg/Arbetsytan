@@ -23,6 +23,7 @@ function ProjectDetail() {
   const [ingestMode, setIngestMode] = useState('document') // document, note, audio
   const [showEditModal, setShowEditModal] = useState(false)
   const [sources, setSources] = useState([])
+  const [projectNotes, setProjectNotes] = useState([])
   const [showAddSourceModal, setShowAddSourceModal] = useState(false)
   const [addingSource, setAddingSource] = useState(false)
   const [newSource, setNewSource] = useState({ title: '', type: 'link', comment: '' })
@@ -66,7 +67,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const [projectRes, eventsRes, documentsRes, sourcesRes] = await Promise.all([
+      const [projectRes, eventsRes, documentsRes, sourcesRes, notesRes] = await Promise.all([
         fetch(`http://localhost:8000/api/projects/${id}`, {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
@@ -78,6 +79,9 @@ function ProjectDetail() {
         }),
         fetch(`http://localhost:8000/api/projects/${id}/sources`, {
           headers: { 'Authorization': `Basic ${auth}` }
+        }),
+        fetch(`http://localhost:8000/api/projects/${id}/notes`, {
+          headers: { 'Authorization': `Basic ${auth}` }
         })
       ])
       
@@ -88,11 +92,13 @@ function ProjectDetail() {
       const eventsData = await eventsRes.json()
       const documentsData = documentsRes.ok ? await documentsRes.json() : []
       const sourcesData = sourcesRes.ok ? await sourcesRes.json() : []
+      const notesData = notesRes.ok ? await notesRes.json() : []
       
       setProject(projectData)
       setEvents(eventsData)
       setDocuments(documentsData)
       setSources(sourcesData)
+      setProjectNotes(notesData)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1082,8 +1088,34 @@ function ProjectDetail() {
           </div>
         </div>
 
-        {/* Sidebar - Källor */}
+        {/* Sidebar - Källor & Anteckningar */}
         <div className="workspace-sidebar">
+          {/* Project Notes Section */}
+          {projectNotes.length > 0 && (
+            <div className="sidebar-section">
+              <div className="sidebar-section-header">
+                <h3 className="sidebar-section-title">Anteckningar (Feed)</h3>
+              </div>
+              <div className="sidebar-section-content">
+                {projectNotes.map(note => (
+                  <div key={note.id} className="sidebar-item">
+                    <div className="sidebar-item-title">{note.title || 'Anteckning'}</div>
+                    <div className="sidebar-item-meta">
+                      <span className="sidebar-item-date">
+                        {new Date(note.created_at).toLocaleDateString('sv-SE')}
+                      </span>
+                      {note.sanitize_level && (
+                        <Badge variant="normal" className="sidebar-item-badge">
+                          {note.sanitize_level}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           <div className="sidebar-section">
             <div className="sidebar-section-header">
               <h3 className="sidebar-section-title">Källor</h3>

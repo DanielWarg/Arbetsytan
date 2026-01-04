@@ -272,7 +272,7 @@ function ProjectsList() {
     navigate(`/projects/${project.id}`)
   }
 
-  const handleCreateProjectFromFeed = async (feedUrl, feedName) => {
+  const handleCreateProjectFromFeed = async (feedUrl, feedName, mode = 'fulltext') => {
     try {
       const auth = btoa('admin:password')
       const response = await fetch('http://localhost:8000/api/projects/from-feed', {
@@ -284,7 +284,8 @@ function ProjectsList() {
         body: JSON.stringify({
           url: feedUrl,
           project_name: feedName,
-          limit: 10
+          limit: 10,
+          mode: mode
         })
       })
       
