@@ -35,6 +35,58 @@
   margin-top: var(--spacing-xl);
 }
 
+/* Note item styling */
+.note-item {
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  margin-bottom: var(--spacing-sm);
+}
+
+.note-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.note-edit-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.note-edit-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.note-body-content {
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-sm);
+  background: var(--color-bg-default);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.note-body-text {
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  padding: 0;
+}
+
 .sidebar-section-header {
   display: flex;
   justify-content: space-between;
@@ -1657,6 +1709,27 @@
   color: var(--color-text-muted);
 }
 
+.source-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.source-edit-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.source-edit-btn:hover {
+  color: var(--color-text-primary);
+}
+
 .source-delete-btn {
   background: none;
   border: none;
@@ -1670,6 +1743,21 @@
 
 .source-delete-btn:hover {
   color: var(--color-brand-red);
+}
+
+.source-url {
+  margin-bottom: var(--spacing-xs);
+}
+
+.source-link {
+  font-size: var(--font-size-xs);
+  color: var(--color-brand-primary);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.source-link:hover {
+  text-decoration: underline;
 }
 
 .source-title {

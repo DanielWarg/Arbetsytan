@@ -65,7 +65,33 @@
 .document-title-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-lg);
+  width: 100%;
+}
+
+.document-title-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.document-edit-btn {
+  background: none;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.document-edit-btn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-hover);
 }
 
 .document-title {

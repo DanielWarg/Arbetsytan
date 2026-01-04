@@ -25,8 +25,15 @@ function ProjectDetail() {
   const [sources, setSources] = useState([])
   const [projectNotes, setProjectNotes] = useState([])
   const [showAddSourceModal, setShowAddSourceModal] = useState(false)
+  const [showEditSourceModal, setShowEditSourceModal] = useState(false)
+  const [showEditNoteModal, setShowEditNoteModal] = useState(false)
+  const [editingSource, setEditingSource] = useState(null)
+  const [editingNote, setEditingNote] = useState(null)
   const [addingSource, setAddingSource] = useState(false)
-  const [newSource, setNewSource] = useState({ title: '', type: 'link', comment: '' })
+  const [updatingSource, setUpdatingSource] = useState(false)
+  const [updatingNote, setUpdatingNote] = useState(false)
+  const [newSource, setNewSource] = useState({ title: '', type: 'link', url: '', comment: '' })
+  const [editNoteBody, setEditNoteBody] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: null, id: null, name: '' })
   const [deleting, setDeleting] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -508,7 +515,7 @@ function ProjectDetail() {
       if (!response.ok) throw new Error('Failed to add source')
       
       // Reset form and close modal
-      setNewSource({ title: '', type: 'link', comment: '' })
+      setNewSource({ title: '', type: 'link', url: '', comment: '' })
       setShowAddSourceModal(false)
       
       // Refresh data
@@ -518,6 +525,99 @@ function ProjectDetail() {
       alert('Kunde inte lägga till källa')
     } finally {
       setAddingSource(false)
+    }
+  }
+
+  const handleEditSource = (source) => {
+    setEditingSource(source)
+    setNewSource({
+      title: source.title || '',
+      type: source.type || 'link',
+      url: source.url || '',
+      comment: source.comment || ''
+    })
+    setShowEditSourceModal(true)
+  }
+
+  const handleUpdateSource = async (e) => {
+    e.preventDefault()
+    setUpdatingSource(true)
+    
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/sources/${editingSource.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newSource)
+      })
+      
+      if (!response.ok) throw new Error('Failed to update source')
+      
+      // Reset form and close modal
+      setEditingSource(null)
+      setNewSource({ title: '', type: 'link', url: '', comment: '' })
+      setShowEditSourceModal(false)
+      
+      // Refresh data
+      await fetchProject()
+    } catch (err) {
+      console.error('Error updating source:', err)
+      alert('Kunde inte uppdatera källa')
+    } finally {
+      setUpdatingSource(false)
+    }
+  }
+
+  const handleEditNote = (note) => {
+    setEditingNote(note)
+    setEditNoteBody(note.masked_body || '')
+    setShowEditNoteModal(true)
+  }
+
+  const handleUpdateNote = async (e) => {
+    e.preventDefault()
+    setUpdatingNote(true)
+    
+    try {
+      const username = 'admin'
+      const password = 'password'
+      const auth = btoa(`${username}:${password}`)
+      
+      const response = await fetch(`http://localhost:8000/api/projects/${id}/notes/${editingNote.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: editingNote.title,
+          body: editNoteBody
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to update note')
+      }
+      
+      // Reset and close modal
+      setEditingNote(null)
+      setEditNoteBody('')
+      setShowEditNoteModal(false)
+      
+      // Refresh data
+      await fetchProject()
+    } catch (err) {
+      console.error('Error updating note:', err)
+      alert(`Kunde inte uppdatera anteckning: ${err.message}`)
+    } finally {
+      setUpdatingNote(false)
     }
   }
 
@@ -1090,32 +1190,6 @@ function ProjectDetail() {
 
         {/* Sidebar - Källor & Anteckningar */}
         <div className="workspace-sidebar">
-          {/* Project Notes Section */}
-          {projectNotes.length > 0 && (
-            <div className="sidebar-section">
-              <div className="sidebar-section-header">
-                <h3 className="sidebar-section-title">Anteckningar (Feed)</h3>
-              </div>
-              <div className="sidebar-section-content">
-                {projectNotes.map(note => (
-                  <div key={note.id} className="sidebar-item">
-                    <div className="sidebar-item-title">{note.title || 'Anteckning'}</div>
-                    <div className="sidebar-item-meta">
-                      <span className="sidebar-item-date">
-                        {new Date(note.created_at).toLocaleDateString('sv-SE')}
-                      </span>
-                      {note.sanitize_level && (
-                        <Badge variant="normal" className="sidebar-item-badge">
-                          {note.sanitize_level}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
           <div className="sidebar-section">
             <div className="sidebar-section-header">
               <h3 className="sidebar-section-title">Källor</h3>
@@ -1128,25 +1202,75 @@ function ProjectDetail() {
               </button>
             </div>
 
-            {sources.length === 0 ? (
+            {sources.length === 0 && projectNotes.length === 0 ? (
               <p className="sources-empty">Inga källor tillagda</p>
             ) : (
               <div className="sources-list">
+                {/* Show ProjectNotes as sources */}
+                {projectNotes.map(note => (
+                  <div key={`note-${note.id}`} className="source-item">
+                    <div className="source-header">
+                      <span className="source-type-badge">Anteckning</span>
+                      <div className="source-actions">
+                        <button 
+                          className="source-edit-btn"
+                          onClick={() => handleEditNote(note)}
+                          title="Redigera anteckning"
+                        >
+                          <Edit size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="source-title">{note.title || 'Anteckning'}</div>
+                    {note.masked_body && (
+                      <div className="source-comment" style={{ 
+                        maxHeight: '150px', 
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'pre-wrap',
+                        fontSize: 'var(--font-size-xs)',
+                        fontFamily: 'monospace'
+                      }}>
+                        {note.masked_body.substring(0, 200)}{note.masked_body.length > 200 ? '...' : ''}
+                      </div>
+                    )}
+                    <div className="source-date">
+                      {new Date(note.created_at).toLocaleDateString('sv-SE')}
+                    </div>
+                  </div>
+                ))}
+                {/* Show actual sources */}
                 {sources.map(source => (
                   <div key={source.id} className="source-item">
                     <div className="source-header">
                       <span className="source-type-badge">
                         {getSourceTypeLabel(source.type)}
                       </span>
-                      <button 
-                        className="source-delete-btn"
-                        onClick={() => handleDeleteSource(source.id)}
-                        title="Radera källa"
-                      >
-                        ×
-                      </button>
+                      <div className="source-actions">
+                        <button 
+                          className="source-edit-btn"
+                          onClick={() => handleEditSource(source)}
+                          title="Redigera källa"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button 
+                          className="source-delete-btn"
+                          onClick={() => handleDeleteSource(source.id)}
+                          title="Radera källa"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                     <div className="source-title">{source.title}</div>
+                    {source.url && (
+                      <div className="source-url">
+                        <a href={source.url} target="_blank" rel="noopener noreferrer" className="source-link">
+                          {source.url}
+                        </a>
+                      </div>
+                    )}
                     {source.comment && (
                       <div className="source-comment">{source.comment}</div>
                     )}
@@ -1251,6 +1375,17 @@ function ProjectDetail() {
           </div>
           
           <div className="form-group">
+            <label htmlFor="source-url">URL</label>
+            <input
+              id="source-url"
+              type="url"
+              value={newSource.url}
+              onChange={(e) => setNewSource({...newSource, url: e.target.value})}
+              placeholder="https://..."
+            />
+          </div>
+          
+          <div className="form-group">
             <label htmlFor="source-comment">Kommentar</label>
             <textarea
               id="source-comment"
@@ -1258,7 +1393,7 @@ function ProjectDetail() {
               onChange={(e) => setNewSource({...newSource, comment: e.target.value})}
               maxLength={500}
               rows={3}
-              placeholder="Valfri beskrivning eller URL"
+              placeholder="Valfri beskrivning"
             />
           </div>
           
@@ -1277,6 +1412,136 @@ function ProjectDetail() {
               disabled={addingSource}
             >
               {addingSource ? 'Lägger till...' : 'Lägg till källa'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Note Modal */}
+      <Modal isOpen={showEditNoteModal} onClose={() => setShowEditNoteModal(false)} title="Redigera anteckning">
+        <form onSubmit={handleUpdateNote} className="add-source-form">
+          <div className="form-group">
+            <label htmlFor="edit-note-title">Titel</label>
+            <input
+              id="edit-note-title"
+              type="text"
+              value={editingNote?.title || ''}
+              onChange={(e) => setEditingNote({...editingNote, title: e.target.value})}
+              maxLength={200}
+              placeholder="Valfri titel"
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="edit-note-body">Innehåll *</label>
+            <textarea
+              id="edit-note-body"
+              value={editNoteBody}
+              onChange={(e) => setEditNoteBody(e.target.value)}
+              required
+              rows={15}
+              placeholder="Anteckningens innehåll..."
+              style={{ fontFamily: 'monospace', fontSize: '0.9em' }}
+            />
+          </div>
+          
+          <div className="modal-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowEditNoteModal(false)
+                setEditingNote(null)
+                setEditNoteBody('')
+              }}
+              disabled={updatingNote}
+            >
+              Avbryt
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={updatingNote}
+            >
+              {updatingNote ? 'Uppdaterar...' : 'Spara ändringar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Source Modal */}
+      <Modal isOpen={showEditSourceModal} onClose={() => setShowEditSourceModal(false)} title="Redigera källa">
+        <form onSubmit={handleUpdateSource} className="add-source-form">
+          <div className="form-group">
+            <label htmlFor="edit-source-title">Titel *</label>
+            <input
+              id="edit-source-title"
+              type="text"
+              value={newSource.title}
+              onChange={(e) => setNewSource({...newSource, title: e.target.value})}
+              maxLength={200}
+              required
+              placeholder="T.ex. 'Regeringens pressmeddelande'"
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="edit-source-type">Typ *</label>
+            <select
+              id="edit-source-type"
+              value={newSource.type}
+              onChange={(e) => setNewSource({...newSource, type: e.target.value})}
+              required
+            >
+              <option value="link">Länk</option>
+              <option value="person">Person</option>
+              <option value="document">Dokument</option>
+              <option value="other">Övrigt</option>
+            </select>
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="edit-source-url">URL</label>
+            <input
+              id="edit-source-url"
+              type="url"
+              value={newSource.url}
+              onChange={(e) => setNewSource({...newSource, url: e.target.value})}
+              placeholder="https://..."
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="edit-source-comment">Kommentar</label>
+            <textarea
+              id="edit-source-comment"
+              value={newSource.comment}
+              onChange={(e) => setNewSource({...newSource, comment: e.target.value})}
+              maxLength={500}
+              rows={3}
+              placeholder="Valfri beskrivning"
+            />
+          </div>
+          
+          <div className="modal-actions">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setShowEditSourceModal(false)
+                setEditingSource(null)
+                setNewSource({ title: '', type: 'link', url: '', comment: '' })
+              }}
+              disabled={updatingSource}
+            >
+              Avbryt
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={updatingSource}
+            >
+              {updatingSource ? 'Uppdaterar...' : 'Spara ändringar'}
             </Button>
           </div>
         </form>

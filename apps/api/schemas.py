@@ -58,6 +58,9 @@ class ProjectEventResponse(BaseModel):
         populate_by_name = True
 
 
+class DocumentUpdate(BaseModel):
+    masked_text: str  # Updated masked text (will be re-sanitized)
+
 class DocumentResponse(BaseModel):
     id: int
     project_id: int
@@ -92,6 +95,10 @@ class DocumentListResponse(BaseModel):
 
 # Project Notes schemas
 class NoteCreate(BaseModel):
+    title: Optional[str] = None
+    body: str  # Raw body text (will be sanitized)
+
+class NoteUpdate(BaseModel):
     title: Optional[str] = None
     body: str  # Raw body text (will be sanitized)
 
@@ -176,8 +183,15 @@ class JournalistNoteImageResponse(BaseModel):
 class ProjectSourceCreate(BaseModel):
     title: str = Field(..., max_length=200)
     type: SourceType
+    url: Optional[str] = None
     comment: Optional[str] = Field(None, max_length=500)
 
+
+class ProjectSourceUpdate(BaseModel):
+    title: Optional[str] = None
+    type: Optional[str] = None
+    url: Optional[str] = None
+    comment: Optional[str] = None
 
 class ProjectSourceResponse(BaseModel):
     id: int

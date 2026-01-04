@@ -41,9 +41,9 @@ from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote,
 from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
-    DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse,
+    DocumentResponse, DocumentListResponse, DocumentUpdate, NoteCreate, NoteUpdate, NoteResponse, NoteListResponse,
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
-    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate,
+    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectSourceUpdate, ProjectStatusUpdate,
     ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
     FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
     CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse
@@ -699,6 +699,91 @@ async def get_document(
     )
 
 
+@app.put("/api/documents/{document_id}", response_model=DocumentResponse)
+async def update_document(
+    document_id: int,
+    document_update: DocumentUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Update a document's masked_text.
+    The text will go through the same normalize/mask/sanitization pipeline.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Normalize text
+    normalized_text = normalize_text(document_update.masked_text)
+    
+    # Progressive sanitization pipeline (same as documents)
+    pii_gate_reasons = {}
+    sanitize_level = SanitizeLevel.NORMAL
+    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+    
+    # Try normal masking
+    masked_text = mask_text(normalized_text, level="normal")
+    is_safe, reasons = pii_gate_check(masked_text)
+    if is_safe:
+        sanitize_level = SanitizeLevel.NORMAL
+        pii_gate_reasons = None
+    else:
+        pii_gate_reasons["normal"] = reasons
+        
+        # Try strict masking
+        masked_text = mask_text(normalized_text, level="strict")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.STRICT
+        else:
+            pii_gate_reasons["strict"] = reasons
+            
+            # Use paranoid masking
+            masked_text = mask_text(normalized_text, level="paranoid")
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    # Update document
+    document.masked_text = masked_text
+    document.sanitize_level = sanitize_level
+    document.pii_gate_reasons = pii_gate_reasons if pii_gate_reasons else None
+    document.usage_restrictions = usage_restrictions
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=document.project_id,
+        event_type="document_updated",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "document_id": document_id,
+            "file_type": document.file_type
+        }, context="audit")
+    )
+    db.add(event)
+    
+    # Update project updated_at
+    from sqlalchemy.sql import func
+    project = db.query(Project).filter(Project.id == document.project_id).first()
+    if project:
+        project.updated_at = func.now()
+    
+    db.commit()
+    db.refresh(document)
+    
+    return DocumentResponse(
+        id=document.id,
+        project_id=document.project_id,
+        filename=document.filename,
+        file_type=document.file_type,
+        classification=document.classification.value,
+        masked_text=document.masked_text,
+        sanitize_level=document.sanitize_level.value,
+        usage_restrictions=document.usage_restrictions,
+        pii_gate_reasons=document.pii_gate_reasons,
+        created_at=document.created_at
+    )
+
 @app.delete("/api/documents/{document_id}", status_code=204)
 async def delete_document(
     document_id: int,
@@ -1070,6 +1155,79 @@ async def get_note(
         raise HTTPException(status_code=404, detail="Note not found")
     return note
 
+@app.put("/api/projects/{project_id}/notes/{note_id}", response_model=NoteResponse)
+async def update_project_note(
+    project_id: int,
+    note_id: int,
+    note_update: NoteUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Update a project note.
+    Body goes through same normalize/mask/sanitization pipeline as documents.
+    """
+    db_note = db.query(ProjectNote).filter(
+        ProjectNote.id == note_id,
+        ProjectNote.project_id == project_id
+    ).first()
+    if not db_note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Normalize text
+    normalized_text = normalize_text(note_update.body)
+    
+    # Progressive sanitization pipeline (same as documents)
+    pii_gate_reasons = {}
+    sanitize_level = SanitizeLevel.NORMAL
+    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+    
+    # Try normal masking
+    masked_text = mask_text(normalized_text, level="normal")
+    is_safe, reasons = pii_gate_check(masked_text)
+    if is_safe:
+        sanitize_level = SanitizeLevel.NORMAL
+        pii_gate_reasons = None
+    else:
+        pii_gate_reasons["normal"] = reasons
+        
+        # Try strict masking
+        masked_text = mask_text(normalized_text, level="strict")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.STRICT
+        else:
+            pii_gate_reasons["strict"] = reasons
+            
+            # Use paranoid masking
+            masked_text = mask_text(normalized_text, level="paranoid")
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    # Update note
+    if note_update.title is not None:
+        db_note.title = note_update.title
+    db_note.masked_body = masked_text
+    db_note.sanitize_level = sanitize_level
+    db_note.pii_gate_reasons = pii_gate_reasons if pii_gate_reasons else None
+    db_note.usage_restrictions = usage_restrictions
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_updated",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": note_id,
+            "note_type": "project_note"
+        }, context="audit")
+    )
+    db.add(event)
+    
+    db.commit()
+    db.refresh(db_note)
+    
+    return db_note
 
 @app.delete("/api/notes/{note_id}", status_code=204)
 async def delete_note(
@@ -1583,6 +1741,7 @@ async def create_project_source(
         project_id=project_id,
         title=source_data.title,
         type=source_data.type,
+        url=getattr(source_data, 'url', None),
         comment=source_data.comment
     )
     db.add(source)
@@ -1621,6 +1780,51 @@ async def get_project_sources(
     
     sources = db.query(ProjectSource).filter(ProjectSource.project_id == project_id).order_by(ProjectSource.created_at.desc()).all()
     return sources
+
+@app.put("/api/projects/{project_id}/sources/{source_id}", response_model=ProjectSourceResponse)
+async def update_project_source(
+    project_id: int,
+    source_id: int,
+    source_update: ProjectSourceUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Update a project source."""
+    source = db.query(ProjectSource).filter(
+        ProjectSource.id == source_id,
+        ProjectSource.project_id == project_id
+    ).first()
+    
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    
+    # Update fields if provided
+    if source_update.title is not None:
+        source.title = source_update.title
+    if source_update.type is not None:
+        source.type = source_update.type
+    if source_update.url is not None:
+        source.url = source_update.url
+    if source_update.comment is not None:
+        source.comment = source_update.comment
+    
+    db.commit()
+    db.refresh(source)
+    
+    # Log update event
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="source_updated",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "source_id": source_id,
+            "source_type": source.type.value if hasattr(source.type, 'value') else str(source.type)
+        }, context="audit")
+    )
+    db.add(event)
+    db.commit()
+    
+    return source
 
 
 @app.delete("/api/projects/{project_id}/sources/{source_id}", status_code=204)
@@ -1946,9 +2150,47 @@ async def create_project_from_feed(
                 article_text = item.get('summary_text', '')
                 logger.info(f"Using summary text length: {len(article_text)} chars")
             
-            # Build raw content (deterministic format)
+            # Build raw content with better formatting
             published_str = item.get('published') or ''
-            raw_content = f"{item['title']}\n{published_str}\n{item_link}\n\n{article_text}\n\nKälla: {item_link}"
+            published_display = ""
+            if published_str:
+                try:
+                    from datetime import datetime
+                    # Try to parse ISO format
+                    dt = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                    published_display = dt.strftime('%Y-%m-%d %H:%M')
+                except:
+                    published_display = published_str
+            
+            feed_title = feed_data.get('title', 'RSS Feed')
+            
+            if article_text:
+                raw_content = f"""KÄLLA
+{feed_title}
+{item_link}
+
+PUBLICERAD
+{published_display}
+
+INNEHÅLL
+{article_text}
+
+EXTRAKTION
+Källa hämtad via RSS + artikellänk
+Text extraherad automatiskt"""
+            else:
+                raw_content = f"""KÄLLA
+{feed_title}
+{item_link}
+
+PUBLICERAD
+{published_display}
+
+INNEHÅLL
+{item.get('summary_text', '')}
+
+EXTRAKTION
+Källa hämtad via RSS (endast sammanfattning)"""
             
             # Run sanitize pipeline (fail-closed)
             try:
@@ -1957,8 +2199,17 @@ async def create_project_from_feed(
                 logger.error(f"Pipeline failed for feed item {item_link}: {e}")
                 continue  # Skip this item (fail-closed)
             
-            # Generate stable filename
-            if item_guid:
+            # Generate filename from item title (sanitized for filesystem)
+            # Use item title as filename, fallback to guid/hash
+            if item.get('title'):
+                # Sanitize title for filename: remove special chars, limit length
+                import re
+                # Keep word chars, spaces, hyphens, and Swedish chars
+                safe_title = re.sub(r'[^\w\s\-åäöÅÄÖ]', '', item['title'])
+                safe_title = re.sub(r'\s+', '_', safe_title.strip())
+                safe_title = safe_title[:100]  # Limit length
+                filename = f"{safe_title}.txt"
+            elif item_guid:
                 filename = f"feed_{item_guid[:8]}.txt"
             else:
                 # Hash link for stable filename
@@ -2130,12 +2381,41 @@ async def create_project_from_scout_item(
                 logger.warning(f"Failed to fetch article text: {e}")
                 article_text = ""
         
-        # Build raw content from Scout item
+        # Build raw content from Scout item with better formatting
         published_str = scout_item.published_at.isoformat() if scout_item.published_at else ""
+        published_display = ""
+        if scout_item.published_at:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                published_display = dt.strftime('%Y-%m-%d %H:%M')
+            except:
+                published_display = published_str
+        
         if article_text:
-            raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\n{article_text}\n\nKälla: {scout_item.raw_source}"
+            raw_content = f"""KÄLLA
+{scout_item.raw_source or 'Scout Feed'}
+{scout_item.link}
+
+PUBLICERAD
+{published_display}
+
+INNEHÅLL
+{article_text}
+
+EXTRAKTION
+Källa hämtad via RSS + artikellänk
+Text extraherad automatiskt (Scout)"""
         else:
-            raw_content = f"{scout_item.title}\n{published_str}\n{scout_item.link}\n\nKälla: {scout_item.raw_source}"
+            raw_content = f"""KÄLLA
+{scout_item.raw_source or 'Scout Feed'}
+{scout_item.link}
+
+PUBLICERAD
+{published_display}
+
+EXTRAKTION
+Källa hämtad via RSS (endast sammanfattning)"""
         
         # Run ingest pipeline (same as document upload)
         try:
@@ -2149,10 +2429,21 @@ async def create_project_from_scout_item(
         pii_gate_reasons = pipeline_result["pii_gate_reasons"]
         usage_restrictions = pipeline_result["usage_restrictions"]
         
+        # Generate filename from scout item title (sanitized for filesystem)
+        import re
+        if scout_item.title:
+            # Keep word chars, spaces, hyphens, and Swedish chars
+            safe_title = re.sub(r'[^\w\s\-åäöÅÄÖ]', '', scout_item.title)
+            safe_title = re.sub(r'\s+', '_', safe_title.strip())
+            safe_title = safe_title[:100]  # Limit length
+            filename = f"{safe_title}.txt"
+        else:
+            filename = f"scout_item_{scout_item.id}.txt"
+        
         # Create document from Scout item
         db_document = Document(
             project_id=db_project.id,
-            filename=f"scout_item_{scout_item.id}.txt",
+            filename=filename,
             file_type="txt",
             classification=db_project.classification,
             masked_text=masked_text,
