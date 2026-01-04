@@ -189,3 +189,33 @@ class ProjectSourceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Scout schemas
+class ScoutFeedCreate(BaseModel):
+    name: str
+    url: str
+
+
+class ScoutFeedResponse(BaseModel):
+    id: int
+    name: str
+    url: str
+    is_enabled: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScoutItemResponse(BaseModel):
+    id: int
+    feed_id: int
+    title: str
+    link: str
+    published_at: Optional[datetime]
+    fetched_at: datetime
+    raw_source: str
+
+    class Config:
+        from_attributes = True

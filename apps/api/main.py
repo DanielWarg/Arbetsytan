@@ -4,13 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
+from sqlalchemy import or_, and_
 import os
 import uuid
 import shutil
 import logging
 from typing import Optional, List
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -36,13 +37,14 @@ def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
     return sanitized
 
 from database import get_db, engine
-from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
+from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
 from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
     DocumentResponse, DocumentListResponse, NoteCreate, NoteResponse, NoteListResponse,
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
-    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate
+    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectStatusUpdate,
+    ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -1600,3 +1602,100 @@ async def delete_project_source(
     logger.info(f"Source removed from project {project_id}: type={source_type}")
     
     return None
+
+
+# Scout endpoints
+@app.get("/api/scout/feeds", response_model=List[ScoutFeedResponse])
+async def list_scout_feeds(
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """List all Scout feeds. Lazy seed: creates 3 defaults if table is empty."""
+    # Lazy seed: if no feeds exist, create defaults
+    feed_count = db.query(ScoutFeed).count()
+    if feed_count == 0:
+        defaults = [
+            ScoutFeed(name="Göteborgs tingsrätt", url="", is_enabled=False),
+            ScoutFeed(name="Polisen Göteborg", url="", is_enabled=False),
+            ScoutFeed(name="TT", url="", is_enabled=False)
+        ]
+        for feed in defaults:
+            db.add(feed)
+        db.commit()
+        logger.info("Scout: Created 3 default feeds (disabled)")
+    
+    feeds = db.query(ScoutFeed).all()
+    return feeds
+
+
+@app.post("/api/scout/feeds", response_model=ScoutFeedResponse, status_code=201)
+async def create_scout_feed(
+    feed_data: ScoutFeedCreate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Create a new Scout feed."""
+    feed = ScoutFeed(
+        name=feed_data.name,
+        url=feed_data.url,
+        is_enabled=True
+    )
+    db.add(feed)
+    db.commit()
+    db.refresh(feed)
+    return feed
+
+
+@app.delete("/api/scout/feeds/{feed_id}", status_code=204)
+async def delete_scout_feed(
+    feed_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Disable a Scout feed (soft delete)."""
+    feed = db.query(ScoutFeed).filter(ScoutFeed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="Feed not found")
+    
+    feed.is_enabled = False
+    db.commit()
+    return None
+
+
+@app.get("/api/scout/items", response_model=List[ScoutItemResponse])
+async def list_scout_items(
+    hours: int = Query(24, ge=1, le=168),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """List Scout items from last N hours."""
+    from datetime import timedelta
+    from sqlalchemy import func as sql_func
+    
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    
+    # Filter: (published_at >= cutoff) OR (published_at IS NULL AND fetched_at >= cutoff)
+    items = db.query(ScoutItem).filter(
+        or_(
+            ScoutItem.published_at >= cutoff,
+            and_(ScoutItem.published_at.is_(None), ScoutItem.fetched_at >= cutoff)
+        )
+    ).order_by(
+        sql_func.coalesce(ScoutItem.published_at, ScoutItem.fetched_at).desc()
+    ).limit(limit).all()
+    
+    return items
+
+
+@app.post("/api/scout/fetch")
+async def fetch_scout_feeds(
+    mode: str = Query("fixture", regex="^(fixture|live)$"),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Manually trigger RSS feed fetch."""
+    from scout import fetch_all_feeds
+    
+    results = fetch_all_feeds(db, mode=mode)
+    return {"feeds_processed": len(results), "results": results}

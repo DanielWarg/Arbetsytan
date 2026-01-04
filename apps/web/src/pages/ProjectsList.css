@@ -685,3 +685,66 @@
   color: #fca5a5;
   border: 1px solid rgba(220, 38, 38, 0.3);
 }
+
+/* Scout Widget - tipsstrålkastare style */
+.scout-widget-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+}
+
+.scout-widget-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-sans);
+  padding: var(--spacing-xs) 0;
+}
+
+.scout-widget-badge {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+}
+
+.scout-widget-title {
+  flex: 1;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+}
+
+.scout-widget-time {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  flex-shrink: 0;
+}
+
+.btn-overview {
+  margin-top: auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  background: var(--color-interactive-default);
+  color: var(--color-interactive-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-medium);
+}
+
+.btn-overview:hover {
+  opacity: 0.9;
+}

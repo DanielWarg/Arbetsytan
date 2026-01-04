@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import ProjectsList from './pages/ProjectsList'
 import ProjectDetail from './pages/ProjectDetail'
 import DocumentView from './pages/DocumentView'
+import Scout from './pages/Scout'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
@@ -81,6 +82,7 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
             <Route path="/projects" element={<ProjectsList />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/projects/:projectId/documents/:documentId" element={<DocumentView />} />
+            <Route path="/scout" element={<Scout />} />
           </Routes>
         </div>
       </main>

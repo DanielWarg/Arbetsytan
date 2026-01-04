@@ -16,6 +16,7 @@ function ProjectsList() {
   const [error, setError] = useState(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [scoutItems, setScoutItems] = useState([])
 
   const fetchProjects = async () => {
     try {
@@ -42,6 +43,33 @@ function ProjectsList() {
 
   useEffect(() => {
     fetchProjects()
+  }, [])
+
+  useEffect(() => {
+    const fetchScoutItems = async () => {
+      try {
+        const username = 'admin'
+        const password = 'password'
+        const auth = btoa(`${username}:${password}`)
+        
+        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=5', {
+          headers: {
+            'Authorization': `Basic ${auth}`
+          },
+          credentials: 'omit'
+        })
+        
+        if (!response.ok) throw new Error('Failed to fetch scout items')
+        
+        const data = await response.json()
+        setScoutItems(data)
+      } catch (err) {
+        console.error('Error fetching scout items:', err)
+        setScoutItems([])
+      }
+    }
+    
+    fetchScoutItems()
   }, [])
 
   const handleCreateSuccess = (project) => {
@@ -185,23 +213,38 @@ function ProjectsList() {
           </div>
         </Card>
 
-        {/* Scout Widget (Placeholder) */}
+        {/* Scout Widget */}
         <Card className="overview-card">
           <div className="overview-card-header">
-            <h3 className="overview-card-title">Scout</h3>
-            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+            <h3 className="overview-card-title">Scout – senaste 24h</h3>
           </div>
           <div className="overview-card-content">
-            <p className="overview-placeholder-text">
-              Automatisk identifiering och kategorisering av innehåll.
-            </p>
-            <button 
-              className="btn-overview-disabled"
-              disabled
-            >
+            {scoutItems.length > 0 ? (
+              <div className="scout-widget-list">
+                {scoutItems.slice(0, 5).map(item => (
+                  <div key={item.id} className="scout-widget-item">
+                    <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
+                    <span className="scout-widget-title">{item.title}</span>
+                    <span className="scout-widget-time">
+                      {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="overview-empty-state">
+                <p className="overview-empty-text">Inga leads</p>
+              </div>
+            )}
+            <Link to="/scout" className="btn-overview">
               <Eye size={16} />
-              <span>Öppna Scout</span>
-            </button>
+              <span>Visa alla</span>
+            </Link>
           </div>
         </Card>
 

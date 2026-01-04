@@ -10,6 +10,7 @@ function Dashboard() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [scoutItems, setScoutItems] = useState([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -54,6 +55,37 @@ function Dashboard() {
     }
     
     fetchData()
+  }, [])
+
+  useEffect(() => {
+    const fetchScoutItems = async () => {
+      try {
+        const username = 'admin'
+        const password = 'password'
+        const auth = btoa(`${username}:${password}`)
+        
+        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=5', {
+          headers: {
+            'Authorization': `Basic ${auth}`
+          },
+          credentials: 'omit'
+        })
+        
+        if (!response.ok) {
+          console.error('Scout fetch failed:', response.status, response.statusText)
+          throw new Error(`Failed to fetch scout items: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        console.log('Scout items fetched:', data.length, data)
+        setScoutItems(data)
+      } catch (err) {
+        console.error('Error fetching scout items:', err)
+        setScoutItems([])
+      }
+    }
+    
+    fetchScoutItems()
   }, [])
 
   // Get projects with near deadlines (using shared urgency helper)
@@ -181,6 +213,32 @@ function Dashboard() {
             </Card>
           </Link>
         )}
+      </section>
+
+      <section className="dashboard-section">
+        <h2 className="section-title">Scout – senaste 24h</h2>
+        <p className="scout-subtitle">Leads från dina RSS-källor</p>
+        {scoutItems.length > 0 ? (
+          <div className="scout-items-list">
+            {scoutItems.slice(0, 5).map(item => (
+              <div key={item.id} className="scout-item">
+                <Badge variant="normal">{item.raw_source}</Badge>
+                <span className="scout-item-title">{item.title}</span>
+                <span className="scout-item-time">
+                  {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="scout-empty">Inga leads</p>
+        )}
+        <Link to="/scout" className="btn-view-all">Visa alla</Link>
       </section>
     </div>
   )

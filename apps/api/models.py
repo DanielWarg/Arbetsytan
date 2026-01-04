@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Enum as SQLEnum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Enum as SQLEnum, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -149,3 +149,28 @@ class ProjectSource(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     project = relationship("Project", back_populates="sources")
+
+
+class ScoutFeed(Base):
+    """RSS feeds för Scout-funktionalitet."""
+    __tablename__ = "scout_feeds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    url = Column(String, nullable=False)  # Kan vara placeholder/tom
+    is_enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ScoutItem(Base):
+    """RSS items från Scout feeds."""
+    __tablename__ = "scout_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    feed_id = Column(Integer, ForeignKey("scout_feeds.id"), nullable=False)
+    title = Column(String, nullable=False)
+    link = Column(String, nullable=False)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    fetched_at = Column(DateTime(timezone=True), server_default=func.now())
+    guid_hash = Column(String, unique=True, nullable=False, index=True)
+    raw_source = Column(String, nullable=False)  # Snapshot av feed.name vid fetch
