@@ -180,6 +180,21 @@ make verify-feed-import  # Verifiera feed import-funktionalitet
 make clean               # Stoppa och ta bort volumes
 ```
 
+### Fort Knox verification loop
+
+För att köra Fort Knox v1-verifieringen med automatisk hantering av restarts och compose-uppdateringar:
+
+```bash
+make verify-fortknox-v1-loop
+```
+
+Detta kommando kör verify-scriptet i en loop och hanterar automatiskt:
+- Exit code 100 (NEEDS_RESTART): Kopierar modifierad docker-compose.yml från containern, restartar API, väntar på health och kör igen
+- Exit code 0 (PASS): Avslutar med framgång
+- Exit code 1 eller annat (FAIL): Avslutar med felkod
+
+Max 8 försök. Resultat sparas i `apps/api/test_results/fortknox_v1_verify.json`.
+
 ## Showreel
 
 Detta är ett live demo-verktyg byggt som om det vore för intern nyhetsredaktionsanvändning. Fokus ligger på att visa hur säker, strukturerad hantering av känsligt material kan fungera i praktiken.

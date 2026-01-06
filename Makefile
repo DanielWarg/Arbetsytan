@@ -1,16 +1,106 @@
-.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import verify-feed-full
+.PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import verify-feed-full verify-fortknox-v1 verify-fortknox-v1-loop fortknox-local down-fortknox
 
 dev:
 	@echo "Starting development environment..."
+	@$(MAKE) fortknox-local
 	docker-compose up --build
 
 up:
 	@echo "Starting production environment..."
+	@$(MAKE) fortknox-local
 	docker-compose up -d --build
 
 down:
 	@echo "Stopping all services..."
 	docker-compose down
+	@$(MAKE) down-fortknox
+
+FORTKNOX_DIR := $(shell pwd)/fortknox-local
+
+fortknox-local:
+	@echo "======================================================================"
+	@echo "Starting Fort Knox Local services"
+	@echo "======================================================================"
+	@if [ ! -d "$(FORTKNOX_DIR)" ]; then \
+		echo "⚠️  Fort Knox Local directory not found: $(FORTKNOX_DIR)"; \
+		echo "   Skipping Fort Knox Local startup"; \
+		exit 0; \
+	fi; \
+	\
+	# Check if llama-server is already running on port 8080
+	if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		echo "✓ llama-server already running on port 8080"; \
+	else \
+		echo "Starting llama-server..."; \
+		if [ -f "$(FORTKNOX_DIR)/start_llama_server.sh" ]; then \
+			chmod +x "$(FORTKNOX_DIR)/start_llama_server.sh"; \
+			cd "$(FORTKNOX_DIR)" && nohup ./start_llama_server.sh > /tmp/llama_server.log 2>&1 & \
+			echo $$! > /tmp/llama_server.pid; \
+			echo "✓ llama-server started (PID: $$(cat /tmp/llama_server.pid), log: /tmp/llama_server.log)"; \
+			sleep 3; \
+		else \
+			echo "⚠️  start_llama_server.sh not found in $(FORTKNOX_DIR)"; \
+		fi; \
+	fi; \
+	\
+	# Check if Fort Knox Local is already running on port 8787
+	if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		echo "✓ Fort Knox Local already running on port 8787"; \
+	else \
+		echo "Starting Fort Knox Local..."; \
+		if [ -f "$(FORTKNOX_DIR)/start.sh" ]; then \
+			chmod +x "$(FORTKNOX_DIR)/start.sh"; \
+			cd "$(FORTKNOX_DIR)" && nohup ./start.sh > /tmp/fortknox_local.log 2>&1 & \
+			echo $$! > /tmp/fortknox_local.pid; \
+			echo "✓ Fort Knox Local started (PID: $$(cat /tmp/fortknox_local.pid), log: /tmp/fortknox_local.log)"; \
+			sleep 2; \
+		else \
+			echo "⚠️  start.sh not found in $(FORTKNOX_DIR)"; \
+		fi; \
+	fi; \
+	echo ""
+	@echo "======================================================================"
+	@echo "✅ Fort Knox Local services started"
+	@echo "======================================================================"
+	@echo "llama-server: http://localhost:8080"
+	@echo "Fort Knox Local: http://localhost:8787"
+	@echo ""
+	@echo "Logs:"
+	@echo "  llama-server: tail -f /tmp/llama_server.log"
+	@echo "  Fort Knox Local: tail -f /tmp/fortknox_local.log"
+	@echo ""
+	@echo "Stop with: make down-fortknox"
+	@echo ""
+
+down-fortknox:
+	@echo "Stopping Fort Knox Local services..."
+	@# Stop processes on ports first (more reliable)
+	@if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		PIDS=$$(lsof -ti :8787); \
+		for PID in $$PIDS; do \
+			kill $$PID 2>/dev/null || true; \
+			echo "✓ Stopped process on port 8787 (PID: $$PID)"; \
+		done; \
+		sleep 1; \
+		if lsof -Pi :8787 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+			lsof -ti :8787 | xargs kill -9 2>/dev/null || true; \
+			echo "✓ Force killed remaining processes on port 8787"; \
+		fi; \
+	fi
+	@if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+		PIDS=$$(lsof -ti :8080); \
+		for PID in $$PIDS; do \
+			kill $$PID 2>/dev/null || true; \
+			echo "✓ Stopped process on port 8080 (PID: $$PID)"; \
+		done; \
+		sleep 1; \
+		if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+			lsof -ti :8080 | xargs kill -9 2>/dev/null || true; \
+			echo "✓ Force killed remaining processes on port 8080"; \
+		fi; \
+	fi
+	@rm -f /tmp/fortknox_local.pid /tmp/llama_server.pid 2>/dev/null || true
+	@echo "✅ Fort Knox Local services stopped"
 
 verify:
 	@echo "Running smoke tests..."
@@ -280,3 +370,141 @@ verify-feed-full:
 	@echo "======================================================================"
 	@echo "Results: test_results/feed_project_full_verify.json"
 	@echo ""
+
+verify-fortknox-v1:
+	@echo "======================================================================"
+	@echo "FORT KNOX V1 VERIFICATION"
+	@echo "======================================================================"
+	@echo "Note: This test may restart the API container to test FORTKNOX_OFFLINE"
+	@MAX_RESTARTS=5; \
+	RESTART_COUNT=0; \
+	while [ $$RESTART_COUNT -le $$MAX_RESTARTS ]; do \
+		docker-compose exec -T -e FORTKNOX_TESTMODE=1 api python3 /app/_verify/verify_fortknox_v1.py; \
+		EXIT_CODE=$$?; \
+		if [ $$EXIT_CODE -eq 100 ]; then \
+			RESTART_COUNT=$$((RESTART_COUNT + 1)); \
+			echo "Test requires restart ($$RESTART_COUNT/$$MAX_RESTARTS) - updating docker-compose.yml..."; \
+			if docker-compose exec -T api test -f /tmp/fortknox_compose_update_needed 2>/dev/null; then \
+				COMPOSE_PATH=$$(docker-compose exec -T api cat /tmp/fortknox_compose_update_needed 2>/dev/null | head -1 | tr -d '\r\n' | xargs); \
+				echo "Compose path from container: [$$COMPOSE_PATH]"; \
+				if [ -n "$$COMPOSE_PATH" ]; then \
+					echo "Copying modified compose file from container..."; \
+					if [ ! -f docker-compose.yml.bak_before_fortknox_test ]; then \
+						cp docker-compose.yml docker-compose.yml.bak_before_fortknox_test || true; \
+					fi; \
+					if docker-compose exec -T api cat "$$COMPOSE_PATH" > ./docker-compose.yml.tmp 2>/dev/null; then \
+						if [ -f ./docker-compose.yml.tmp ] && [ -s ./docker-compose.yml.tmp ]; then \
+							mv ./docker-compose.yml.tmp docker-compose.yml; \
+							echo "✅ docker-compose.yml updated on host"; \
+							echo "Verifying update..."; \
+							grep -E "(FORTKNOX_REMOTE_URL|FORTKNOX_TESTMODE)" docker-compose.yml | head -2; \
+						else \
+							echo "⚠️ Warning: Copied file is empty or missing"; \
+							if [ -f docker-compose.yml.bak_before_fortknox_test ]; then \
+								mv docker-compose.yml.bak_before_fortknox_test docker-compose.yml 2>/dev/null || true; \
+							fi; \
+						fi; \
+					else \
+						echo "⚠️ Warning: Failed to read compose file from container"; \
+						if [ -f docker-compose.yml.bak_before_fortknox_test ]; then \
+							mv docker-compose.yml.bak_before_fortknox_test docker-compose.yml 2>/dev/null || true; \
+						fi; \
+					fi; \
+				else \
+					echo "⚠️ Warning: Empty compose path"; \
+				fi; \
+				docker-compose exec -T api rm -f /tmp/fortknox_compose_update_needed 2>/dev/null || true; \
+			fi; \
+			echo "Unsetting FORTKNOX_REMOTE_URL on host (if set)..."; \
+			unset FORTKNOX_REMOTE_URL; \
+			echo "Recreating API container (to load new env vars)..."; \
+			docker-compose up -d --force-recreate api; \
+			echo "Waiting for API to be healthy..."; \
+			sleep 20; \
+			timeout=90; \
+			while [ $$timeout -gt 0 ]; do \
+				if docker-compose exec -T api curl -f http://localhost:8000/health >/dev/null 2>&1; then \
+					echo "✅ API is healthy"; \
+					break; \
+				fi; \
+				sleep 3; \
+				timeout=$$((timeout - 3)); \
+			done; \
+			if [ $$timeout -le 0 ]; then \
+				echo "⚠️ API health check timeout, waiting additional 30s..."; \
+				sleep 30; \
+			fi; \
+			echo "Creating resume flag..."; \
+			docker-compose exec -T api touch /tmp/fortknox_resume_after_restart 2>/dev/null || true; \
+			echo "Re-running verification after restart..."; \
+			echo "Note: FORTKNOX_TESTMODE is controlled by docker-compose.yml for TEST 5"; \
+		elif [ $$EXIT_CODE -ne 0 ]; then \
+			echo ""; \
+			echo "Note: If containers are not running, start with 'make dev' first"; \
+			if [ -f docker-compose.yml.bak_before_fortknox_test ]; then \
+				echo "Restoring original docker-compose.yml..."; \
+				mv docker-compose.yml.bak_before_fortknox_test docker-compose.yml; \
+				docker-compose up -d api; \
+			fi; \
+			exit 1; \
+		else \
+			break; \
+		fi; \
+	done; \
+	if [ $$RESTART_COUNT -gt $$MAX_RESTARTS ]; then \
+		echo "⚠️ Maximum restart count reached ($$MAX_RESTARTS)"; \
+		exit 1; \
+	fi; \
+	if [ -f docker-compose.yml.bak_before_fortknox_test ]; then \
+		echo "Restoring original docker-compose.yml..."; \
+		mv docker-compose.yml.bak_before_fortknox_test docker-compose.yml; \
+		docker-compose up -d api; \
+	fi
+	@echo ""
+	@echo "======================================================================"
+	@echo "✅ FORT KNOX V1 VERIFICATION COMPLETE"
+	@echo "======================================================================"
+	@echo "Results: apps/api/test_results/fortknox_v1_verify.json"
+	@echo ""
+
+verify-fortknox-v1-loop:
+	@echo "=== Fort Knox v1 Verification (loop until done) ==="
+	@MAX=8; \
+	i=1; \
+	while [ $$i -le $$MAX ]; do \
+		echo ""; \
+		echo "--- Attempt $$i/$$MAX ---"; \
+		docker-compose exec -T api python3 /app/_verify/verify_fortknox_v1.py; \
+		code=$$?; \
+		if [ $$code -eq 0 ]; then \
+			echo "PASS: Fort Knox verification completed."; \
+			exit 0; \
+		elif [ $$code -eq 100 ]; then \
+			echo "NEEDS_RESTART (100): Applying compose update/restore and restarting api..."; \
+			if docker-compose exec -T api test -f /tmp/fortknox_compose_update_needed; then \
+				workfile=$$(docker-compose exec -T api sh -lc 'cat /tmp/fortknox_compose_update_needed | head -n 1 | tr -d "\r"'); \
+				echo "Copying compose from container workfile: $$workfile → ./docker-compose.yml"; \
+				docker-compose cp api:$$workfile ./docker-compose.yml; \
+				docker-compose exec -T api sh -lc 'rm -f /tmp/fortknox_compose_update_needed'; \
+			fi; \
+			if docker-compose exec -T api test -f /tmp/fortknox_restore_needed; then \
+				echo "Restore requested. (compose already copied back above if needed)"; \
+				docker-compose exec -T api sh -lc 'rm -f /tmp/fortknox_restore_needed'; \
+			fi; \
+			docker-compose restart api; \
+			echo "Waiting for API health..."; \
+			n=0; \
+			until curl -fsS http://localhost:8000/health >/dev/null 2>&1; do \
+				n=$$((n+1)); \
+				if [ $$n -ge 60 ]; then echo "Health timeout"; exit 1; fi; \
+				sleep 2; \
+			done; \
+			i=$$((i+1)); \
+			continue; \
+		else \
+			echo "FAIL: Verification returned $$code"; \
+			exit $$code; \
+		fi; \
+	done; \
+	echo "FAIL: Exceeded max attempts ($$MAX)."; \
+	exit 1

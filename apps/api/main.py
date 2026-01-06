@@ -37,7 +37,7 @@ def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
     return sanitized
 
 from database import get_db, engine
-from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
+from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, KnoxReport, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
 from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
@@ -46,7 +46,8 @@ from schemas import (
     JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectSourceUpdate, ProjectStatusUpdate,
     ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
     FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
-    CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse
+    CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse,
+    KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
@@ -54,6 +55,8 @@ from text_processing import (
     transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
     sanitize_journalist_note
 )
+from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy
+from fortknox_remote import compile_remote, FortKnoxRemoteError
 
 
 def run_sanitize_pipeline(raw_text: str) -> Dict:
@@ -167,14 +170,25 @@ def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 
-@app.get("/health")
-async def health():
-    """Health check endpoint (no auth required)"""
+async def health_check():
+    """Health check handler (no auth required)"""
     return {
         "status": "ok",
         "demo_mode": DEMO_MODE,
         "auth_mode": AUTH_MODE
     }
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint (no auth required)"""
+    return await health_check()
+
+
+@app.get("/api/health")
+async def api_health():
+    """Health check endpoint (no auth required) - API prefix version"""
+    return await health_check()
 
 
 @app.get("/api/hello")
@@ -1990,6 +2004,81 @@ async def fetch_scout_feeds(
     return {"feeds_processed": len(results), "results": results}
 
 
+@app.get("/api/projects/{project_id}/fortknox/reports", response_model=List[KnoxReportResponse])
+async def list_fortknox_reports(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Lista alla Fort Knox-rapporter för ett projekt.
+    
+    Returns:
+        Lista av KnoxReportResponse (metadata + rendered_markdown)
+    """
+    # Verifiera att projektet finns
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Hämta alla rapporter för projektet
+    reports = db.query(KnoxReport).filter(
+        KnoxReport.project_id == project_id
+    ).order_by(KnoxReport.created_at.desc()).all()
+    
+    return [
+        KnoxReportResponse(
+            id=report.id,
+            project_id=report.project_id,
+            policy_id=report.policy_id,
+            policy_version=report.policy_version,
+            ruleset_hash=report.ruleset_hash,
+            template_id=report.template_id,
+            engine_id=report.engine_id,
+            input_fingerprint=report.input_fingerprint,
+            input_manifest=report.input_manifest,
+            gate_results=report.gate_results,
+            rendered_markdown=report.rendered_markdown,
+            created_at=report.created_at,
+            latency_ms=report.latency_ms
+        )
+        for report in reports
+    ]
+
+
+@app.get("/api/fortknox/reports/{report_id}", response_model=KnoxReportResponse)
+async def get_fortknox_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Hämta en specifik Fort Knox-rapport.
+    
+    Returns:
+        KnoxReportResponse (metadata + rendered_markdown)
+    """
+    report = db.query(KnoxReport).filter(KnoxReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Knox report not found")
+    
+    return KnoxReportResponse(
+        id=report.id,
+        project_id=report.project_id,
+        policy_id=report.policy_id,
+        policy_version=report.policy_version,
+        ruleset_hash=report.ruleset_hash,
+        template_id=report.template_id,
+        engine_id=report.engine_id,
+        input_fingerprint=report.input_fingerprint,
+        input_manifest=report.input_manifest,
+        gate_results=report.gate_results,
+        rendered_markdown=report.rendered_markdown,
+        created_at=report.created_at,
+        latency_ms=report.latency_ms
+    )
+
+
 # ===== FEED IMPORT ENDPOINTS =====
 
 @app.get("/api/feeds/preview", response_model=FeedPreviewResponse)
@@ -2498,3 +2587,261 @@ Källa hämtad via RSS (endast sammanfattning)"""
     except Exception as e:
         logger.error(f"Error creating project from scout item {request.scout_item_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create project from scout item: {str(e)}")
+
+
+# ============================================================================
+# Fort Knox endpoints
+# ============================================================================
+
+@app.post("/api/fortknox/compile", response_model=KnoxReportResponse, status_code=201)
+async def compile_fortknox_report(
+    request: KnoxCompileRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Kompilera Fort Knox-rapport från projekt.
+    
+    Pipeline:
+    1. Bygg KnoxInputPack (deterministiskt)
+    2. Input Gate (sanitize level + PII gate + size check)
+    3. Idempotens Check (om rapport redan finns, returnera den)
+    4. Remote URL Check (om saknas → FORTKNOX_OFFLINE)
+    5. Remote Call (eller test mode)
+    6. Output Gate + Re-ID Guard
+    7. Spara KnoxReport
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        # Hämta policy
+        policy = get_policy(request.policy_id)
+        
+        # 1. Bygg KnoxInputPack
+        pack = build_knox_input_pack(
+            project_id=request.project_id,
+            policy=policy,
+            template_id=request.template_id,
+            db=db
+        )
+        
+        # 2. Input Gate
+        input_pass, input_reasons = input_gate(pack, policy)
+        if not input_pass:
+            logger.warning(
+                "Fort Knox compile: Input gate failed",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id,
+                    "reasons": input_reasons
+                }
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="INPUT_GATE_FAILED",
+                    reasons=input_reasons,
+                    detail="Input gate validation failed"
+                ).model_dump()
+            )
+        
+        # 3. Idempotens Check (före remote URL-check)
+        existing_report = db.query(KnoxReport).filter(
+            KnoxReport.project_id == request.project_id,
+            KnoxReport.policy_id == request.policy_id,
+            KnoxReport.template_id == request.template_id,
+            KnoxReport.input_fingerprint == pack.input_fingerprint
+        ).first()
+        
+        if existing_report:
+            logger.info(
+                "Fort Knox compile: Returning existing report (idempotency)",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id,
+                    "report_id": existing_report.id,
+                    "input_fingerprint": pack.input_fingerprint
+                }
+            )
+            # Returnera befintlig rapport (även om remote offline)
+            return KnoxReportResponse(
+                id=existing_report.id,
+                project_id=existing_report.project_id,
+                policy_id=existing_report.policy_id,
+                policy_version=existing_report.policy_version,
+                ruleset_hash=existing_report.ruleset_hash,
+                template_id=existing_report.template_id,
+                engine_id=existing_report.engine_id,
+                input_fingerprint=existing_report.input_fingerprint,
+                input_manifest=existing_report.input_manifest,
+                gate_results=existing_report.gate_results,
+                rendered_markdown=existing_report.rendered_markdown,
+                created_at=existing_report.created_at,
+                latency_ms=existing_report.latency_ms
+            )
+        
+        # 4. Remote URL Check (endast om inte test mode)
+        test_mode = os.getenv("FORTKNOX_TESTMODE", "0") == "1"
+        remote_url = os.getenv("FORTKNOX_REMOTE_URL", "").strip()
+        
+        if not test_mode and not remote_url:
+            logger.warning(
+                "Fort Knox compile: FORTKNOX_REMOTE_URL not set",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id
+                }
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=KnoxErrorResponse(
+                    error_code="FORTKNOX_OFFLINE",
+                    reasons=["remote_url_not_configured"],
+                    detail="FORTKNOX_REMOTE_URL not set"
+                ).model_dump()
+            )
+        
+        # 5. Remote Call
+        try:
+            # I test mode, remote_url kan vara tomt (compile_remote hanterar test mode)
+            llm_response = compile_remote(
+                pack=pack,
+                policy=policy,
+                template_id=request.template_id,
+                remote_url=remote_url if remote_url else "http://test"  # Dummy URL för test mode
+            )
+        except FortKnoxRemoteError as e:
+            logger.error(
+                f"Fort Knox compile: Remote error: {e.error_code}",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id,
+                    "error_code": e.error_code,
+                    "reasons": e.reasons
+                }
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=KnoxErrorResponse(
+                    error_code="REMOTE_ERROR",
+                    reasons=e.reasons,
+                    detail=e.detail
+                ).model_dump()
+            )
+        
+        # 6. Render Markdown
+        rendered_markdown = render_markdown(llm_response.model_dump(), request.template_id)
+        
+        # 7. Output Gate + Re-ID Guard
+        # Samla input texts för re-ID guard
+        input_texts = [doc.masked_text for doc in pack.documents] + [note.masked_body for note in pack.notes]
+        
+        # PII gate check på rendered markdown
+        is_safe, pii_reasons = pii_gate_check(rendered_markdown)
+        output_gate_reasons = []
+        if not is_safe:
+            output_gate_reasons.extend([f"pii_gate_{reason}" for reason in pii_reasons])
+        
+        # Re-ID Guard
+        re_id_pass, re_id_reasons = re_id_guard(rendered_markdown, input_texts, policy)
+        if not re_id_pass:
+            output_gate_reasons.extend(re_id_reasons)
+        
+        # Fail-closed: om output gate fail, spara ingen rapport
+        if output_gate_reasons:
+            logger.warning(
+                "Fort Knox compile: Output gate failed",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id,
+                    "reasons": output_gate_reasons
+                }
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="OUTPUT_GATE_FAILED",
+                    reasons=output_gate_reasons,
+                    detail="Output gate validation failed"
+                ).model_dump()
+            )
+        
+        # 8. Spara KnoxReport
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        gate_results = {
+            "input": {"pass": True, "reasons": []},
+            "output": {"pass": True, "reasons": []}
+        }
+        
+        db_report = KnoxReport(
+            project_id=request.project_id,
+            policy_id=policy.policy_id,
+            policy_version=policy.policy_version,
+            ruleset_hash=policy.ruleset_hash,
+            template_id=request.template_id,
+            engine_id=os.getenv("FORTKNOX_ENGINE_ID", "test_mode"),
+            input_fingerprint=pack.input_fingerprint,
+            input_manifest=pack.input_manifest,
+            gate_results=gate_results,
+            rendered_markdown=rendered_markdown,
+            latency_ms=latency_ms
+        )
+        db.add(db_report)
+        db.commit()
+        db.refresh(db_report)
+        
+        logger.info(
+            "Fort Knox compile: Success",
+            extra={
+                "project_id": request.project_id,
+                "policy_id": request.policy_id,
+                "template_id": request.template_id,
+                "report_id": db_report.id,
+                "input_fingerprint": pack.input_fingerprint,
+                "latency_ms": latency_ms
+            }
+        )
+        
+        return KnoxReportResponse(
+            id=db_report.id,
+            project_id=db_report.project_id,
+            policy_id=db_report.policy_id,
+            policy_version=db_report.policy_version,
+            ruleset_hash=db_report.ruleset_hash,
+            template_id=db_report.template_id,
+            engine_id=db_report.engine_id,
+            input_fingerprint=db_report.input_fingerprint,
+            input_manifest=db_report.input_manifest,
+            gate_results=db_report.gate_results,
+            rendered_markdown=db_report.rendered_markdown,
+            created_at=db_report.created_at,
+            latency_ms=db_report.latency_ms
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Fort Knox compile: Unexpected error: {e}",
+            extra={
+                "project_id": request.project_id,
+                "policy_id": request.policy_id,
+                "template_id": request.template_id
+            },
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=KnoxErrorResponse(
+                error_code="INTERNAL_ERROR",
+                reasons=["unexpected_error"],
+                detail=str(e)
+            ).model_dump()
+        )
