@@ -139,6 +139,18 @@ function ProjectDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectNotes, location.state?.openNoteId])
 
+  // Allow opening Fort Knox directly from a link (showreel flow)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '')
+    if (params.get('fortknox') === '1') {
+      setShowFortKnoxStation(true)
+      params.delete('fortknox')
+      const next = params.toString()
+      navigate(next ? `${location.pathname}?${next}` : location.pathname, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search])
+
   const handleDropzoneClick = () => {
     const input = ingestMode === 'audio' ? audioInputRef.current : fileInputRef.current
     if (!input) return

@@ -635,9 +635,12 @@ function ProjectsList() {
               Säkerhetshantering och åtkomstkontroll. Kompilera integritetsrapporter direkt från projektvyn.
             </p>
             {projects.length > 0 ? (
-              <Link to="/fortknox" className="btn btn-outline btn-sm btn-overview">
+              <Link
+                to={`/projects/${(projects[0]?.id ?? '')}?fortknox=1`}
+                className="btn btn-outline btn-sm btn-overview"
+              >
                 <Lock size={16} />
-                <span>Öppna Fort Knox</span>
+                <span>Öppna i projekt</span>
               </Link>
             ) : (
             <button className="btn btn-outline btn-sm" disabled>
