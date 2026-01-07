@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
+import { Input } from '../ui/Input'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
 import { apiUrl } from '../lib/api'
@@ -466,7 +467,9 @@ function ProjectsList() {
             </div>
           )}
           <div className="scout-box-actions">
-            <button 
+            <Button
+              variant="outline"
+              size="sm"
               className="btn-scout-refresh"
               onClick={handleScoutBoxFetch}
               disabled={scoutFetching}
@@ -474,8 +477,8 @@ function ProjectsList() {
             >
               <RefreshCw size={14} className={scoutFetching ? 'spinning' : ''} />
               <span>{scoutFetching ? 'Uppdaterar...' : 'Uppdatera'}</span>
-            </button>
-            <Link to="/scout" className="btn-overview">
+            </Button>
+            <Link to="/scout" className="btn btn-outline btn-sm btn-overview">
               <Eye size={16} />
               <span>Visa alla</span>
             </Link>
@@ -535,7 +538,7 @@ function ProjectsList() {
               })}
             </div>
           )}
-          <Link to="/projects" className="btn-overview">
+          <Link to="/projects" className="btn btn-outline btn-sm btn-overview">
             <Eye size={16} />
             <span>Visa alla</span>
           </Link>
@@ -552,7 +555,7 @@ function ProjectsList() {
           <div className="overview-card-content">
             <div className="project-widget-search">
               <Search size={16} className="search-icon" />
-              <input
+              <Input
                 type="text"
                 placeholder="Sök projekt..."
                 value={searchQuery}
@@ -560,13 +563,15 @@ function ProjectsList() {
                 className="project-search-input"
               />
             </div>
-            <button 
-              className="btn-create-project btn-create-project-inline"
+            <Button
+              variant="primary"
+              size="sm"
+              className="btn-create-project-inline"
               onClick={() => setShowCreateModal(true)}
             >
               <FolderPlus size={16} />
               <span>Nytt projekt</span>
-            </button>
+            </Button>
             {lastUpdatedProject && (
               <div className="project-widget-meta">
                 <span className="project-widget-meta-label">Senast uppdaterade:</span>
@@ -583,7 +588,7 @@ function ProjectsList() {
         {/* Due Dates Widget */}
         <Card className="overview-card">
           <div className="overview-card-header">
-            <h3 className="overview-card-title">Due Dates</h3>
+            <h3 className="overview-card-title">Deadlines</h3>
           </div>
           <div className="overview-card-content">
             {projectsWithDueDates.length === 0 ? (
@@ -630,15 +635,12 @@ function ProjectsList() {
               Säkerhetshantering och åtkomstkontroll. Kompilera integritetsrapporter direkt från projektvyn.
             </p>
             {projects.length > 0 ? (
-              <Link to="/fortknox" className="btn-overview">
+              <Link to="/fortknox" className="btn btn-outline btn-sm btn-overview">
                 <Lock size={16} />
                 <span>Öppna Fort Knox</span>
               </Link>
             ) : (
-            <button 
-              className="btn-overview-disabled"
-              disabled
-            >
+            <button className="btn btn-outline btn-sm" disabled>
               <Lock size={16} />
                 <span>Skapa projekt först</span>
             </button>

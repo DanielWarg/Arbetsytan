@@ -103,7 +103,7 @@ function Dashboard() {
     <div className="dashboard-page">
       <div className="projects-header">
         <h2 className="projects-title">Dashboard</h2>
-        <Link to="/projects" className="btn-create-project">
+        <Link to="/projects" className="btn btn-primary btn-sm">
           <span>Alla projekt</span>
         </Link>
       </div>
@@ -155,7 +155,7 @@ function Dashboard() {
           <div className="empty-state">
             <p className="empty-state-title">Inga projekt hittades</p>
             <p className="empty-state-text">Skapa ditt första projekt för att organisera ditt arbete.</p>
-            <Link to="/projects" className="btn-create-project">
+            <Link to="/projects" className="btn btn-primary btn-sm">
               <span>Nytt projekt</span>
             </Link>
           </div>

@@ -208,24 +208,6 @@
   flex-shrink: 0; /* Don't shrink button */
 }
 
-.btn-create-project-small {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-xs);
-  background: var(--color-interactive-default);
-  color: var(--color-interactive-text);
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: opacity 0.2s;
-  flex-shrink: 0;
-}
-
-.btn-create-project-small:hover {
-  opacity: 0.9;
-}
-
 .project-widget-meta {
   display: flex;
   flex-direction: column;
@@ -488,19 +470,6 @@
   padding-top: var(--spacing-xs); /* Slight indentation */
 }
 
-.btn-overview-disabled {
-  margin-top: auto; /* Push button to bottom */
-  padding: var(--spacing-md) var(--spacing-lg); /* Comfortable padding */
-  font-size: var(--font-size-sm);
-  flex-shrink: 0; /* Don't shrink button */
-  opacity: 0.5; /* Clearly disabled, not broken */
-  cursor: not-allowed;
-  border-style: dashed; /* Visual indicator of "coming soon" */
-}
-
-.btn-overview-disabled:hover {
-  opacity: 0.6; /* Slight feedback */
-}
 
 .coming-soon-badge {
   font-size: 0.625rem; /* Smaller, secondary */
@@ -519,23 +488,7 @@
   border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
-.btn-overview-disabled {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-xl);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  font-family: var(--font-sans);
-  cursor: not-allowed;
-  opacity: 0.5;
-  width: 100%;
-}
+/* Disabled action uses shared .btn styles; avoid special casing */
 
 /* Projects Section */
 .projects-section {
@@ -572,35 +525,7 @@
   padding: 0;
 }
 
-.btn-create-project {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-xl);
-  background: var(--color-interactive-default);
-  color: var(--color-interactive-text);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  border: none;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  text-decoration: none;
-  font-family: var(--font-sans);
-  height: auto;
-  line-height: 1;
-}
-
-.dark .btn-create-project {
-  background: var(--color-interactive-default);
-  color: var(--color-interactive-text);
-}
-
-.btn-create-project:hover {
-  opacity: 0.9;
-}
+/* Buttons use shared .btn styles from ui/Button.css */
 
 .projects-empty {
   text-align: center;
@@ -891,29 +816,7 @@
 
 .btn-overview {
   margin-top: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-xs);
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
-  font-family: var(--font-sans);
-  font-weight: var(--font-weight-normal);
   align-self: flex-start;
-}
-
-.btn-overview:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-text-muted);
-  background-color: var(--color-bg-subtle);
 }
 
 /* Scout box actions */
@@ -925,27 +828,7 @@
 }
 
 .btn-scout-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  font-size: var(--font-size-xs);
   flex-shrink: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
-  font-family: var(--font-sans);
-  font-weight: var(--font-weight-normal);
-}
-
-.btn-scout-refresh:hover:not(:disabled) {
-  color: var(--color-text-primary);
-  border-color: var(--color-text-muted);
-  background-color: var(--color-bg-subtle);
 }
 
 .btn-scout-refresh:disabled {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../ui/Badge'
+import { Button } from '../ui/Button'
+import { Input } from '../ui/Input'
 import { apiUrl } from '../lib/api'
 import { formatScoutDate } from '../lib/datetime'
 import './Scout.css'
@@ -13,12 +15,14 @@ function Scout() {
   const [fetching, setFetching] = useState(false)
   const [newFeedName, setNewFeedName] = useState('')
   const [newFeedUrl, setNewFeedUrl] = useState('')
+  const [flash, setFlash] = useState(null) // { type: 'error'|'success', text: string }
 
   const username = 'admin'
   const password = 'password'
   const auth = btoa(`${username}:${password}`)
 
   useEffect(() => {
+    setFlash(null)
     if (activeTab === 'items') {
       fetchItems()
     } else {
@@ -40,6 +44,7 @@ function Scout() {
     } catch (err) {
       console.error('Error fetching scout items:', err)
       setScoutItems([])
+      setFlash({ type: 'error', text: 'Kunde inte hämta leads just nu.' })
     } finally {
       setLoading(false)
     }
@@ -59,6 +64,7 @@ function Scout() {
     } catch (err) {
       console.error('Error fetching feeds:', err)
       setFeeds([])
+      setFlash({ type: 'error', text: 'Kunde inte hämta feeds just nu.' })
     } finally {
       setLoading(false)
     }
@@ -78,7 +84,7 @@ function Scout() {
       await fetchItems()
     } catch (err) {
       console.error('Error fetching feeds:', err)
-      alert('Kunde inte uppdatera feeds')
+      setFlash({ type: 'error', text: 'Kunde inte uppdatera feeds.' })
     } finally {
       setFetching(false)
     }
@@ -86,7 +92,7 @@ function Scout() {
 
   const handleAddFeed = async () => {
     if (!newFeedName || !newFeedUrl) {
-      alert('Fyll i både namn och URL')
+      setFlash({ type: 'error', text: 'Fyll i både namn och URL.' })
       return
     }
     try {
@@ -105,9 +111,10 @@ function Scout() {
       setNewFeedName('')
       setNewFeedUrl('')
       await fetchFeeds()
+      setFlash({ type: 'success', text: 'Feed tillagd.' })
     } catch (err) {
       console.error('Error creating feed:', err)
-      alert('Kunde inte skapa feed')
+      setFlash({ type: 'error', text: 'Kunde inte skapa feed.' })
     }
   }
 
@@ -123,7 +130,7 @@ function Scout() {
       await fetchFeeds()
     } catch (err) {
       console.error('Error disabling feed:', err)
-      alert('Kunde inte inaktivera feed')
+      setFlash({ type: 'error', text: 'Kunde inte inaktivera feed.' })
     }
   }
 
@@ -133,6 +140,12 @@ function Scout() {
       <div className="scout-header">
         <h1 className="scout-title">Scout</h1>
       </div>
+
+      {flash?.text && (
+        <div className={`scout-flash ${flash.type === 'success' ? 'scout-flash-success' : 'scout-flash-error'}`}>
+          {flash.text}
+        </div>
+      )}
 
       <div className="scout-tabs">
         <button
@@ -152,13 +165,15 @@ function Scout() {
       {activeTab === 'items' && (
         <div className="scout-content">
           <div className="scout-actions">
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               className="scout-fetch-btn"
               onClick={handleFetch}
               disabled={fetching}
             >
               {fetching ? 'Uppdaterar...' : 'Uppdatera nu'}
-            </button>
+            </Button>
           </div>
 
           {loading ? (
@@ -195,26 +210,28 @@ function Scout() {
           <div className="scout-feeds-form">
             <h3 className="scout-feeds-form-title">Lägg till feed</h3>
             <div className="scout-feeds-form-fields">
-              <input
+              <Input
                 type="text"
                 placeholder="Namn"
                 value={newFeedName}
                 onChange={(e) => setNewFeedName(e.target.value)}
                 className="scout-feeds-input"
               />
-              <input
+              <Input
                 type="text"
                 placeholder="URL"
                 value={newFeedUrl}
                 onChange={(e) => setNewFeedUrl(e.target.value)}
                 className="scout-feeds-input"
               />
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 className="scout-feeds-add-btn"
                 onClick={handleAddFeed}
               >
                 Lägg till
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -234,12 +251,14 @@ function Scout() {
                     )}
                   </div>
                   {feed.is_enabled && (
-                    <button
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="scout-feed-disable-btn"
                       onClick={() => handleDisableFeed(feed.id)}
                     >
                       Inaktivera
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}
