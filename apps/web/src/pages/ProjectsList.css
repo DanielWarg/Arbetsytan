@@ -5,15 +5,16 @@
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-  padding: var(--spacing-3xl);
+  /* content-area already provides padding; avoid double-padding that adds scroll */
+  padding: 0;
 }
 
 /* Overview Grid */
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--spacing-sm); /* Even tighter gap (reduce scroll) */
-  margin-bottom: var(--spacing-xl);
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
 }
 
 @media (min-width: 768px) {
@@ -31,9 +32,9 @@
 .overview-card {
   display: flex;
   flex-direction: column;
-  min-height: 240px; /* Reduced height for tighter design */
-  max-height: 240px; /* Fixed height */
-  height: 240px;
+  min-height: 200px;
+  max-height: 200px;
+  height: 200px;
 }
 
 .overview-card-large {
@@ -50,7 +51,7 @@
 .overview-card-fullwidth {
   width: 100%;
   max-width: 100%;
-  margin-bottom: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
   min-height: auto;
   max-height: none;
   height: auto;
@@ -58,8 +59,8 @@
 
 /* Scout box - tight, shows 6 items */
 .scout-card-fullwidth {
-  min-height: 240px;
-  max-height: 260px; /* Same height as "Mina projekt" */
+  min-height: 210px;
+  max-height: 220px;
   margin-bottom: var(--spacing-md);
 }
 
@@ -106,8 +107,8 @@
 
 /* Dina Projekt box - tight, same as Scout */
 .projects-card-fullwidth {
-  min-height: 240px;
-  max-height: 260px;
+  min-height: 210px;
+  max-height: 220px;
   margin-bottom: var(--spacing-md);
 }
 
@@ -137,14 +138,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--spacing-lg); /* More space for visual separation */
-  padding-bottom: var(--spacing-md); /* Visual divider */
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--color-border-default); /* Clear separation */
   flex-shrink: 0; /* Don't shrink header */
 }
 
 .overview-card-title {
-  font-size: var(--font-size-xl); /* Larger for hierarchy */
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold); /* Bolder for emphasis */
   color: var(--color-text-primary);
   margin: 0;
