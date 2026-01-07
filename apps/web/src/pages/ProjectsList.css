@@ -32,9 +32,9 @@
 .overview-card {
   display: flex;
   flex-direction: column;
-  min-height: 200px;
-  max-height: 200px;
-  height: 200px;
+  min-height: 170px;
+  max-height: 170px;
+  height: 170px;
 }
 
 .overview-card-large {
@@ -59,8 +59,8 @@
 
 /* Scout box - tight, shows 6 items */
 .scout-card-fullwidth {
-  min-height: 210px;
-  max-height: 220px;
+  min-height: 190px;
+  max-height: 195px;
   margin-bottom: var(--spacing-md);
 }
 
@@ -107,8 +107,8 @@
 
 /* Dina Projekt box - tight, same as Scout */
 .projects-card-fullwidth {
-  min-height: 210px;
-  max-height: 220px;
+  min-height: 190px;
+  max-height: 195px;
   margin-bottom: var(--spacing-md);
 }
 
@@ -512,7 +512,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: var(--spacing-xl);
 }
 
 .projects-title {

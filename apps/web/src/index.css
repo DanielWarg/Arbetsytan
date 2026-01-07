@@ -112,7 +112,7 @@
   flex-direction: column;
   min-height: 0;
   background: var(--color-bg-content);
-  padding: var(--spacing-3xl);
+  padding: var(--spacing-2xl);
 }
 
 .status-card {
