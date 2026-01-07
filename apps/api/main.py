@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Query
+from pydantic import BaseModel
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
@@ -47,15 +48,15 @@ from schemas import (
     ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
     FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
     CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse,
-    KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse
+    KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse, SelectionSet
 )
 from text_processing import (
     extract_text_from_pdf, extract_text_from_txt,
-    normalize_text, mask_text, validate_file_type, pii_gate_check, PiiGateError,
+    normalize_text, mask_text, mask_datetime, validate_file_type, pii_gate_check, PiiGateError,
     transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
     sanitize_journalist_note
 )
-from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy
+from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256
 from fortknox_remote import compile_remote, FortKnoxRemoteError
 
 
@@ -65,7 +66,8 @@ def run_sanitize_pipeline(raw_text: str) -> Dict:
     
     Returns:
         Dict with keys: ok (bool), masked_text (str), sanitize_level (SanitizeLevel),
-        pii_gate_reasons (dict or None), usage_restrictions (dict)
+        pii_gate_reasons (dict or None), usage_restrictions (dict),
+        datetime_masked (bool), datetime_mask_count (int)
         
     Raises:
         Exception if pipeline fails (fail-closed)
@@ -78,6 +80,8 @@ def run_sanitize_pipeline(raw_text: str) -> Dict:
     sanitize_level = SanitizeLevel.NORMAL
     usage_restrictions = {"ai_allowed": True, "export_allowed": True}
     masked_text = None
+    datetime_masked = False
+    datetime_mask_count = 0
     
     # Try normal masking
     masked_text = mask_text(normalized_text, level="normal")
@@ -108,12 +112,21 @@ def run_sanitize_pipeline(raw_text: str) -> Dict:
             sanitize_level = SanitizeLevel.PARANOID
             usage_restrictions = {"ai_allowed": False, "export_allowed": False}
     
+    # DATUM/TID-MASKNING: alltid körs för strict/paranoid (fail-closed mot extern export)
+    if sanitize_level in (SanitizeLevel.STRICT, SanitizeLevel.PARANOID):
+        level_str = "paranoid" if sanitize_level == SanitizeLevel.PARANOID else "strict"
+        masked_text, datetime_stats = mask_datetime(masked_text, level=level_str)
+        datetime_masked = datetime_stats["datetime_masked"]
+        datetime_mask_count = datetime_stats["datetime_mask_count"]
+    
     return {
         "ok": True,
         "masked_text": masked_text,
         "sanitize_level": sanitize_level,
         "pii_gate_reasons": pii_gate_reasons,
-        "usage_restrictions": usage_restrictions
+        "usage_restrictions": usage_restrictions,
+        "datetime_masked": datetime_masked,
+        "datetime_mask_count": datetime_mask_count
     }
 
 # Create tables
@@ -138,9 +151,13 @@ async def preload_stt_engine():
         logger.warning(f"[STARTUP] Failed to preload STT engine: {str(e)} (will load on first use)")
 
 # CORS middleware
+# - Dev: localhost
+# - Prod demo (Tailscale Funnel): set CORS_ALLOW_ORIGINS="https://{DOMAIN_ROOT}"
+cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:5173")
+cors_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -845,6 +862,199 @@ async def delete_document(
     return Response(status_code=204)
 
 
+@app.put("/api/projects/{project_id}/documents/{document_id}/exclude-from-fortknox", response_model=DocumentResponse)
+async def exclude_document_from_fortknox(
+    project_id: int,
+    document_id: int,
+    exclude: bool = Query(default=True),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Exkludera eller inkludera ett dokument från Fort Knox-sammanställningar.
+    
+    Metadata-only operation:
+    - Uppdaterar usage_restrictions.fortknox_excluded
+    - Loggar aldrig originaltext
+    """
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.project_id == project_id
+    ).first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Update usage_restrictions
+    if not document.usage_restrictions:
+        document.usage_restrictions = {}
+    
+    document.usage_restrictions['fortknox_excluded'] = exclude
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="document_fortknox_exclusion_changed",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "document_id": document_id,
+            "excluded": exclude,
+            "file_type": document.file_type
+        }, context="audit")
+    )
+    db.add(event)
+    
+    # Update project updated_at
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.updated_at = func.now()
+    
+    db.commit()
+    db.refresh(document)
+    
+    return DocumentResponse(
+        id=document.id,
+        project_id=document.project_id,
+        filename=document.filename,
+        file_type=document.file_type,
+        classification=document.classification.value,
+        masked_text=document.masked_text,
+        sanitize_level=document.sanitize_level.value,
+        usage_restrictions=document.usage_restrictions,
+        pii_gate_reasons=document.pii_gate_reasons,
+        created_at=document.created_at
+    )
+
+
+@app.put("/api/projects/{project_id}/documents/{document_id}/sanitize", response_model=DocumentResponse)
+async def re_sanitize_document(
+    project_id: int,
+    document_id: int,
+    level: str = Query(default="strict", pattern="^(strict|paranoid)$"),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Re-sanitize a document to a higher sanitize_level.
+    
+    Deterministic, metadata-only operation:
+    - Reads original text from file_path
+    - Re-runs sanitization pipeline with specified level
+    - Updates sanitize_level, masked_text, pii_gate_reasons, usage_restrictions
+    - Never logs original text
+    """
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.project_id == project_id
+    ).first()
+    
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Read original text from file
+    if not document.file_path or not os.path.exists(document.file_path):
+        raise HTTPException(
+            status_code=400,
+            detail="Original file not found. Cannot re-sanitize."
+        )
+    
+    try:
+        # Extract text from file
+        if document.file_type == 'pdf':
+            raw_text = extract_text_from_pdf(document.file_path)
+        else:  # txt
+            raw_text = extract_text_from_txt(document.file_path)
+    except Exception as e:
+        logger.error(f"Failed to extract text from {document.file_path}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to read original file"
+        )
+    
+    # Normalize text
+    normalized_text = normalize_text(raw_text)
+    
+    # Progressive sanitization pipeline
+    pii_gate_reasons = {}
+    sanitize_level = SanitizeLevel.NORMAL
+    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+    
+    # Try normal masking first
+    masked_text = mask_text(normalized_text, level="normal")
+    is_safe, reasons = pii_gate_check(masked_text)
+    if is_safe:
+        sanitize_level = SanitizeLevel.NORMAL
+        pii_gate_reasons = None
+    else:
+        pii_gate_reasons["normal"] = reasons
+        
+        # Try strict masking
+        masked_text = mask_text(normalized_text, level="strict")
+        is_safe, reasons = pii_gate_check(masked_text)
+        if is_safe:
+            sanitize_level = SanitizeLevel.STRICT
+        else:
+            pii_gate_reasons["strict"] = reasons
+            
+            # Use paranoid masking
+            masked_text = mask_text(normalized_text, level="paranoid")
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    # Ensure we meet the requested level
+    if level == "strict" and sanitize_level == SanitizeLevel.NORMAL:
+        # Force strict level
+        masked_text = mask_text(normalized_text, level="strict")
+        sanitize_level = SanitizeLevel.STRICT
+        # Re-check gate
+        is_safe, reasons = pii_gate_check(masked_text)
+        if not is_safe:
+            # Must use paranoid
+            masked_text = mask_text(normalized_text, level="paranoid")
+            sanitize_level = SanitizeLevel.PARANOID
+            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+    
+    # Update document
+    document.masked_text = masked_text
+    document.sanitize_level = sanitize_level
+    document.pii_gate_reasons = pii_gate_reasons if pii_gate_reasons else None
+    document.usage_restrictions = usage_restrictions
+    
+    # Create event (metadata only - never log original text)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="document_re_sanitized",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "document_id": document_id,
+            "new_sanitize_level": sanitize_level.value,
+            "file_type": document.file_type
+        }, context="audit")
+    )
+    db.add(event)
+    
+    # Update project updated_at
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.updated_at = func.now()
+    
+    db.commit()
+    db.refresh(document)
+    
+    return DocumentResponse(
+        id=document.id,
+        project_id=document.project_id,
+        filename=document.filename,
+        file_type=document.file_type,
+        classification=document.classification.value,
+        masked_text=document.masked_text,
+        sanitize_level=document.sanitize_level.value,
+        usage_restrictions=document.usage_restrictions,
+        pii_gate_reasons=document.pii_gate_reasons,
+        created_at=document.created_at
+    )
+
+
 # Recordings endpoint
 @app.post("/api/projects/{project_id}/recordings", response_model=DocumentListResponse, status_code=201)
 async def upload_recording(
@@ -1268,6 +1478,84 @@ async def delete_note(
     
     db.commit()
     return None
+
+
+@app.put("/api/projects/{project_id}/notes/{note_id}/exclude-from-fortknox", response_model=NoteResponse)
+async def exclude_note_from_fortknox(
+    project_id: int,
+    note_id: int,
+    exclude: bool = Query(default=True),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Exkludera eller inkludera en anteckning från Fort Knox-sammanställningar.
+    
+    Metadata-only operation:
+    - Uppdaterar usage_restrictions.fortknox_excluded
+    - Loggar aldrig originaltext
+    """
+    db_note = db.query(ProjectNote).filter(
+        ProjectNote.id == note_id,
+        ProjectNote.project_id == project_id
+    ).first()
+    
+    if not db_note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Update usage_restrictions
+    if not db_note.usage_restrictions:
+        db_note.usage_restrictions = {}
+    
+    db_note.usage_restrictions['fortknox_excluded'] = exclude
+    
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="note_fortknox_exclusion_changed",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "note_id": note_id,
+            "excluded": exclude
+        }, context="audit")
+    )
+    db.add(event)
+    
+    db.commit()
+    db.refresh(db_note)
+    
+    return db_note
+
+
+@app.put("/api/projects/{project_id}/notes/{note_id}/sanitize", response_model=NoteResponse)
+async def re_sanitize_note(
+    project_id: int,
+    note_id: int,
+    level: str = Query(default="strict", pattern="^(strict|paranoid)$"),
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Re-sanitize a note to a higher sanitize_level.
+    
+    Note: Notes don't store original text, only masked_body.
+    This endpoint attempts to upgrade sanitize_level but cannot re-process original text.
+    Returns error if original text is required but not available.
+    """
+    db_note = db.query(ProjectNote).filter(
+        ProjectNote.id == note_id,
+        ProjectNote.project_id == project_id
+    ).first()
+    
+    if not db_note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    
+    # Notes don't store original text - we can't re-sanitize properly
+    # Return error explaining this limitation
+    raise HTTPException(
+        status_code=400,
+        detail="Notes cannot be re-sanitized because original text is not stored. Please edit the note manually to update sanitization level."
+    )
 
 
 # Journalist Notes endpoints
@@ -1999,6 +2287,31 @@ async def fetch_scout_feeds(
 ):
     """Manually trigger RSS feed fetch."""
     from scout import fetch_all_feeds
+
+    # Seeda default-feeds om tabellen är tom (UI kan kalla /fetch utan att någonsin kalla /feeds)
+    feed_count = db.query(ScoutFeed).count()
+    if feed_count == 0:
+        defaults = [
+            ScoutFeed(
+                name="Polisen – Händelser Västra Götaland",
+                url="https://polisen.se/aktuellt/rss/vastra-gotaland/handelser-rss---vastra-gotaland/",
+                is_enabled=True
+            ),
+            ScoutFeed(
+                name="Polisen – Pressmeddelanden Västra Götaland",
+                url="https://polisen.se/aktuellt/rss/vastra-gotaland/pressmeddelanden-rss---vastra-gotaland/",
+                is_enabled=True
+            ),
+            ScoutFeed(
+                name="Göteborgs tingsrätt",
+                url="https://www.domstol.se/feed/56/?searchPageId=1139&scope=news",
+                is_enabled=True
+            )
+        ]
+        for feed in defaults:
+            db.add(feed)
+        db.commit()
+        logger.info("Scout: Created 3 default feeds (all enabled) [seeded in /fetch]")
     
     results = fetch_all_feeds(db)
     return {"feeds_processed": len(results), "results": results}
@@ -2287,6 +2600,40 @@ Källa hämtad via RSS (endast sammanfattning)"""
             except Exception as e:
                 logger.error(f"Pipeline failed for feed item {item_link}: {e}")
                 continue  # Skip this item (fail-closed)
+
+            # Feed/Scout är systemgenererat underlag. För att Extern inte ska fastna i
+            # sanitize_level_too_low direkt så höjer vi miniminivån till STRICT deterministiskt.
+            # OBS: Inga råa texter loggas.
+            try:
+                if pipeline_result.get("sanitize_level") == SanitizeLevel.NORMAL:
+                    normalized = normalize_text(raw_content)
+                    strict_masked = mask_text(normalized, level="strict")
+                    # Maska datum/tid för strict
+                    strict_masked, datetime_stats = mask_datetime(strict_masked, level="strict")
+                    is_safe, reasons = pii_gate_check(strict_masked)
+                    if is_safe:
+                        pipeline_result["masked_text"] = strict_masked
+                        pipeline_result["sanitize_level"] = SanitizeLevel.STRICT
+                        pipeline_result["pii_gate_reasons"] = None
+                        pipeline_result["usage_restrictions"] = {"ai_allowed": True, "export_allowed": True}
+                        pipeline_result["datetime_masked"] = datetime_stats["datetime_masked"]
+                        pipeline_result["datetime_mask_count"] = datetime_stats["datetime_mask_count"]
+                    else:
+                        paranoid_masked = mask_text(normalized, level="paranoid")
+                        # Maska datum/tid för paranoid
+                        paranoid_masked, datetime_stats_p = mask_datetime(paranoid_masked, level="paranoid")
+                        is_safe_p, reasons_p = pii_gate_check(paranoid_masked)
+                        if not is_safe_p:
+                            raise Exception("Paranoid masking failed PII gate for feed item")
+                        pipeline_result["masked_text"] = paranoid_masked
+                        pipeline_result["sanitize_level"] = SanitizeLevel.PARANOID
+                        pipeline_result["pii_gate_reasons"] = {"strict": reasons, "paranoid": reasons_p}
+                        pipeline_result["usage_restrictions"] = {"ai_allowed": False, "export_allowed": False}
+                        pipeline_result["datetime_masked"] = datetime_stats_p["datetime_masked"]
+                        pipeline_result["datetime_mask_count"] = datetime_stats_p["datetime_mask_count"]
+            except Exception as e:
+                logger.error(f"Failed to enforce min strict for feed item {item_link}: {e}")
+                continue  # Skip item (fail-closed)
             
             # Generate filename from item title (sanitized for filesystem)
             # Use item title as filename, fallback to guid/hash
@@ -2517,6 +2864,40 @@ Källa hämtad via RSS (endast sammanfattning)"""
         sanitize_level = pipeline_result["sanitize_level"]
         pii_gate_reasons = pipeline_result["pii_gate_reasons"]
         usage_restrictions = pipeline_result["usage_restrictions"]
+        datetime_masked = pipeline_result.get("datetime_masked", False)
+        datetime_mask_count = pipeline_result.get("datetime_mask_count", 0)
+
+        # Scout är systemgenererat underlag. För att undvika att Extern blir en återvändsgränd
+        # (sanitize_level_too_low direkt) så höjer vi miniminivån till STRICT deterministiskt.
+        # OBS: Vi använder endast råtexten i minnet här (inget loggas, inget sparas rått).
+        if sanitize_level == SanitizeLevel.NORMAL:
+            normalized = normalize_text(raw_content)
+            strict_masked = mask_text(normalized, level="strict")
+            # Maska datum/tid för strict
+            strict_masked, datetime_stats = mask_datetime(strict_masked, level="strict")
+            is_safe, reasons = pii_gate_check(strict_masked)
+            if is_safe:
+                masked_text = strict_masked
+                sanitize_level = SanitizeLevel.STRICT
+                # pii_gate_reasons är None om normal passerade; behåll None här.
+                pii_gate_reasons = None
+                usage_restrictions = {"ai_allowed": True, "export_allowed": True}
+                datetime_masked = datetime_stats["datetime_masked"]
+                datetime_mask_count = datetime_stats["datetime_mask_count"]
+            else:
+                # Fail-closed: paranoid ska alltid passera gate
+                paranoid_masked = mask_text(normalized, level="paranoid")
+                # Maska datum/tid för paranoid
+                paranoid_masked, datetime_stats_p = mask_datetime(paranoid_masked, level="paranoid")
+                is_safe_p, reasons_p = pii_gate_check(paranoid_masked)
+                if not is_safe_p:
+                    raise HTTPException(status_code=500, detail="Internal error: Paranoid masking failed PII gate for Scout item")
+                masked_text = paranoid_masked
+                sanitize_level = SanitizeLevel.PARANOID
+                pii_gate_reasons = {"strict": reasons, "paranoid": reasons_p}
+                usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+                datetime_masked = datetime_stats_p["datetime_masked"]
+                datetime_mask_count = datetime_stats_p["datetime_mask_count"]
         
         # Generate filename from scout item title (sanitized for filesystem)
         import re
@@ -2593,6 +2974,114 @@ Källa hämtad via RSS (endast sammanfattning)"""
 # Fort Knox endpoints
 # ============================================================================
 
+@app.get("/api/projects/{project_id}/export_snapshot")
+async def export_project_snapshot(
+    project_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Deterministiskt snapshot av projektets underlag för Fort Knox External.
+    Returnerar:
+      - export_markdown: säkert (maskat) markdown-underlag
+      - input_manifest: [{type, id, title, sanitize_level, created_at, updated_at}]
+      - counts: {documents, notes, sources, transcripts}
+    Inga råa original. Endast sanerat innehåll och metadata.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    documents = db.query(Document).filter(Document.project_id == project_id).order_by(Document.created_at.asc(), Document.id.asc()).all()
+    notes = db.query(ProjectNote).filter(ProjectNote.project_id == project_id).order_by(ProjectNote.created_at.asc(), ProjectNote.id.asc()).all()
+    sources = db.query(ProjectSource).filter(ProjectSource.project_id == project_id).order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc()).all()
+    transcripts = []  # TODO: iteration 2
+
+    input_manifest: List[Dict[str, Any]] = []
+    for doc in documents:
+        # can_autofix: vi kan bumpa deterministiskt så länge masked_text finns.
+        # Scout-importerade dokument kan sakna fysisk fil, men masked_text finns i DB och räcker.
+        can_autofix = bool((doc.masked_text or "").strip())
+        blocking_reason = None if can_autofix else "ORIGINAL_MISSING"
+        # datetime_masked: check om [DATUM] eller [TID] tokens finns (metadata-only)
+        masked_content = doc.masked_text or ""
+        datetime_masked = ("[DATUM]" in masked_content or "[TID]" in masked_content or "[RELATIV_TID]" in masked_content)
+        input_manifest.append({
+            "type": "document",
+            "id": doc.id,
+            "title": doc.filename,
+            "sanitize_level": getattr(doc.sanitize_level, "value", str(doc.sanitize_level)),
+            "created_at": doc.created_at.isoformat(),
+            "updated_at": (getattr(doc, "updated_at", None) or doc.created_at).isoformat(),
+            "origin": "scout" if getattr(doc, "document_metadata", None) and getattr(doc, "document_metadata").get("raw_source") else "manual",
+            "can_autofix": can_autofix,
+            "blocking_reason": blocking_reason,
+            "datetime_masked": datetime_masked
+        })
+    for note in notes:
+        # Heuristik utan schemaändring:
+        # - AUTO (Scout/Feed) skapas av importflöden och får oftast usage_restrictions satt
+        # - MANUAL (användarskapad) saknar ofta usage_restrictions
+        origin = "scout" if getattr(note, "usage_restrictions", None) else "manual"
+        can_autofix = bool((note.masked_body or "").strip())
+        # datetime_masked: check om [DATUM] eller [TID] tokens finns (metadata-only)
+        masked_content = note.masked_body or ""
+        datetime_masked = ("[DATUM]" in masked_content or "[TID]" in masked_content or "[RELATIV_TID]" in masked_content)
+        input_manifest.append({
+            "type": "note",
+            "id": note.id,
+            "title": note.title or f"Anteckning {note.id}",
+            "sanitize_level": getattr(note.sanitize_level, "value", str(note.sanitize_level)),
+            "created_at": note.created_at.isoformat(),
+            "updated_at": (getattr(note, "updated_at", None) or note.created_at).isoformat(),
+            "origin": origin,
+            "can_autofix": can_autofix,
+            "blocking_reason": None if can_autofix else "EMPTY_MASKED_BODY",
+            "datetime_masked": datetime_masked
+        })
+
+    md_lines: List[str] = []
+    md_lines.append(f"# Fort Knox Export Snapshot — Projekt {project.name}")
+    md_lines.append("")
+    md_lines.append(f"Genererad: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    md_lines.append("")
+    md_lines.append("## Dokument")
+    md_lines.append("")
+    if documents:
+        for doc in documents:
+            md_lines.append(f"### {doc.filename} (id: {doc.id})")
+            md_lines.append("")
+            md_lines.append(doc.masked_text or "")
+            md_lines.append("")
+    else:
+        md_lines.append("*(Inga dokument)*")
+        md_lines.append("")
+    md_lines.append("## Anteckningar")
+    md_lines.append("")
+    if notes:
+        for note in notes:
+            title = note.title or f"Anteckning {note.id}"
+            md_lines.append(f"### {title} (id: {note.id})")
+            md_lines.append("")
+            md_lines.append(note.masked_body or "")
+            md_lines.append("")
+    else:
+        md_lines.append("*(Inga anteckningar)*")
+        md_lines.append("")
+
+    export_markdown = "\n".join(md_lines)
+    counts = {
+        "documents": len(documents),
+        "notes": len(notes),
+        "sources": len(sources),
+        "transcripts": len(transcripts)
+    }
+    return {
+        "export_markdown": export_markdown,
+        "input_manifest": input_manifest,
+        "counts": counts
+    }
+
 @app.post("/api/fortknox/compile", response_model=KnoxReportResponse, status_code=201)
 async def compile_fortknox_report(
     request: KnoxCompileRequest,
@@ -2625,6 +3114,111 @@ async def compile_fortknox_report(
             template_id=request.template_id,
             db=db
         )
+
+        # 1.2. Om selection/snapshot_mode: applicera urval deterministiskt (iteration 1: documents + notes)
+        if request.snapshot_mode or (request.selection is not None):
+            include_docs = set()
+            include_notes = set()
+            exclude_docs = set()
+            exclude_notes = set()
+            if request.selection:
+                for item in (request.selection.include or []):
+                    if item.type == "document":
+                        include_docs.add(item.id)
+                    elif item.type == "note":
+                        include_notes.add(item.id)
+                for item in (request.selection.exclude or []):
+                    if item.type == "document":
+                        exclude_docs.add(item.id)
+                    elif item.type == "note":
+                        exclude_notes.add(item.id)
+            # Om include-listor finns -> använd endast dessa, annars alla
+            current_doc_ids = {d.doc_id for d in pack.documents}
+            current_note_ids = {n.note_id for n in pack.notes}
+            if include_docs:
+                final_doc_ids = include_docs & current_doc_ids
+            else:
+                final_doc_ids = set(current_doc_ids)
+            if include_notes:
+                final_note_ids = include_notes & current_note_ids
+            else:
+                final_note_ids = set(current_note_ids)
+            # Applicera exclude
+            final_doc_ids -= exclude_docs
+            final_note_ids -= exclude_notes
+            # Filtrera items
+            new_documents = [d for d in pack.documents if d.doc_id in final_doc_ids]
+            new_notes = [n for n in pack.notes if n.note_id in final_note_ids]
+            # Kontroll: tomt urval
+            if len(new_documents) + len(new_notes) == 0:
+                logger.warning(
+                    "Fort Knox compile: Empty selection set",
+                    extra={
+                        "project_id": request.project_id,
+                        "policy_id": request.policy_id,
+                        "template_id": request.template_id
+                    }
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=KnoxErrorResponse(
+                        error_code="EMPTY_INPUT_SET",
+                        reasons=["Du har exkluderat allt underlag. Välj minst ett dokument eller en anteckning."],
+                        detail="Selection produced empty input set"
+                    ).model_dump()
+                )
+            # Bygg nytt manifest: dokument + anteckningar + befintliga sources från pack
+            new_manifest: List[Dict[str, Any]] = []
+            for d in new_documents:
+                new_manifest.append({
+                    "kind": "document",
+                    "id": d.doc_id,
+                    "sha256": d.sha256,
+                    "sanitize_level": d.sanitize_level,
+                    "updated_at": d.updated_at.isoformat() if hasattr(d.updated_at, "isoformat") else d.updated_at
+                })
+            for n in new_notes:
+                new_manifest.append({
+                    "kind": "note",
+                    "id": n.note_id,
+                    "sha256": n.sha256,
+                    "sanitize_level": n.sanitize_level,
+                    "updated_at": n.updated_at.isoformat() if hasattr(n.updated_at, "isoformat") else n.updated_at
+                })
+            # Lägg till sources från tidigare manifest (behåll metadata)
+            for m in pack.input_manifest:
+                if m.get("kind") == "source":
+                    new_manifest.append(m)
+            # Sortera manifest deterministiskt
+            new_manifest = sorted(new_manifest, key=lambda x: (x.get("kind",""), x.get("id", 0)))
+            # Re-fingerprint
+            manifest_json = canonical_json(new_manifest)
+            new_fingerprint = compute_sha256(manifest_json)
+            # Uppdatera pack (pydantic-modell är muterbar)
+            pack.documents = new_documents
+            pack.notes = new_notes
+            pack.input_manifest = new_manifest
+            pack.input_fingerprint = new_fingerprint
+        
+        # 1.5. Validera att input set inte är tomt (efter exkludering)
+        total_inputs = len(pack.documents) + len(pack.notes) + len(pack.sources)
+        if total_inputs == 0:
+            logger.warning(
+                "Fort Knox compile: Empty input set after exclusion",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id
+                }
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="EMPTY_INPUT_SET",
+                    reasons=["Alla dokument, anteckningar och källor är exkluderade från sammanställningen"],
+                    detail="Input set is empty after exclusion"
+                ).model_dump()
+        )
         
         # 2. Input Gate
         input_pass, input_reasons = input_gate(pack, policy)
@@ -2648,11 +3242,20 @@ async def compile_fortknox_report(
             )
         
         # 3. Idempotens Check (före remote URL-check)
+        #
+        # IMPORTANT:
+        # Vi måste inkludera "vilken motor" som användes i cache-nyckeln,
+        # annars kan en gammal TESTMODE-fixture återanvändas när man byter till live (lokal LLM).
+        test_mode = os.getenv("FORTKNOX_TESTMODE", "0") == "1"
+        engine_id_current = "test_mode" if test_mode else os.getenv("FORTKNOX_ENGINE_ID", "remote")
+        engine_id_current = (engine_id_current or "").strip() or ("test_mode" if test_mode else "remote")
+
         existing_report = db.query(KnoxReport).filter(
             KnoxReport.project_id == request.project_id,
             KnoxReport.policy_id == request.policy_id,
             KnoxReport.template_id == request.template_id,
-            KnoxReport.input_fingerprint == pack.input_fingerprint
+            KnoxReport.input_fingerprint == pack.input_fingerprint,
+            KnoxReport.engine_id == engine_id_current
         ).first()
         
         if existing_report:
@@ -2684,7 +3287,6 @@ async def compile_fortknox_report(
             )
         
         # 4. Remote URL Check (endast om inte test mode)
-        test_mode = os.getenv("FORTKNOX_TESTMODE", "0") == "1"
         remote_url = os.getenv("FORTKNOX_REMOTE_URL", "").strip()
         
         if not test_mode and not remote_url:
@@ -2734,21 +3336,21 @@ async def compile_fortknox_report(
                 ).model_dump()
             )
         
-        # 6. Render Markdown
-        rendered_markdown = render_markdown(llm_response.model_dump(), request.template_id)
+        # 6. Output Gate + Re-ID Guard (kontrollerar llm output)
+        # Gör outputen först för att kunna skriva integritetsstatus i rapporten
+        rendered_text_candidate = render_markdown(llm_response.model_dump(), request.template_id)
         
-        # 7. Output Gate + Re-ID Guard
         # Samla input texts för re-ID guard
         input_texts = [doc.masked_text for doc in pack.documents] + [note.masked_body for note in pack.notes]
         
         # PII gate check på rendered markdown
-        is_safe, pii_reasons = pii_gate_check(rendered_markdown)
+        is_safe, pii_reasons = pii_gate_check(rendered_text_candidate)
         output_gate_reasons = []
         if not is_safe:
             output_gate_reasons.extend([f"pii_gate_{reason}" for reason in pii_reasons])
         
         # Re-ID Guard
-        re_id_pass, re_id_reasons = re_id_guard(rendered_markdown, input_texts, policy)
+        re_id_pass, re_id_reasons = re_id_guard(rendered_text_candidate, input_texts, policy)
         if not re_id_pass:
             output_gate_reasons.extend(re_id_reasons)
         
@@ -2772,6 +3374,100 @@ async def compile_fortknox_report(
                 ).model_dump()
             )
         
+        # 7. Bygg slutlig rendered_markdown enligt specifik struktur (svenska)
+        # Sektioner:
+        # Sammanställning
+        # 1. Vad vi vet just nu
+        # 2. Det här behöver vi verifiera
+        # 3. Tidslinje
+        # 4. Underlag som ingick
+        # 5. Risker och integritet
+        # 6. Rekommenderade nästa steg
+        # Bilaga: Audit
+        llm_json = llm_response.model_dump()
+        lines: List[str] = []
+        # Sammanställning
+        lines.append("# Sammanställning")
+        lines.append("")
+        if llm_json.get("executive_summary"):
+            lines.append(llm_json["executive_summary"])
+        else:
+            lines.append("Sammanställningen bygger på valt underlag. Inga personuppgifter eller råtexter exponeras i denna rapport.")
+        lines.append("")
+        # 1. Vad vi vet just nu
+        lines.append("## 1. Vad vi vet just nu")
+        lines.append("")
+        themes = llm_json.get("themes") or []
+        theme_bullets = []
+        for theme in themes:
+            theme_bullets.extend(theme.get("bullets", []))
+        if theme_bullets:
+            for bullet in theme_bullets[:7]:
+                lines.append(f"- {bullet}")
+        else:
+            lines.append("- Inga tydliga observationer kunde extraheras från underlaget.")
+        lines.append("")
+        # 2. Det här behöver vi verifiera
+        lines.append("## 2. Det här behöver vi verifiera")
+        lines.append("")
+        open_q = llm_json.get("open_questions") or []
+        if open_q:
+            for q in open_q[:7]:
+                lines.append(f"- {q}")
+        else:
+            lines.append("- Inga specifika verifieringspunkter identifierades.")
+        lines.append("")
+        # 3. Tidslinje
+        lines.append("## 3. Tidslinje")
+        lines.append("")
+        tl = llm_json.get("timeline_high_level") or []
+        if tl:
+            for t in tl:
+                lines.append(f"- {t}")
+        else:
+            lines.append("Ingen tydlig tidslinje i valt material")
+        lines.append("")
+        # 4. Underlag som ingick (max 10 rader)
+        lines.append("## 4. Underlag som ingick (utan PII)")
+        lines.append("")
+        # Använd pack.input_manifest som är filtrerat via selection om tillämpat
+        manifest = pack.input_manifest or []
+        listed = 0
+        for m in manifest:
+            if m.get("kind") in ("document", "note"):
+                type_label = "Dokument" if m["kind"] == "document" else "Anteckning"
+                lines.append(f"- [{type_label}] {m.get('id')} (sanitize: {m.get('sanitize_level')})")
+                listed += 1
+                if listed >= 10:
+                    break
+        remaining = sum(1 for m in manifest if m.get("kind") in ("document","note")) - listed
+        if remaining > 0:
+            lines.append(f"(+{remaining} fler)")
+        lines.append("")
+        # 5. Risker och integritet
+        lines.append("## 5. Risker och integritet")
+        lines.append("")
+        lines.append("Inga tecken på PII i output och re-ID guard passerade utan varningar.")
+        lines.append("")
+        # 6. Rekommenderade nästa steg
+        lines.append("## 6. Rekommenderade nästa steg")
+        lines.append("")
+        next_steps = llm_json.get("next_steps") or []
+        if next_steps:
+            for step in next_steps[:7]:
+                lines.append(f"- {step}")
+        else:
+            lines.append("- Inga explicita nästa steg identifierade.")
+        lines.append("")
+        # Bilaga: Audit
+        lines.append("## Bilaga: Audit")
+        lines.append("")
+        lines.append(f"Policy: {policy.policy_id} v{policy.policy_version}")
+        lines.append(f"Ruleset: {policy.ruleset_hash}")
+        lines.append(f"Ingångsfingerprint: {pack.input_fingerprint[:16]}...")
+        lines.append("")
+        final_rendered_markdown = "\n".join(lines)
+        
         # 8. Spara KnoxReport
         latency_ms = int((time.time() - start_time) * 1000)
         
@@ -2786,11 +3482,11 @@ async def compile_fortknox_report(
             policy_version=policy.policy_version,
             ruleset_hash=policy.ruleset_hash,
             template_id=request.template_id,
-            engine_id=os.getenv("FORTKNOX_ENGINE_ID", "test_mode"),
+            engine_id=engine_id_current,
             input_fingerprint=pack.input_fingerprint,
             input_manifest=pack.input_manifest,
             gate_results=gate_results,
-            rendered_markdown=rendered_markdown,
+            rendered_markdown=final_rendered_markdown,
             latency_ms=latency_ms
         )
         db.add(db_report)
@@ -2845,3 +3541,150 @@ async def compile_fortknox_report(
                 detail=str(e)
             ).model_dump()
         )
+
+
+class SanitizeLevelUpdate(BaseModel):
+    level: str  # "strict" | "paranoid"
+
+
+@app.put("/api/documents/{document_id}/sanitize-level")
+async def update_document_sanitize_level(
+    document_id: int,
+    body: SanitizeLevelUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Bumpa dokumentets sanitize_level deterministiskt och re-sanitera masked_text.
+    Idempotent: samma nivå igen gör ingen ändring.
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    desired = (body.level or "").lower()
+    if desired not in ("strict", "paranoid"):
+        raise HTTPException(status_code=422, detail=[{"loc": ["body","level"], "msg": "level must be 'strict' or 'paranoid'"}])
+    # Order mapping
+    order = {"normal": 0, "strict": 1, "paranoid": 2}
+    current = getattr(doc.sanitize_level, "value", str(doc.sanitize_level))
+    if order[current] >= order[desired]:
+        # No downgrade or same level: return current state
+        return {
+            "id": doc.id,
+            "sanitize_level": current,
+            "masked_text": doc.masked_text
+        }
+    # Re-mask current masked_text with higher level (safe, deterministic)
+    try:
+        # Fail-closed ONLY om vi saknar både originalfil OCH maskat innehåll.
+        # Scout-importerade dokument har ofta placeholder file_path (ingen faktisk fil),
+        # men masked_text i DB räcker för deterministisk bump.
+        import os
+        file_path = str(doc.file_path or "")
+        file_exists = bool(file_path) and os.path.exists(file_path)
+        has_masked = bool((doc.masked_text or "").strip())
+        is_scout_placeholder = file_path.startswith("scout_import_")
+        if (not file_exists) and (not has_masked) and (not is_scout_placeholder):
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error_code": "ORIGINAL_MISSING",
+                    "item": {"type": "document", "id": document_id},
+                    "message": "Original file not found and no masked_text available. Cannot re-sanitize."
+                }
+            )
+        # Normalize first
+        norm = normalize_text(doc.masked_text or "")
+        if desired == "paranoid":
+            new_masked = mask_text(norm, level="paranoid")
+            # Maska datum/tid för paranoid
+            new_masked, datetime_stats = mask_datetime(new_masked, level="paranoid")
+        else:
+            new_masked = mask_text(norm, level="strict")
+            # Maska datum/tid för strict
+            new_masked, datetime_stats = mask_datetime(new_masked, level="strict")
+        is_safe, reasons = pii_gate_check(new_masked)
+        if not is_safe:
+            raise HTTPException(status_code=400, detail=KnoxErrorResponse(
+                error_code="INPUT_GATE_FAILED",
+                reasons=[f"pii_gate_{r}" for r in reasons],
+                detail="PII gate failed after sanitize bump"
+            ).model_dump())
+        # Persist changes
+        doc.masked_text = new_masked
+        doc.sanitize_level = SanitizeLevel.STRICT if desired == "strict" else SanitizeLevel.PARANOID
+        db.add(doc)
+        db.commit()
+        return {
+            "id": doc.id,
+            "sanitize_level": getattr(doc.sanitize_level, "value", str(doc.sanitize_level)),
+            "masked_text": doc.masked_text,
+            "datetime_masked": datetime_stats["datetime_masked"],
+            "datetime_mask_count": datetime_stats["datetime_mask_count"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to bump document sanitize level: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update document sanitize level")
+
+
+@app.put("/api/projects/{project_id}/notes/{note_id}/sanitize-level")
+async def update_note_sanitize_level(
+    project_id: int,
+    note_id: int,
+    body: SanitizeLevelUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Bumpa anteckningens sanitize_level deterministiskt och re-sanitera masked_body.
+    Idempotent: samma nivå igen gör ingen ändring.
+    """
+    note = db.query(ProjectNote).filter(ProjectNote.id == note_id, ProjectNote.project_id == project_id).first()
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    desired = (body.level or "").lower()
+    if desired not in ("strict", "paranoid"):
+        raise HTTPException(status_code=422, detail=[{"loc": ["body","level"], "msg": "level must be 'strict' or 'paranoid'"}])
+    order = {"normal": 0, "strict": 1, "paranoid": 2}
+    current = getattr(note.sanitize_level, "value", str(note.sanitize_level))
+    if order[current] >= order[desired]:
+        return {
+            "id": note.id,
+            "sanitize_level": current,
+            "masked_body": note.masked_body
+        }
+    try:
+        norm = normalize_text(note.masked_body or "")
+        if desired == "paranoid":
+            new_masked = mask_text(norm, level="paranoid")
+            # Maska datum/tid för paranoid
+            new_masked, datetime_stats = mask_datetime(new_masked, level="paranoid")
+        else:
+            new_masked = mask_text(norm, level="strict")
+            # Maska datum/tid för strict
+            new_masked, datetime_stats = mask_datetime(new_masked, level="strict")
+        is_safe, reasons = pii_gate_check(new_masked)
+        if not is_safe:
+            raise HTTPException(status_code=400, detail=KnoxErrorResponse(
+                error_code="INPUT_GATE_FAILED",
+                reasons=[f"pii_gate_{r}" for r in reasons],
+                detail="PII gate failed after sanitize bump"
+            ).model_dump())
+        note.masked_body = new_masked
+        note.sanitize_level = SanitizeLevel.STRICT if desired == "strict" else SanitizeLevel.PARANOID
+        db.add(note)
+        db.commit()
+        return {
+            "id": note.id,
+            "sanitize_level": getattr(note.sanitize_level, "value", str(note.sanitize_level)),
+            "masked_body": note.masked_body,
+            "datetime_masked": datetime_stats["datetime_masked"],
+            "datetime_mask_count": datetime_stats["datetime_mask_count"]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to bump note sanitize level: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update note sanitize level")

@@ -40,7 +40,7 @@ def calculate_guid_hash(feed_url: str, entry: Dict) -> str:
     return hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
 
 
-def parse_rss_feed(url: str) -> List[Dict]:
+def parse_rss_feed(url: str, content: Optional[bytes] = None) -> List[Dict]:
     """
     Parse RSS/Atom feed using feedparser.
     
@@ -53,8 +53,8 @@ def parse_rss_feed(url: str) -> List[Dict]:
     entries = []
     
     try:
-        # Use feedparser with custom User-Agent
-        feed = feedparser.parse(url)
+        # Parse från redan hämtad respons om möjligt (undvik dubbel-fetch utan headers)
+        feed = feedparser.parse(content if content is not None else url)
         
         for entry in feed.entries:
             entries.append({
@@ -107,8 +107,8 @@ def fetch_all_feeds(db: Session) -> Dict[int, int]:
                 results[feed.id] = 0
                 continue
             
-            # Parse feed
-            entries = parse_rss_feed(feed.url)
+            # Parse feed (använd response.content så vi inte gör en ny fetch i feedparser)
+            entries = parse_rss_feed(feed.url, content=response.content)
             
             if not entries:
                 logger.warning(f"Scout feed {feed.id} ({feed.name}): no entries found")

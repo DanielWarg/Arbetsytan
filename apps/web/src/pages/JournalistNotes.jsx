@@ -4,6 +4,7 @@ import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { FileText, Plus, AlertCircle, HelpCircle, AlertTriangle, Image as ImageIcon, X, Edit, Trash2 } from 'lucide-react'
+import { apiUrl } from '../lib/api'
 import './JournalistNotes.css'
 
 function JournalistNotes({ projectId }) {
@@ -45,7 +46,7 @@ function JournalistNotes({ projectId }) {
   // Fetch notes list
   const fetchNotes = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/journalist-notes`, {
+      const response = await fetch(apiUrl(`/projects/${projectId}/journalist-notes`), {
         headers: { 'Authorization': `Basic ${auth}` },
         credentials: 'omit'
       })
@@ -79,11 +80,11 @@ function JournalistNotes({ projectId }) {
       })
       
       const [noteResponse, imagesResponse] = await Promise.all([
-        fetch(`http://localhost:8000/api/journalist-notes/${noteId}`, {
+        fetch(apiUrl(`/journalist-notes/${noteId}`), {
           headers: { 'Authorization': `Basic ${auth}` },
           credentials: 'omit'
         }),
-        fetch(`http://localhost:8000/api/journalist-notes/${noteId}/images`, {
+        fetch(apiUrl(`/journalist-notes/${noteId}/images`), {
           headers: { 'Authorization': `Basic ${auth}` },
           credentials: 'omit'
         })
@@ -105,7 +106,7 @@ function JournalistNotes({ projectId }) {
         const urlMap = {}
         for (const image of imagesData) {
           try {
-            const imgResponse = await fetch(`http://localhost:8000/api/journalist-notes/${noteId}/images/${image.id}`, {
+            const imgResponse = await fetch(apiUrl(`/journalist-notes/${noteId}/images/${image.id}`), {
               headers: { 'Authorization': `Basic ${auth}` },
               credentials: 'omit'
             })
@@ -168,7 +169,7 @@ function JournalistNotes({ projectId }) {
     setSaveStatus('saving')
     
     try {
-      const response = await fetch(`http://localhost:8000/api/journalist-notes/${activeNoteId}`, {
+      const response = await fetch(apiUrl(`/journalist-notes/${activeNoteId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -207,7 +208,7 @@ function JournalistNotes({ projectId }) {
         const formData = new FormData()
         formData.append('file', file)
         
-        await fetch(`http://localhost:8000/api/projects/${projectId}/documents`, {
+        await fetch(apiUrl(`/projects/${projectId}/documents`), {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${auth}`
@@ -230,7 +231,7 @@ function JournalistNotes({ projectId }) {
 
   const createNote = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/journalist-notes`, {
+      const response = await fetch(apiUrl(`/projects/${projectId}/journalist-notes`), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -276,7 +277,7 @@ function JournalistNotes({ projectId }) {
     let success = false
     
     try {
-      const response = await fetch(`http://localhost:8000/api/journalist-notes/${deleteTarget.id}`, {
+      const response = await fetch(apiUrl(`/journalist-notes/${deleteTarget.id}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -411,7 +412,7 @@ function JournalistNotes({ projectId }) {
       const formData = new FormData()
       formData.append('file', file)
       
-      const response = await fetch(`http://localhost:8000/api/journalist-notes/${activeNoteId}/images`, {
+      const response = await fetch(apiUrl(`/journalist-notes/${activeNoteId}/images`), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -425,7 +426,7 @@ function JournalistNotes({ projectId }) {
       const imageData = await response.json()
       
       // Visa bilden direkt i edit modal
-      const imgResponse = await fetch(`http://localhost:8000/api/journalist-notes/${activeNoteId}/images/${imageData.id}`, {
+      const imgResponse = await fetch(apiUrl(`/journalist-notes/${activeNoteId}/images/${imageData.id}`), {
         headers: { 'Authorization': `Basic ${auth}` },
         credentials: 'omit'
       })

@@ -1,5 +1,7 @@
 .PHONY: dev up down verify clean verify-fas0 verify-fas1 verify-fas2 verify-fas4-static verify-all verify-transcription-quality verify-projects-e2e verify-feed-import verify-feed-full verify-fortknox-v1 verify-fortknox-v1-loop fortknox-local down-fortknox
 
+.PHONY: build-web prod-up prod-down prod-logs prod-smoke
+
 dev:
 	@echo "Starting development environment..."
 	@$(MAKE) fortknox-local
@@ -101,6 +103,27 @@ down-fortknox:
 	fi
 	@rm -f /tmp/fortknox_local.pid /tmp/llama_server.pid 2>/dev/null || true
 	@echo "✅ Fort Knox Local services stopped"
+
+# ============================================================================
+# Tailscale Funnel demo deploy (local Mac): one domain, HTTPS via Funnel, Caddy routing
+# ============================================================================
+
+build-web:
+	@echo "Building web (VITE_API_BASE=/api)..."
+	@cd apps/web && VITE_API_BASE=/api npm ci --silent
+	@cd apps/web && VITE_API_BASE=/api npm run build --silent
+
+prod-up:
+	@bash deploy/tailscale/scripts/start.sh
+
+prod-down:
+	@bash deploy/tailscale/scripts/stop.sh
+
+prod-logs:
+	@docker-compose -f deploy/tailscale/docker-compose.prod.yml logs -f --tail=200
+
+prod-smoke:
+	@bash deploy/tailscale/scripts/smoke.sh
 
 verify:
 	@echo "Running smoke tests..."

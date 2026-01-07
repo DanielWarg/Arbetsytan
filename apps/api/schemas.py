@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, model_validator
-from typing import Optional, Dict, Any, List
+from pydantic import BaseModel, Field, model_validator, field_validator
+from typing import Optional, Dict, Any, List, Literal
 from datetime import datetime, date
 from models import Classification, NoteCategory, SourceType, ProjectStatus
 
@@ -274,3 +274,130 @@ class CreateProjectFromScoutItemRequest(BaseModel):
 class CreateProjectFromScoutItemResponse(BaseModel):
     project_id: int
     document_id: int
+
+
+# Fort Knox schemas
+class KnoxPolicy(BaseModel):
+    """Fort Knox policy definition."""
+    policy_id: str  # e.g., "internal", "external"
+    policy_version: str
+    ruleset_hash: str
+    mode: Literal["internal", "external"]
+    sanitize_min_level: str  # "normal", "strict", "paranoid"
+    quote_limit_words: int
+    date_strictness: str  # e.g., "strict", "relaxed"
+    max_bytes: int
+
+
+class KnoxDocumentItem(BaseModel):
+    """Document item in KnoxInputPack."""
+    doc_id: int
+    sha256: str
+    sanitize_level: str
+    updated_at: datetime
+    masked_text: str
+
+
+class KnoxNoteItem(BaseModel):
+    """Note item in KnoxInputPack."""
+    note_id: int
+    sha256: str
+    sanitize_level: str
+    updated_at: datetime
+    masked_body: str
+
+
+class KnoxSourceItem(BaseModel):
+    """Source item in KnoxInputPack (v1: metadata only, no URL in payload)."""
+    source_id: int
+    type: str
+    title: str
+
+
+class KnoxInputPack(BaseModel):
+    """Deterministic input pack for Fort Knox compilation."""
+    project: Dict[str, Any]  # {id, name, tags, status, created_at}
+    documents: List[KnoxDocumentItem]
+    notes: List[KnoxNoteItem]
+    sources: List[KnoxSourceItem]  # v1: metadata only
+    policy: KnoxPolicy
+    template_id: str
+    input_manifest: List[Dict[str, Any]]  # Manifest utan innehåll
+    input_fingerprint: str  # sha256(canonical_json(input_manifest))
+
+
+class SelectionItem(BaseModel):
+    """Single selection item for External compile (iteration 1: documents + notes)."""
+    type: Literal["document", "note"]
+    id: int
+
+
+class SelectionSet(BaseModel):
+    """Selection for include/exclude lists. Deterministic order is maintained by backend."""
+    include: List[SelectionItem] = []
+    exclude: List[SelectionItem] = []
+
+
+class KnoxCompileRequest(BaseModel):
+    """Request to compile a Fort Knox report."""
+    project_id: int
+    policy_id: str
+    template_id: str
+    selection: Optional[SelectionSet] = None
+    snapshot_mode: bool = False
+
+
+class KnoxErrorResponse(BaseModel):
+    """Metadata-only error response."""
+    error_code: str
+    reasons: List[str]
+    detail: Optional[str] = None
+
+
+class KnoxThemeItem(BaseModel):
+    """Theme item in LLM response."""
+    name: str
+    bullets: List[str]
+
+
+class KnoxRiskItem(BaseModel):
+    """Risk item in LLM response."""
+    risk: str
+    mitigation: str
+
+
+class KnoxLLMResponse(BaseModel):
+    """Strict JSON Schema for LLM response (additionalProperties:false)."""
+    template_id: str
+    language: Literal["sv"]
+    title: str
+    executive_summary: str
+    themes: List[KnoxThemeItem]
+    timeline_high_level: List[str]  # string[] not string
+    risks: List[KnoxRiskItem]
+    open_questions: List[str]
+    next_steps: List[str]
+    confidence: Literal["low", "medium", "high"]
+
+    class Config:
+        extra = "forbid"  # additionalProperties:false equivalent
+
+
+class KnoxReportResponse(BaseModel):
+    """Fort Knox report response."""
+    id: int
+    project_id: int
+    policy_id: str
+    policy_version: str
+    ruleset_hash: str
+    template_id: str
+    engine_id: Optional[str]
+    input_fingerprint: str
+    input_manifest: List[Dict[str, Any]]  # Manifest utan innehåll
+    gate_results: Dict[str, Any]
+    rendered_markdown: Optional[str]  # Endast vid pass
+    created_at: datetime
+    latency_ms: Optional[int]
+
+    class Config:
+        from_attributes = True

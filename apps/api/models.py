@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Enum as SQLEnum, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Enum as SQLEnum, Text, Boolean, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -177,3 +177,27 @@ class ScoutItem(Base):
     fetched_at = Column(DateTime(timezone=True), server_default=func.now())
     guid_hash = Column(String, unique=True, nullable=False, index=True)
     raw_source = Column(String, nullable=False)  # Snapshot av feed.name vid fetch
+
+
+class KnoxReport(Base):
+    """Fort Knox-rapporter - deterministiska sammanställningar från projekt."""
+    __tablename__ = "knox_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    policy_id = Column(String, nullable=False)  # e.g., "internal", "external"
+    policy_version = Column(String, nullable=False)
+    ruleset_hash = Column(String, nullable=False)
+    template_id = Column(String, nullable=False)  # e.g., "weekly", "brief", "incident"
+    engine_id = Column(String, nullable=True)  # e.g., "ministral-3-8b-gguf-q4_k_m"
+    input_fingerprint = Column(String, nullable=False)  # sha256 of canonical manifest
+    input_manifest = Column(JSON, nullable=False)  # Manifest utan innehåll
+    gate_results = Column(JSON, nullable=False)  # {"input": {"pass": bool, "reasons": []}, "output": {...}}
+    rendered_markdown = Column(Text, nullable=True)  # Endast vid pass, null vid fail
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    latency_ms = Column(Integer, nullable=True)  # Latency i millisekunder
+
+    # Index för idempotens lookup
+    __table_args__ = (
+        Index('idx_knox_report_idempotency', 'project_id', 'policy_id', 'template_id', 'input_fingerprint'),
+    )

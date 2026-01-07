@@ -49,6 +49,10 @@ Arbetsytan är ett internt arbetsverktyg som:
 - [SECURITY_MODEL.md](SECURITY_MODEL.md) – Säkerhetsmodell och klassificering
 - [ROADMAP.md](ROADMAP.md) – Utvecklingsroadmap med stop/go-punkter
 - [RUNBOOK.md](RUNBOOK.md) – Verifieringsrunbook för alla faser
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) – Systemarkitektur och moduler
+- [docs/FLOWS.md](docs/FLOWS.md) – Flödesdiagram och processer
+- [docs/SECURITY.md](docs/SECURITY.md) – Säkerhetsprinciper och implementation
+- [docs/VERIFYING.md](docs/VERIFYING.md) – Verifieringsprocesser och tester
 - [docs/FEED_IMPORT_PLAN.md](docs/FEED_IMPORT_PLAN.md) – Feed import implementation och status
 
 ## Teknisk stack
@@ -111,7 +115,7 @@ Security Core är en isolerad, dormant modul förberedd för framtida extern AI-
 
 **Status:** Inaktiv, dormant, opt-in via feature flag. Ingen endpoint-användning. Befintlig masking i `text_processing.py` förblir aktiv och oberoende.
 
-Se [docs/SECURITY_CORE.md](docs/SECURITY_CORE.md) för detaljer.
+Se [docs/SECURITY.md](docs/SECURITY.md) för säkerhetsprinciper och implementation.
 
 ## Feed Import & Scout
 

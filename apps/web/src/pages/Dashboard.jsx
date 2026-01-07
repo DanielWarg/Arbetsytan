@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { getDueUrgency } from '../lib/urgency'
+import { apiUrl } from '../lib/api'
+import { formatScoutDate } from '../lib/datetime'
 import './Dashboard.css'
 
 function Dashboard() {
@@ -19,7 +21,7 @@ function Dashboard() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        const response = await fetch('http://localhost:8000/api/projects', {
+        const response = await fetch(apiUrl('/projects'), {
           headers: {
             'Authorization': `Basic ${auth}`
           }
@@ -29,17 +31,7 @@ function Dashboard() {
         
         const data = await response.json()
         
-        // DEBUG: Log projects payload before filtering
-        console.log('[DEBUG] Total projects from API:', data.length)
         const projectsWithDueDate = data.filter(p => p.due_date)
-        console.log('[DEBUG] Projects with due_date:', projectsWithDueDate.length)
-        if (projectsWithDueDate.length > 0) {
-          console.log('[DEBUG] Sample project with due_date:', {
-            id: projectsWithDueDate[0].id,
-            name: projectsWithDueDate[0].name,
-            due_date: projectsWithDueDate[0].due_date
-          })
-        }
         
         setProjects(data)
         
@@ -64,7 +56,7 @@ function Dashboard() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=5', {
+        const response = await fetch(apiUrl('/scout/items?hours=24&limit=5'), {
           headers: {
             'Authorization': `Basic ${auth}`
           },
@@ -77,7 +69,6 @@ function Dashboard() {
         }
         
         const data = await response.json()
-        console.log('Scout items fetched:', data.length, data)
         setScoutItems(data)
       } catch (err) {
         console.error('Error fetching scout items:', err)
@@ -92,10 +83,6 @@ function Dashboard() {
   const nearDeadlineProjects = projects
     .filter(p => {
       const urgency = getDueUrgency(p.due_date)
-      // DEBUG: Log each project's urgency
-      if (p.due_date) {
-        console.log(`[DEBUG] Project ${p.id} (${p.name}): due_date=${p.due_date}, urgency=`, urgency)
-      }
       return urgency.label !== null // Only show projects with warning/danger/overdue
     })
     .sort((a, b) => {
@@ -107,17 +94,7 @@ function Dashboard() {
       return urgencyA.normalizedDate.localeCompare(urgencyB.normalizedDate)
     })
     .slice(0, 5) // Limit to 5
-  
-  // DEBUG: Log after filtering
-  console.log('[DEBUG] urgentProjects.length:', nearDeadlineProjects.length)
-  if (nearDeadlineProjects.length > 0) {
-    console.log('[DEBUG] urgentProjects:', nearDeadlineProjects.map(p => ({
-      id: p.id,
-      name: p.name,
-      due_date: p.due_date,
-      urgency: getDueUrgency(p.due_date)
-    })))
-  }
+ 
 
   if (loading) return <div className="dashboard-page">Laddar...</div>
   if (error) return <div className="dashboard-page">Fel: {error}</div>
@@ -132,13 +109,8 @@ function Dashboard() {
       </div>
       
       {/* Deadlines nära section */}
-      {(() => {
-        console.log('[DEBUG] Rendering Deadlines nära check: nearDeadlineProjects.length =', nearDeadlineProjects.length)
-        return null
-      })()}
       {nearDeadlineProjects.length > 0 && (
         <section className="dashboard-section">
-          {console.log('[DEBUG] Rendering Deadlines nära section')}
           <h2 className="section-title">Deadlines nära</h2>
           <div className="deadlines-list">
             {nearDeadlineProjects.map(proj => {
@@ -233,15 +205,10 @@ function Dashboard() {
                   }
                 }}
               >
-                <Badge variant="normal">{item.raw_source}</Badge>
+                <Badge variant="normal" className="scout-item-badge">{item.raw_source}</Badge>
                 <span className="scout-item-title">{item.title}</span>
                 <span className="scout-item-time">
-                  {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                  {formatScoutDate(item.published_at || item.fetched_at)}
                 </span>
               </a>
             ))}

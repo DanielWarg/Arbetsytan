@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/ARCHITECTURE.md, docs/FLOWS.md, docs/VERIFYING.md
+
 Perfekt val 👍
 Då gör vi **Phase 1 till ett låst, sparbart styrdokument** som du kan:
 

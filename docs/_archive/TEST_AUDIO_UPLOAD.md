@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/ARCHITECTURE.md, docs/FLOWS.md, docs/VERIFYING.md
+
 # Test Audio Upload - Backend Direct Test
 
 ## STEG 1 - Endpoint Information

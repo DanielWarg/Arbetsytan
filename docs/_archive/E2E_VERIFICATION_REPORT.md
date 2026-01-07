@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # E2E Verification Report — Arbetsytan (Phase 1)
 
 **Datum:** 2026-01-02  

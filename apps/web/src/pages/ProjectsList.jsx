@@ -6,6 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
+import { apiUrl } from '../lib/api'
 import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss, X, Loader2 } from 'lucide-react'
 import './ProjectsList.css'
 
@@ -35,7 +36,7 @@ function ProjectsList() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch('http://localhost:8000/api/projects', {
+      const response = await fetch(apiUrl('/projects'), {
         headers: {
           'Authorization': `Basic ${auth}`
         }
@@ -63,7 +64,7 @@ function ProjectsList() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
+        const response = await fetch(apiUrl('/scout/items?hours=168&limit=50'), {
           headers: {
             'Authorization': `Basic ${auth}`
           },
@@ -93,7 +94,7 @@ function ProjectsList() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
         
-        await fetch('http://localhost:8000/api/scout/fetch', {
+        await fetch(apiUrl('/scout/fetch'), {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${auth}`
@@ -123,7 +124,7 @@ function ProjectsList() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      await fetch('http://localhost:8000/api/scout/fetch', {
+    await fetch(apiUrl('/scout/fetch'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -131,7 +132,7 @@ function ProjectsList() {
       })
       
       // Refresh items after fetching feeds
-      const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
+      const response = await fetch(apiUrl('/scout/items?hours=168&limit=50'), {
         headers: {
           'Authorization': `Basic ${auth}`
         },
@@ -155,7 +156,7 @@ function ProjectsList() {
   const fetchScoutModalItems = useCallback(async () => {
     setScoutModalLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/items?hours=168&limit=50', {
+      const response = await fetch(apiUrl('/scout/items?hours=168&limit=50'), {
         headers: {
           'Authorization': `Basic ${scoutAuth}`
         }
@@ -174,7 +175,7 @@ function ProjectsList() {
   const fetchScoutModalFeeds = async () => {
     setScoutModalLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+      const response = await fetch(apiUrl('/scout/feeds'), {
         headers: {
           'Authorization': `Basic ${scoutAuth}`
         }
@@ -207,7 +208,7 @@ function ProjectsList() {
   const handleScoutModalFetch = async () => {
     setScoutModalFetching(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/fetch', {
+      const response = await fetch(apiUrl('/scout/fetch'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${scoutAuth}`
@@ -229,7 +230,7 @@ function ProjectsList() {
       return
     }
     try {
-      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+      const response = await fetch(apiUrl('/scout/feeds'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${scoutAuth}`,
@@ -252,7 +253,7 @@ function ProjectsList() {
 
   const handleScoutModalDisableFeed = async (feedId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/scout/feeds/${feedId}`, {
+      const response = await fetch(apiUrl(`/scout/feeds/${feedId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Basic ${scoutAuth}`
@@ -275,7 +276,7 @@ function ProjectsList() {
   const handleCreateProjectFromFeed = async (feedUrl, feedName, mode = 'fulltext') => {
     try {
       const auth = btoa('admin:password')
-      const response = await fetch('http://localhost:8000/api/projects/from-feed', {
+      const response = await fetch(apiUrl('/projects/from-feed'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -306,7 +307,7 @@ function ProjectsList() {
     setCreatingFromScoutItem(itemId)
     try {
       const auth = btoa('admin:password')
-      const response = await fetch('http://localhost:8000/api/projects/from-scout-item', {
+      const response = await fetch(apiUrl('/projects/from-scout-item'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -445,7 +446,7 @@ function ProjectsList() {
                       {creatingFromScoutItem === item.id ? (
                         <Loader2 size={14} className="spinning" />
                       ) : (
-                        <FolderPlus size={14} />
+                        <span>Skapa projekt</span>
                       )}
                     </button>
                     <button
@@ -474,13 +475,10 @@ function ProjectsList() {
               <RefreshCw size={14} className={scoutFetching ? 'spinning' : ''} />
               <span>{scoutFetching ? 'Uppdaterar...' : 'Uppdatera'}</span>
             </button>
-            <button 
-              className="btn-overview"
-              onClick={() => setShowScoutModal(true)}
-            >
+            <Link to="/scout" className="btn-overview">
               <Eye size={16} />
               <span>Visa alla</span>
-            </button>
+            </Link>
           </div>
         </div>
       </Card>
@@ -621,43 +619,30 @@ function ProjectsList() {
           </div>
         </Card>
 
-        {/* Fort Knox Widget (Placeholder) */}
+        {/* Fort Knox Widget */}
         <Card className="overview-card">
           <div className="overview-card-header">
             <h3 className="overview-card-title">Fort Knox</h3>
-            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
+            <Badge variant="normal" className="fortknox-status-badge">REDO</Badge>
           </div>
           <div className="overview-card-content">
             <p className="overview-placeholder-text">
-              Säkerhetshantering och åtkomstkontroll.
+              Säkerhetshantering och åtkomstkontroll. Kompilera integritetsrapporter direkt från projektvyn.
             </p>
+            {projects.length > 0 ? (
+              <Link to="/fortknox" className="btn-overview">
+                <Lock size={16} />
+                <span>Öppna Fort Knox</span>
+              </Link>
+            ) : (
             <button 
               className="btn-overview-disabled"
               disabled
             >
               <Lock size={16} />
-              <span>Öppna Fort Knox</span>
+                <span>Skapa projekt först</span>
             </button>
-          </div>
-        </Card>
-
-        {/* Archive Widget (Placeholder) */}
-        <Card className="overview-card">
-          <div className="overview-card-header">
-            <h3 className="overview-card-title">Arkiv</h3>
-            <Badge variant="normal" className="coming-soon-badge">Kommer snart</Badge>
-          </div>
-          <div className="overview-card-content">
-            <p className="overview-placeholder-text">
-              Arkiverade projekt och dokument.
-            </p>
-            <button 
-              className="btn-overview-disabled"
-              disabled
-            >
-              <FileText size={16} />
-              <span>Öppna Arkiv</span>
-            </button>
+            )}
           </div>
         </Card>
 

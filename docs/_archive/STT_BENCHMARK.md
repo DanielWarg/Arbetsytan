@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # STT Benchmark Matrix - Prestanda & Kvalitet
 
 ## Översikt

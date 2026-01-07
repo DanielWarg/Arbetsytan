@@ -4,6 +4,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { ArrowLeft, Info, Edit } from 'lucide-react'
+import { apiUrl } from '../lib/api'
 import './DocumentView.css'
 
 function DocumentView() {
@@ -22,7 +23,7 @@ function DocumentView() {
         const password = 'password'
         const auth = btoa(`${username}:${password}`)
 
-        const response = await fetch(`http://localhost:8000/api/documents/${documentId}`, {
+        const response = await fetch(apiUrl(`/documents/${documentId}`), {
           headers: { 'Authorization': `Basic ${auth}` }
         })
 
@@ -69,7 +70,7 @@ function DocumentView() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/documents/${documentId}`, {
+      const response = await fetch(apiUrl(`/documents/${documentId}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,

@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # Källor / Referenser (Byggsten B) — Implementation Report
 
 **Status:** ✅ Completed  

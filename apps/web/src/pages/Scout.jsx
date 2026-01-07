@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../ui/Badge'
+import { apiUrl } from '../lib/api'
+import { formatScoutDate } from '../lib/datetime'
 import './Scout.css'
 
 function Scout() {
@@ -27,7 +29,7 @@ function Scout() {
   const fetchItems = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/items?hours=24&limit=50', {
+      const response = await fetch(apiUrl('/scout/items?hours=24&limit=50'), {
         headers: {
           'Authorization': `Basic ${auth}`
         }
@@ -46,7 +48,7 @@ function Scout() {
   const fetchFeeds = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+      const response = await fetch(apiUrl('/scout/feeds'), {
         headers: {
           'Authorization': `Basic ${auth}`
         }
@@ -65,7 +67,7 @@ function Scout() {
   const handleFetch = async () => {
     setFetching(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scout/fetch', {
+      const response = await fetch(apiUrl('/scout/fetch'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -88,7 +90,7 @@ function Scout() {
       return
     }
     try {
-      const response = await fetch('http://localhost:8000/api/scout/feeds', {
+      const response = await fetch(apiUrl('/scout/feeds'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -111,7 +113,7 @@ function Scout() {
 
   const handleDisableFeed = async (feedId) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/scout/feeds/${feedId}`, {
+      const response = await fetch(apiUrl(`/scout/feeds/${feedId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -168,6 +170,9 @@ function Scout() {
                   <Badge variant="normal" className="scout-item-badge">
                     {item.raw_source}
                   </Badge>
+                  <span className="scout-item-time-full">
+                    {formatScoutDate(item.published_at || item.fetched_at)}
+                  </span>
                   <a
                     href={item.link}
                     target="_blank"
@@ -176,14 +181,6 @@ function Scout() {
                   >
                     {item.title}
                   </a>
-                  <span className="scout-item-time-full">
-                    {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
                 </div>
               ))}
             </div>

@@ -5,6 +5,7 @@ import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
+import { apiUrl } from '../lib/api'
 import './FortKnoxPanel.css'
 
 function FortKnoxPanel({ projectId }) {
@@ -38,13 +39,28 @@ function FortKnoxPanel({ projectId }) {
   const [savingNote, setSavingNote] = useState(false)
 
   const parseKnoxError = (payload) => {
+    // Handle Pydantic validation errors (422) - detail is a list
+    if (Array.isArray(payload?.detail)) {
+      const reasons = payload.detail.map(err => {
+        const loc = err.loc ? err.loc.join('.') : 'unknown'
+        const msg = err.msg || 'Validation error'
+        return `${loc}: ${msg}`
+      })
+      return { error_code: 'VALIDATION_ERROR', reasons, detail: payload }
+    }
+    
+    // Handle wrapped error (detail.error_code)
     if (payload?.detail?.error_code) {
       return payload.detail
-    } else if (payload?.error_code) {
-      return payload
-    } else {
-      return { error_code: 'UNKNOWN', reasons: [], detail: null }
     }
+    
+    // Handle direct error_code
+    if (payload?.error_code) {
+      return payload
+    }
+    
+    // Fallback
+    return { error_code: 'UNKNOWN', reasons: [JSON.stringify(payload)], detail: payload }
   }
 
   const getStatus = () => {
@@ -53,6 +69,8 @@ function FortKnoxPanel({ projectId }) {
       const errorCode = error.error_code
       if (errorCode === 'FORTKNOX_OFFLINE') return 'OFFLINE'
       if (errorCode === 'INPUT_GATE_FAILED' || errorCode === 'OUTPUT_GATE_FAILED') return 'BLOCKED'
+      if (errorCode === 'EMPTY_INPUT_SET') return 'ERROR'
+      if (errorCode === 'VALIDATION_ERROR') return 'ERROR'
       if (error.reasons?.some(r => r.includes('quote_detected'))) return 'BLOCKED'
       return 'ERROR'
     }
@@ -127,8 +145,8 @@ function FortKnoxPanel({ projectId }) {
     
     try {
       const endpoint = item.type === 'document'
-        ? `http://localhost:8000/api/projects/${projectId}/documents/${item.id}/sanitize?level=strict`
-        : `http://localhost:8000/api/projects/${projectId}/notes/${item.id}/sanitize?level=strict`
+        ? apiUrl(`/projects/${projectId}/documents/${item.id}/sanitize?level=strict`)
+        : apiUrl(`/projects/${projectId}/notes/${item.id}/sanitize?level=strict`)
       
       const response = await fetch(endpoint, {
         method: 'PUT',
@@ -175,7 +193,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/documents/${docId}`, {
+      const response = await fetch(apiUrl(`/documents/${docId}`), {
         headers: { 'Authorization': `Basic ${auth}` }
       })
       
@@ -205,7 +223,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/documents/${editingDocument.id}`, {
+      const response = await fetch(apiUrl(`/documents/${editingDocument.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -253,7 +271,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/documents/${docId}`, {
+      const response = await fetch(apiUrl(`/documents/${docId}`), {
         headers: { 'Authorization': `Basic ${auth}` }
       })
       
@@ -286,7 +304,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/documents/${docId}/exclude-from-fortknox?exclude=true`, {
+      const response = await fetch(apiUrl(`/projects/${projectId}/documents/${docId}/exclude-from-fortknox?exclude=true`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -334,7 +352,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/notes/${noteId}`, {
+      const response = await fetch(apiUrl(`/notes/${noteId}`), {
         headers: { 'Authorization': `Basic ${auth}` }
       })
       
@@ -370,7 +388,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/notes/${noteId}`, {
+      const response = await fetch(apiUrl(`/notes/${noteId}`), {
         headers: { 'Authorization': `Basic ${auth}` }
       })
       
@@ -402,7 +420,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/notes/${editingNote.id}`, {
+      const response = await fetch(apiUrl(`/projects/${projectId}/notes/${editingNote.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -441,11 +459,15 @@ function FortKnoxPanel({ projectId }) {
   }
 
   const handleExcludeNote = async (noteId, e) => {
-    e.preventDefault()
-    e.stopPropagation()
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     
     const itemKey = `note_${noteId}`
-    if (deletingItems.has(itemKey)) return
+    if (deletingItems.has(itemKey)) {
+      return
+    }
     
     setDeletingItems(prev => new Set(prev).add(itemKey))
     
@@ -454,7 +476,7 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/projects/${projectId}/notes/${noteId}/exclude-from-fortknox?exclude=true`, {
+      const response = await fetch(apiUrl(`/projects/${projectId}/notes/${noteId}/exclude-from-fortknox?exclude=true`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -499,18 +521,20 @@ function FortKnoxPanel({ projectId }) {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000)
 
+    const requestBody = {
+      project_id: parseInt(projectId),
+      policy_id: policyId,
+      template_id: templateId
+    }
+
     try {
-      const response = await fetch('http://localhost:8000/api/fortknox/compile', {
+      const response = await fetch(apiUrl('/fortknox/compile'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${auth}`
         },
-        body: JSON.stringify({
-          project_id: parseInt(projectId),
-          policy_id: policyId,
-          template_id: templateId
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       })
 
@@ -526,7 +550,12 @@ function FortKnoxPanel({ projectId }) {
         setFixedItems(new Set()) // Reset fixed items on new compile
         setFixErrors(new Map()) // Reset fix errors
       } else {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(async () => {
+          // If JSON parsing fails, try to get text
+          const text = await response.text().catch(() => 'Unknown error')
+          return { detail: text }
+        })
+        
         const parsedError = parseKnoxError(errorData)
         setError(parsedError)
         setReport(null)
@@ -862,9 +891,18 @@ function FortKnoxPanel({ projectId }) {
                                       <Button
                                         variant="secondary"
                                         size="sm"
-                                        onClick={(e) => handleExcludeNote(note.id, e)}
+                                        onClick={(e) => {
+                                          if (e) {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            e.nativeEvent?.stopImmediatePropagation()
+                                          }
+                                          handleExcludeNote(note.id, e)
+                                          return false
+                                        }}
                                         disabled={deletingItems.has(`note_${note.id}`)}
                                         className="fortknox-exclude-btn"
+                                        type="button"
                                       >
                                         {deletingItems.has(`note_${note.id}`) ? 'Exkluderar...' : 'Exkludera från sammanställning'}
                                       </Button>
@@ -877,9 +915,18 @@ function FortKnoxPanel({ projectId }) {
                                       <Button
                                         variant="secondary"
                                         size="sm"
-                                        onClick={(e) => handleExcludeNote(note.id, e)}
+                                        onClick={(e) => {
+                                          if (e) {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            e.nativeEvent?.stopImmediatePropagation()
+                                          }
+                                          handleExcludeNote(note.id, e)
+                                          return false
+                                        }}
                                         disabled={deletingItems.has(`note_${note.id}`)}
                                         className="fortknox-exclude-btn"
+                                        type="button"
                                       >
                                         {deletingItems.has(`note_${note.id}`) ? 'Exkluderar...' : 'Exkludera'}
                                       </Button>
@@ -926,12 +973,44 @@ function FortKnoxPanel({ projectId }) {
       {/* ERROR State */}
       {error && !loading && status === 'ERROR' && (
         <div className="fortknox-error-card fortknox-error-state-card">
-          <h4 className="fortknox-error-title">Tekniskt fel</h4>
-          <p className="fortknox-error-text">
-            Sammanställningen kunde inte slutföras. Ingen data har läckt eller bearbetats delvis.
-          </p>
-          {error.error_code && (
-            <div className="fortknox-error-code">Error: {error.error_code}</div>
+          {error.error_code === 'EMPTY_INPUT_SET' ? (
+            <>
+              <h4 className="fortknox-error-title">Tomt underlag</h4>
+              <p className="fortknox-error-text">
+                Du har exkluderat allt underlag från sammanställningen. Välj minst ett dokument, anteckning eller källa för att kompilera en rapport.
+              </p>
+            </>
+          ) : error.error_code === 'VALIDATION_ERROR' ? (
+            <>
+              <h4 className="fortknox-error-title">Valideringsfel</h4>
+              <p className="fortknox-error-text">
+                Begäran kunde inte valideras. Kontrollera att alla fält är korrekt ifyllda.
+              </p>
+              {error.reasons && error.reasons.length > 0 && (
+                <ul className="fortknox-error-reasons">
+                  {error.reasons.slice(0, 5).map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : (
+            <>
+              <h4 className="fortknox-error-title">Tekniskt fel</h4>
+              <p className="fortknox-error-text">
+                Sammanställningen kunde inte slutföras. Ingen data har läckt eller bearbetats delvis.
+              </p>
+              {error.error_code && (
+                <div className="fortknox-error-code">Error: {error.error_code}</div>
+              )}
+              {error.reasons && error.reasons.length > 0 && (
+                <ul className="fortknox-error-reasons">
+                  {error.reasons.slice(0, 5).map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
       )}

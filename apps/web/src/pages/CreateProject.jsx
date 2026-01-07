@@ -5,6 +5,7 @@ import { Input, Textarea } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Badge } from '../ui/Badge'
 import { Info, Trash2 } from 'lucide-react'
+import { apiUrl } from '../lib/api'
 import './CreateProject.css'
 
 function CreateProject({ onClose, onSuccess, project = null }) {
@@ -72,9 +73,9 @@ function CreateProject({ onClose, onSuccess, project = null }) {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const url = isEditMode 
-        ? `http://localhost:8000/api/projects/${project.id}`
-        : 'http://localhost:8000/api/projects'
+      const url = isEditMode
+        ? apiUrl(`/projects/${project.id}`)
+        : apiUrl('/projects')
       
       const method = isEditMode ? 'PUT' : 'POST'
       
@@ -129,7 +130,7 @@ function CreateProject({ onClose, onSuccess, project = null }) {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${project.id}`, {
+      const response = await fetch(apiUrl(`/projects/${project.id}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Basic ${auth}`

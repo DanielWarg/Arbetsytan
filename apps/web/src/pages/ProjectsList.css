@@ -12,8 +12,8 @@
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--spacing-md); /* Tighter gap */
-  margin-bottom: var(--spacing-3xl);
+  gap: var(--spacing-sm); /* Even tighter gap (reduce scroll) */
+  margin-bottom: var(--spacing-xl);
 }
 
 @media (min-width: 768px) {
@@ -60,7 +60,7 @@
 .scout-card-fullwidth {
   min-height: 240px;
   max-height: 260px; /* Same height as "Mina projekt" */
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
 }
 
 .scout-card-fullwidth .overview-card-header {
@@ -108,7 +108,7 @@
 .projects-card-fullwidth {
   min-height: 240px;
   max-height: 260px;
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
 }
 
 .projects-card-fullwidth .overview-card-header {
@@ -551,14 +551,14 @@
 }
 
 .projects-page {
-  padding: var(--spacing-3xl);
+  padding: var(--spacing-2xl);
 }
 
 .projects-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-3xl);
+  margin-bottom: var(--spacing-2xl);
 }
 
 .projects-title {
@@ -836,6 +836,14 @@
   transition: all 0.2s;
 }
 
+.scout-widget-item-create-btn {
+  padding: 6px 10px;
+  font-size: var(--font-size-xs);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
 .scout-widget-item-create-btn:hover {
   background: var(--color-interactive-default);
   color: var(--color-interactive-text);
@@ -875,6 +883,10 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-xs); /* Keep time small */
   flex-shrink: 0;
+  /* Make the date/time read as a clean left-aligned column (not ragged) */
+  min-width: 96px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .btn-overview {
@@ -1053,6 +1065,9 @@
 
 .scout-modal-item-time {
   font-size: var(--font-size-xs);
+  min-width: 96px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .scout-modal-item-content {

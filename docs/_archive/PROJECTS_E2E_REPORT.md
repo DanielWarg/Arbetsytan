@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # Projects E2E Verification Report
 
 **Datum:** 2026-01-01  

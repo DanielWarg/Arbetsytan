@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # Phase 1 — UX Stabilization Plan
 
 **Roll:** Senior frontend engineer med UX-ansvar  

@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Badge } from '../ui/Badge'
 import { Modal } from '../ui/Modal'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
-import { FileText, StickyNote, Mic, Upload, File, Info, Edit, Trash2 } from 'lucide-react'
+import { apiUrl } from '../lib/api'
+import { FileText, StickyNote, Mic, Upload, File, Info, Edit, Trash2, Lock } from 'lucide-react'
 import JournalistNotes from './JournalistNotes'
+import FortKnoxStation from '../components/FortKnoxStation'
 import './ProjectDetail.css'
 
 function ProjectDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [project, setProject] = useState(null)
   const [events, setEvents] = useState([])
   const [documents, setDocuments] = useState([])
@@ -44,6 +47,7 @@ function ProjectDetail() {
     includeNotes: false
   })
   const [exporting, setExporting] = useState(false)
+  const [showFortKnoxStation, setShowFortKnoxStation] = useState(false)
   const fileInputRef = useRef(null)
   
   // Recording states
@@ -75,19 +79,19 @@ function ProjectDetail() {
       const auth = btoa(`${username}:${password}`)
       
       const [projectRes, eventsRes, documentsRes, sourcesRes, notesRes] = await Promise.all([
-        fetch(`http://localhost:8000/api/projects/${id}`, {
+        fetch(apiUrl(`/projects/${id}`), {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
-        fetch(`http://localhost:8000/api/projects/${id}/events`, {
+        fetch(apiUrl(`/projects/${id}/events`), {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
-        fetch(`http://localhost:8000/api/projects/${id}/documents`, {
+        fetch(apiUrl(`/projects/${id}/documents`), {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
-        fetch(`http://localhost:8000/api/projects/${id}/sources`, {
+        fetch(apiUrl(`/projects/${id}/sources`), {
           headers: { 'Authorization': `Basic ${auth}` }
         }),
-        fetch(`http://localhost:8000/api/projects/${id}/notes`, {
+        fetch(apiUrl(`/projects/${id}/notes`), {
           headers: { 'Authorization': `Basic ${auth}` }
         })
       ])
@@ -116,6 +120,19 @@ function ProjectDetail() {
   useEffect(() => {
     fetchProject()
   }, [id])
+
+  // Open note modal if navigated from Fort Knox
+  useEffect(() => {
+    if (location.state?.openNoteId && projectNotes.length > 0) {
+      const note = projectNotes.find(n => n.id === location.state.openNoteId)
+      if (note) {
+        handleEditNote(note)
+        // Clear state to prevent reopening on re-render
+        navigate(location.pathname, { replace: true, state: {} })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectNotes, location.state?.openNoteId])
 
   const handleDropzoneClick = () => {
     if (ingestMode === 'audio') {
@@ -156,7 +173,7 @@ function ProjectDetail() {
 
       // Upload audio
       // NOTE: Do NOT set Content-Type header - browser will set it automatically with boundary for FormData
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/recordings`, {
+      const response = await fetch(apiUrl(`/projects/${id}/recordings`), {
         method: 'POST',
         headers: {
           'Authorization': 'Basic ' + auth
@@ -375,7 +392,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(username + ':' + password)
       
-      const response = await fetch('http://localhost:8000/api/projects/' + id + '/recordings', {
+      const response = await fetch(apiUrl(`/projects/${id}/recordings`), {
         method: 'POST',
         headers: {
           'Authorization': 'Basic ' + auth
@@ -434,7 +451,7 @@ function ProjectDetail() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/documents`, {
+      const response = await fetch(apiUrl(`/projects/${id}/documents`), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`
@@ -503,7 +520,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/sources`, {
+      const response = await fetch(apiUrl(`/projects/${id}/sources`), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -548,7 +565,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/sources/${editingSource.id}`, {
+      const response = await fetch(apiUrl(`/projects/${id}/sources/${editingSource.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -589,7 +606,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/notes/${editingNote.id}`, {
+      const response = await fetch(apiUrl(`/projects/${id}/notes/${editingNote.id}`), {
         method: 'PUT',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -653,7 +670,7 @@ function ProjectDetail() {
         include_notes: exportSettings.includeNotes
       })
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/export?${params}`, {
+      const response = await fetch(apiUrl(`/projects/${id}/export?${params}`), {
         headers: {
           'Authorization': `Basic ${auth}`
         }
@@ -684,8 +701,7 @@ function ProjectDetail() {
   const confirmDelete = async () => {
     if (!deleteConfirm.id) return
     
-    const apiBase = import.meta.env.VITE_API_URL || 
-      (import.meta.env.DEV ? 'http://localhost:8000' : '')
+    const apiBase = apiUrl('').replace(/\/api\/?$/, '')
     
     setDeleting(true)
     let success = false
@@ -699,10 +715,10 @@ function ProjectDetail() {
       
       switch (deleteConfirm.type) {
         case 'document':
-          endpoint = `${apiBase}/api/documents/${deleteConfirm.id}`
+          endpoint = apiUrl(`/documents/${deleteConfirm.id}`)
           break
         case 'source':
-          endpoint = `${apiBase}/api/projects/${id}/sources/${deleteConfirm.id}`
+          endpoint = apiUrl(`/projects/${id}/sources/${deleteConfirm.id}`)
           break
         default:
           throw new Error('Unknown delete type')
@@ -746,7 +762,7 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(`${username}:${password}`)
       
-      const response = await fetch(`http://localhost:8000/api/projects/${id}/status`, {
+      const response = await fetch(apiUrl(`/projects/${id}/status`), {
         method: 'PATCH',
         headers: {
           'Authorization': `Basic ${auth}`,
@@ -842,6 +858,14 @@ function ProjectDetail() {
                 </button>
               </div>
               <div className="toolbar-right">
+                <Button
+                  variant="primary"
+                  onClick={() => setShowFortKnoxStation(true)}
+                  className="fortknox-open-btn"
+                >
+                  <Lock size={16} />
+                  <span>Fort Knox</span>
+                </Button>
                 <div className="toolbar-status">
                   <label className="toolbar-status-label">Status:</label>
                   <select 
@@ -1622,6 +1646,14 @@ function ProjectDetail() {
             </div>
           </div>
       </Modal>
+
+      {/* Fort Knox Station */}
+      {showFortKnoxStation && (
+        <FortKnoxStation
+          projectId={id}
+          onClose={() => setShowFortKnoxStation(false)}
+        />
+      )}
     </div>
   )
 }

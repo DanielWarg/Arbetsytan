@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # Security Core
 
 Security Core är en isolerad, dormant modul som porterats från copy-pastev2 för framtida extern AI-integration. Modulen är **inte aktiv** i nuvarande runtime och används inte av några endpoints.

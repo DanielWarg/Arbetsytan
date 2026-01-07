@@ -14,6 +14,11 @@ CREATE TABLE IF NOT EXISTS projects (
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='projects' AND column_name='status') THEN
+        ALTER TABLE projects ADD COLUMN status VARCHAR NOT NULL DEFAULT 'research';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name='projects' AND column_name='due_date') THEN
         ALTER TABLE projects ADD COLUMN due_date TIMESTAMP WITH TIME ZONE;
     END IF;

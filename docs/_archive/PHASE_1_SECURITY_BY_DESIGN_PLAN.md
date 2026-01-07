@@ -1,3 +1,5 @@
+ARCHIVED: replaced by docs/VERIFYING.md, docs/ARCHITECTURE.md, docs/SECURITY.md
+
 # Phase 1: Security by Design - Implementation Plan
 
 ## 🧠 Working Principles — Phase 1: Security by Design

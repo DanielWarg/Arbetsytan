@@ -107,6 +107,60 @@ def sanitize_journalist_note(raw_text: str) -> str:
     return text
 
 
+def mask_datetime(text: str, level: str = "strict") -> Tuple[str, dict]:
+    """
+    Mask datum/tid deterministiskt (fail-closed: datum aldrig exporteras externt).
+    
+    Levels:
+    - strict: maska YYYY-MM-DD, svenska datum, klockslag → [DATUM], [TID]
+    - paranoid: strict + relativa tidsord (igår, idag, imorgon) → [RELATIV_TID]
+    
+    Returns:
+        (masked_text, stats) där stats = {datetime_masked: bool, datetime_mask_count: int}
+    """
+    masked_count = 0
+    
+    # DATUM-patterns (strict + paranoid)
+    # ISO datum: 2026-01-06, 2026/01/06
+    text, n = re.subn(r'\b(19|20)\d{2}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b', '[DATUM]', text)
+    masked_count += n
+    
+    # DD/MM/YYYY och D/M/YYYY
+    text, n = re.subn(r'\b(0?[1-9]|[12]\d|3[01])/(0?[1-9]|1[0-2])/(19|20)\d{2}\b', '[DATUM]', text)
+    masked_count += n
+    
+    # Svenska månader (lång form): "6 januari 2026", "12 maj 2024"
+    swedish_months_long = r'(januari|februari|mars|april|maj|juni|juli|augusti|september|oktober|november|december)'
+    text, n = re.subn(rf'\b(0?[1-9]|[12]\d|3[01])\s+{swedish_months_long}\s+(19|20)\d{{2}}\b', '[DATUM]', text, flags=re.IGNORECASE)
+    masked_count += n
+    
+    # Svenska månader (kort form): "6 jan 2026", "12 dec 2024"
+    swedish_months_short = r'(jan|feb|mar|apr|maj|jun|jul|aug|sep|sept|okt|nov|dec)'
+    text, n = re.subn(rf'\b(0?[1-9]|[12]\d|3[01])\s+{swedish_months_short}\.?\s+(19|20)\d{{2}}\b', '[DATUM]', text, flags=re.IGNORECASE)
+    masked_count += n
+    
+    # "6 januari", "12 maj" (utan år)
+    text, n = re.subn(rf'\b(0?[1-9]|[12]\d|3[01])\s+{swedish_months_long}\b', '[DATUM]', text, flags=re.IGNORECASE)
+    masked_count += n
+    
+    # Klockslag: "13:24", "7:45", "kl 13:24", "kl. 13:24"
+    text, n = re.subn(r'\b(kl\.?\s+)?(0?[0-9]|1\d|2[0-3])[:\.]([0-5]\d)\b', '[TID]', text, flags=re.IGNORECASE)
+    masked_count += n
+    
+    # PARANOID: relativa tidsord (svenska)
+    if level == "paranoid":
+        relative_time_words = r'\b(igår|idag|imorgon|i går|i dag|i morgon|förrgår|övermorgon)\b'
+        text, n = re.subn(relative_time_words, '[RELATIV_TID]', text, flags=re.IGNORECASE)
+        masked_count += n
+    
+    stats = {
+        "datetime_masked": masked_count > 0,
+        "datetime_mask_count": masked_count
+    }
+    
+    return text, stats
+
+
 def normalize_text(text: str) -> str:
     """
     Basic text normalization:

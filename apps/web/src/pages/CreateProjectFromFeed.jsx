@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { ExternalLink, Loader2 } from 'lucide-react'
+import { apiUrl } from '../lib/api'
 import './CreateProjectFromFeed.css'
 
 function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectName = '' }) {
@@ -27,7 +28,7 @@ function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectNam
         setPreviewing(true)
         try {
           const response = await fetch(
-            `http://localhost:8000/api/feeds/preview?url=${encodeURIComponent(initialFeedUrl.trim())}`,
+            apiUrl(`/feeds/preview?url=${encodeURIComponent(initialFeedUrl.trim())}`),
             {
               headers: {
                 'Authorization': `Basic ${auth}`
@@ -71,7 +72,7 @@ function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectNam
     setPreviewing(true)
     try {
       const response = await fetch(
-        `http://localhost:8000/api/feeds/preview?url=${encodeURIComponent(feedUrl.trim())}`,
+        apiUrl(`/feeds/preview?url=${encodeURIComponent(feedUrl.trim())}`),
         {
           headers: {
             'Authorization': `Basic ${auth}`
@@ -109,7 +110,7 @@ function CreateProjectFromFeed({ onClose, initialFeedUrl = '', initialProjectNam
 
     setCreating(true)
     try {
-      const response = await fetch('http://localhost:8000/api/projects/from-feed', {
+      const response = await fetch(apiUrl('/projects/from-feed'), {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${auth}`,

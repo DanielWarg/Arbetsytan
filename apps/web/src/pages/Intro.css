@@ -1,0 +1,95 @@
+/* Intro (Showreel landing) */
+
+.intro-page {
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-4xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.intro-card {
+  width: min(980px, 100%);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3xl);
+}
+
+.intro-header {
+  margin-bottom: var(--spacing-xl);
+}
+
+.intro-kicker {
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  margin-bottom: var(--spacing-sm);
+}
+
+.intro-title {
+  font-size: clamp(32px, 3.4vw, 48px);
+  font-family: var(--font-serif);
+  margin: 0;
+  line-height: 1.15;
+  color: var(--color-text-primary);
+}
+
+.intro-subtitle {
+  margin: var(--spacing-md) 0 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-lg);
+  line-height: 1.5;
+  font-family: var(--font-sans);
+}
+
+.intro-video-shell {
+  margin-top: var(--spacing-2xl);
+}
+
+.intro-video {
+  width: 100%;
+  max-height: 520px;
+  border-radius: var(--radius-sm);
+  background: #000;
+  border: 1px solid var(--color-border-default);
+}
+
+.intro-video-hint {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+}
+
+.intro-video-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.95em;
+}
+
+.intro-actions {
+  margin-top: var(--spacing-2xl);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  flex-wrap: wrap;
+}
+
+.intro-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+.intro-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+

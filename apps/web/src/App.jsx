@@ -6,6 +6,8 @@ import ProjectsList from './pages/ProjectsList'
 import ProjectDetail from './pages/ProjectDetail'
 import DocumentView from './pages/DocumentView'
 import Scout from './pages/Scout'
+import FortKnox from './pages/FortKnox'
+import Intro from './pages/Intro'
 import Sidebar from './components/Sidebar'
 import './index.css'
 
@@ -78,11 +80,13 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
         
         <div className="content-area">
           <Routes>
-            <Route path="/" element={<ProjectsList />} />
+            <Route path="/" element={<Intro />} />
+            <Route path="/intro" element={<Intro />} />
             <Route path="/projects" element={<ProjectsList />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/projects/:projectId/documents/:documentId" element={<DocumentView />} />
             <Route path="/scout" element={<Scout />} />
+            <Route path="/fortknox" element={<FortKnox />} />
           </Routes>
         </div>
       </main>
