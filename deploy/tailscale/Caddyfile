@@ -9,7 +9,8 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
-		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		# Allow mic/camera for showreel features (röstmemo + bild i anteckningar).
+		Permissions-Policy "geolocation=(), microphone=(self), camera=(self)"
 	}
 
 	# Health directly from API
