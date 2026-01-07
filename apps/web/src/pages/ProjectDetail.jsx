@@ -55,6 +55,11 @@ function ProjectDetail() {
   const [recordingProcessing, setRecordingProcessing] = useState(false)
   const [recordingError, setRecordingError] = useState(null)
   const [recordingSuccess, setRecordingSuccess] = useState(null)
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false)
+  const [transcriptDocId, setTranscriptDocId] = useState(null)
+  const [transcriptPreview, setTranscriptPreview] = useState('')
+  const [transcriptPreviewLoading, setTranscriptPreviewLoading] = useState(false)
+  const [transcriptPreviewError, setTranscriptPreviewError] = useState(null)
   const audioInputRef = useRef(null)
   
   // MediaRecorder states
@@ -425,6 +430,37 @@ function ProjectDetail() {
       setRecordingError(err.message || 'Uppladdning misslyckades')
     }
   }
+
+  const openTranscriptPreview = async (documentId) => {
+    setTranscriptDocId(documentId)
+    setTranscriptPreview('')
+    setTranscriptPreviewError(null)
+    setShowTranscriptModal(true)
+    setTranscriptPreviewLoading(true)
+
+    try {
+      const auth = btoa('admin:password')
+      const res = await fetch(apiUrl(`/documents/${documentId}`), {
+        headers: { 'Authorization': `Basic ${auth}` }
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const doc = await res.json()
+      const text = String(doc.masked_text || '')
+      const snippet = text.length > 1200 ? `${text.slice(0, 1200)}…` : text
+      setTranscriptPreview(snippet)
+    } catch (err) {
+      setTranscriptPreviewError('Kunde inte hämta förhandsvisning. Öppna dokumentet för att se transkriptionen.')
+    } finally {
+      setTranscriptPreviewLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (recordingSuccess?.documentId) {
+      openTranscriptPreview(recordingSuccess.documentId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingSuccess?.documentId])
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -919,7 +955,7 @@ function ProjectDetail() {
 
             {/* Audio Recorder Card - Only when audio mode is active */}
             {ingestMode === 'audio' && (
-              <div className="audio-recorder-card">
+              <div className={`audio-recorder-card ${(isRecording || recordingUploading || recordingProcessing) ? 'audio-recorder-busy' : ''}`}>
                 <div className="audio-recorder-header">
                   <h3 className="audio-recorder-title">Röstmemo</h3>
                   <p className="audio-recorder-help">Spela in direkt eller ladda upp en ljudfil för transkribering.</p>
@@ -1669,6 +1705,44 @@ function ProjectDetail() {
               </button>
             </div>
           </div>
+      </Modal>
+
+      <Modal
+        isOpen={showTranscriptModal}
+        onClose={() => setShowTranscriptModal(false)}
+        title="Röstmemo transkriberat"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+            Klart. Röstmemon sparas som ett dokument i projektet.
+          </p>
+          {transcriptPreviewLoading ? (
+            <p style={{ margin: 0 }}>Hämtar förhandsvisning…</p>
+          ) : transcriptPreviewError ? (
+            <p style={{ margin: 0 }}>{transcriptPreviewError}</p>
+          ) : (
+            <div className="transcript-preview-box">
+              <pre className="transcript-preview-text">{transcriptPreview || '—'}</pre>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setShowTranscriptModal(false)}>
+              Stäng
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (transcriptDocId) {
+                  setShowTranscriptModal(false)
+                  navigate(`/projects/${id}/documents/${transcriptDocId}`)
+                }
+              }}
+              disabled={!transcriptDocId}
+            >
+              Öppna dokument
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       {/* Fort Knox Station */}
