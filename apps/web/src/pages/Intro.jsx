@@ -34,8 +34,9 @@ export default function Intro() {
   const [skipNext, setSkipNext] = useState(getSkipIntro())
 
   const videoSrc = useMemo(() => {
-    // Place a file in apps/web/public/showreel.mp4 or set VITE_SHOWREEL_VIDEO_URL
-    return import.meta.env.VITE_SHOWREEL_VIDEO_URL || '/showreel.mp4'
+    // Default: built-in showreel asset (copied to apps/web/public at build time)
+    // Override: set VITE_SHOWREEL_VIDEO_URL (e.g. to a hosted mp4)
+    return import.meta.env.VITE_SHOWREEL_VIDEO_URL || '/Arbetsytan__Teknisk_djupdykning.mp4'
   }, [])
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function Intro() {
             preload="metadata"
           />
           <div className="intro-video-hint">
-            Lägg din video i <code>apps/web/public/showreel.mp4</code> eller sätt{' '}
+            Lägg din video i <code>apps/web/public/Arbetsytan__Teknisk_djupdykning.mp4</code> eller sätt{' '}
             <code>VITE_SHOWREEL_VIDEO_URL</code>.
           </div>
         </div>

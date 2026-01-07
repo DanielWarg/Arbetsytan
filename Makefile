@@ -110,6 +110,13 @@ down-fortknox:
 
 build-web:
 	@echo "Building web (VITE_API_BASE=/api)..."
+	@mkdir -p apps/web/public
+	@if [ -f "Arbetsytan__Teknisk_djupdykning.mp4" ]; then \
+		echo "Copying showreel video into apps/web/public/..."; \
+		cp -f "Arbetsytan__Teknisk_djupdykning.mp4" "apps/web/public/Arbetsytan__Teknisk_djupdykning.mp4"; \
+	else \
+		echo "NOTE: Arbetsytan__Teknisk_djupdykning.mp4 not found in repo root; intro video will be missing unless VITE_SHOWREEL_VIDEO_URL is set."; \
+	fi
 	@cd apps/web && VITE_API_BASE=/api npm ci --silent
 	@cd apps/web && VITE_API_BASE=/api npm run build --silent
 
