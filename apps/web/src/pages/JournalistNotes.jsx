@@ -132,6 +132,7 @@ function JournalistNotes({ projectId }) {
     fetchNotes()
   }, [fetchNotes])
 
+
   useEffect(() => {
     if (activeNoteId) {
       fetchNote(activeNoteId)
@@ -722,7 +723,14 @@ function JournalistNotes({ projectId }) {
             />
             <button
               className="btn-prefix"
-              onClick={() => imageInputRef.current?.click()}
+              onClick={() => {
+                try {
+                  imageInputRef.current?.showPicker?.()
+                } catch {
+                  // ignore
+                }
+                imageInputRef.current?.click()
+              }}
               title="Ladda upp bild"
             >
               <ImageIcon size={14} />

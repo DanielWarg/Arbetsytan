@@ -135,11 +135,14 @@ function ProjectDetail() {
   }, [projectNotes, location.state?.openNoteId])
 
   const handleDropzoneClick = () => {
-    if (ingestMode === 'audio') {
-      audioInputRef.current?.click()
-    } else {
-      fileInputRef.current?.click()
+    const input = ingestMode === 'audio' ? audioInputRef.current : fileInputRef.current
+    if (!input) return
+    try {
+      input.showPicker?.()
+    } catch {
+      // ignore
     }
+    input.click()
   }
 
   const handleAudioSelect = async (e) => {
@@ -828,75 +831,89 @@ function ProjectDetail() {
             {/* Toolbar - Small, secondary */}
             <div className="ingest-toolbar">
               <div className="toolbar-left">
-                <button 
-                  className={`toolbar-btn ${ingestMode === 'document' ? 'active' : ''}`}
-                  onClick={() => setIngestMode('document')}
-                  disabled={false}
-                >
-                  <FileText size={14} />
-                  <span>Dokument</span>
-                </button>
-                <button 
-                  className={`toolbar-btn ${ingestMode === 'note' ? 'active' : ''}`}
-                  onClick={() => setIngestMode('note')}
-                >
-                  <StickyNote size={14} />
-                  <span>Anteckningar</span>
-                </button>
-                <button 
-                  className={`toolbar-btn ${ingestMode === 'audio' ? 'active' : ''}`}
-                  onClick={() => {
-                    setIngestMode('audio')
-                    // Reset to 'record' mode when switching to audio to show recording button by default
-                    setRecordingMode('record')
-                    setMicPermissionError(null)
-                  }}
-                  disabled={false}
-                >
-                  <Mic size={14} />
-                  <span>Röstmemo</span>
-                </button>
-              </div>
-              <div className="toolbar-right">
-                <Button
-                  variant="primary"
-                  onClick={() => setShowFortKnoxStation(true)}
-                  className="fortknox-open-btn"
-                >
-                  <Lock size={16} />
-                  <span>Fort Knox</span>
-                </Button>
-                <div className="toolbar-status">
-                  <label className="toolbar-status-label">Status:</label>
-                  <select 
-                    className="toolbar-status-select"
-                    value={project.status}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    disabled={updatingStatus}
+                <div className="toolbar-group">
+                  <button
+                    className={`toolbar-item ${ingestMode === 'document' ? 'active' : ''}`}
+                    onClick={() => setIngestMode('document')}
+                    type="button"
                   >
-                    <option value="research">Research</option>
-                    <option value="processing">Bearbetning</option>
-                    <option value="fact_check">Faktakoll</option>
-                    <option value="ready">Klar</option>
-                    <option value="archived">Arkiverad</option>
-                  </select>
+                    <FileText size={14} />
+                    <span>Dokument</span>
+                  </button>
+                  <button
+                    className={`toolbar-item ${ingestMode === 'note' ? 'active' : ''}`}
+                    onClick={() => setIngestMode('note')}
+                    type="button"
+                  >
+                    <StickyNote size={14} />
+                    <span>Anteckningar</span>
+                  </button>
+                  <button
+                    className={`toolbar-item ${ingestMode === 'audio' ? 'active' : ''}`}
+                    onClick={() => {
+                      setIngestMode('audio')
+                      setRecordingMode('record')
+                      setMicPermissionError(null)
+                    }}
+                    type="button"
+                  >
+                    <Mic size={14} />
+                    <span>Röstmemo</span>
+                  </button>
                 </div>
-                <button 
-                  className="toolbar-btn"
-                  onClick={() => setShowEditModal(true)}
-                  title="Redigera projekt"
-                >
-                  <Edit size={14} />
-                  <span>Redigera</span>
-                </button>
-                <button 
-                  className="toolbar-btn"
-                  onClick={() => setShowExportModal(true)}
-                  title="Ladda ner projektet som fil"
-                >
-                  <FileText size={14} />
-                  <span>Exportera</span>
-                </button>
+              </div>
+
+              <div className="toolbar-right">
+                <div className="toolbar-group">
+                  <button
+                    className="toolbar-item toolbar-item-strong"
+                    onClick={() => setShowFortKnoxStation(true)}
+                    type="button"
+                    title="Öppna Fort Knox"
+                  >
+                    <Lock size={14} />
+                    <span>Fort Knox</span>
+                  </button>
+
+                  <div className="toolbar-sep" aria-hidden="true" />
+
+                  <div className="toolbar-status">
+                    <label className="toolbar-status-label">Status</label>
+                    <select
+                      className="toolbar-status-select"
+                      value={project.status}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                      disabled={updatingStatus}
+                    >
+                      <option value="research">Research</option>
+                      <option value="processing">Bearbetning</option>
+                      <option value="fact_check">Faktakoll</option>
+                      <option value="ready">Klar</option>
+                      <option value="archived">Arkiverad</option>
+                    </select>
+                  </div>
+
+                  <div className="toolbar-sep" aria-hidden="true" />
+
+                  <button
+                    className="toolbar-item"
+                    onClick={() => setShowEditModal(true)}
+                    type="button"
+                    title="Redigera projekt"
+                  >
+                    <Edit size={14} />
+                    <span>Redigera</span>
+                  </button>
+                  <button
+                    className="toolbar-item"
+                    onClick={() => setShowExportModal(true)}
+                    type="button"
+                    title="Exportera projekt"
+                  >
+                    <FileText size={14} />
+                    <span>Exportera</span>
+                  </button>
+                </div>
               </div>
             </div>
 
