@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { Settings } from 'lucide-react'
+import { Menu, Settings } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import ProjectsList from './pages/ProjectsList'
 import ProjectDetail from './pages/ProjectDetail'
@@ -46,6 +46,8 @@ function App() {
 }
 
 function AppContent({ demoMode, darkMode, toggleTheme }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
   const currentDate = new Date().toLocaleDateString('sv-SE', { 
     weekday: 'long', 
     day: 'numeric', 
@@ -54,11 +56,30 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
 
   return (
     <div className="app-layout">
-      <Sidebar darkMode={darkMode} toggleTheme={toggleTheme} />
+      <div
+        className={`sidebar-backdrop ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      <Sidebar
+        darkMode={darkMode}
+        toggleTheme={toggleTheme}
+        mobileOpen={sidebarOpen}
+        onMobileClose={() => setSidebarOpen(false)}
+      />
       
       <main className="main-content">
         <header className="top-header">
           <div className="header-left">
+            <button
+              className="header-menu-btn"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Öppna meny"
+              type="button"
+            >
+              <Menu size={18} />
+            </button>
             <div className="header-date">{currentDate}</div>
           </div>
           

@@ -9,6 +9,14 @@
   position: relative;
 }
 
+.sidebar-backdrop {
+  display: none;
+}
+
+.header-menu-btn {
+  display: none;
+}
+
 .main-content {
   flex: 1;
   display: flex;
@@ -36,6 +44,23 @@
   display: flex;
   align-items: center;
   gap: 1rem; /* gap-4 */
+}
+
+.header-menu-btn {
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-muted);
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-menu-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .header-date {
@@ -113,6 +138,40 @@
   min-height: 0;
   background: var(--color-bg-content);
   padding: var(--spacing-2xl);
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    display: block;
+  }
+
+  .top-header {
+    padding: 0 var(--spacing-xl);
+  }
+
+  .content-area {
+    padding: var(--spacing-xl);
+  }
+
+  .header-menu-btn {
+    display: inline-flex;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 50;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .sidebar-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .status-card {
