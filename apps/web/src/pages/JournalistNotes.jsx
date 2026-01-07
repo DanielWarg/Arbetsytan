@@ -710,7 +710,15 @@ function JournalistNotes({ projectId }) {
               type="file"
               accept="image/*"
               onChange={handleImageSelect}
-              style={{ display: 'none' }}
+              // Some browsers are picky about programmatic click() on display:none inputs.
+              // Keep it visually hidden but present in the layout tree.
+              style={{
+                position: 'absolute',
+                left: '-9999px',
+                width: '1px',
+                height: '1px',
+                opacity: 0
+              }}
             />
             <button
               className="btn-prefix"

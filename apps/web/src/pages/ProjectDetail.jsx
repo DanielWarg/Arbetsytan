@@ -908,6 +908,21 @@ function ProjectDetail() {
                   <p className="audio-recorder-help">Spela in direkt eller ladda upp en ljudfil för transkribering.</p>
                 </div>
 
+                {/* Keep file input ALWAYS mounted so we can open the picker within the same user gesture tick */}
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioSelect}
+                  style={{
+                    position: 'absolute',
+                    left: '-9999px',
+                    width: '1px',
+                    height: '1px',
+                    opacity: 0
+                  }}
+                />
+
                 <div className="audio-recorder-actions">
                   <button
                     className={`audio-action-btn audio-action-primary ${recordingMode === 'record' ? 'active' : ''}`}
@@ -925,10 +940,8 @@ function ProjectDetail() {
                     onClick={() => {
                       setRecordingMode('upload')
                       setMicPermissionError(null)
-                      // Open file picker immediately when clicking upload button
-                      setTimeout(() => {
-                        audioInputRef.current?.click()
-                      }, 0)
+                      // IMPORTANT: Must be in the same user-gesture tick, otherwise browsers may block the picker.
+                      audioInputRef.current?.click()
                     }}
                     disabled={isRecording || recordingUploading || recordingProcessing}
                   >
@@ -1055,24 +1068,10 @@ function ProjectDetail() {
                     )}
                   </div>
                 ) : (
-                  /* Upload mode - existing file input */
+                  /* Upload mode */
                   <>
-                    <input
-                      ref={audioInputRef}
-                      type="file"
-                      accept="audio/*"
-                      onChange={handleAudioSelect}
-                      style={{ 
-                        position: 'absolute',
-                        width: '1px',
-                        height: '1px',
-                        opacity: 0,
-                        overflow: 'hidden',
-                        zIndex: -1
-                      }}
-                    />
                     {(recordingUploading || recordingProcessing) && (
-                      <div 
+                      <div
                         className={`ingest-dropzone ${recordingUploading || recordingProcessing ? 'uploading' : ''} ${isDraggingAudio ? 'dragging' : ''}`}
                         onDragOver={handleAudioDragOver}
                         onDragLeave={handleAudioDragLeave}
@@ -1111,7 +1110,15 @@ function ProjectDetail() {
                     type="file"
                     accept=".pdf,.txt"
                     onChange={handleFileSelect}
-                    style={{ display: 'none' }}
+                    // Some browsers block programmatic click() on display:none inputs.
+                    // Keep it hidden but present in the layout tree.
+                    style={{
+                      position: 'absolute',
+                      left: '-9999px',
+                      width: '1px',
+                      height: '1px',
+                      opacity: 0
+                    }}
                   />
                   <div className="dropzone-content">
                     {uploading ? (
