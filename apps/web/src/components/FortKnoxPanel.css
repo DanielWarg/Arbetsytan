@@ -158,6 +158,12 @@
   margin-top: var(--spacing-lg);
 }
 
+.fortknox-loading-hint {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
 .fortknox-skeleton {
   height: 20px;
   background: var(--color-bg-active);
@@ -632,6 +638,23 @@
 
 .fortknox-report-header {
   margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.fortknox-report-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.fortknox-report-saved {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
 }
 
 .fortknox-report-title {

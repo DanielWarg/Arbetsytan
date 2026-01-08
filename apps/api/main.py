@@ -2993,6 +2993,12 @@ async def export_project_snapshot(
         raise HTTPException(status_code=404, detail="Project not found")
 
     documents = db.query(Document).filter(Document.project_id == project_id).order_by(Document.created_at.asc(), Document.id.asc()).all()
+    # Exkludera Fort Knox-genererade rapportdokument från snapshot-underlag
+    # (annars riskerar vi recursion/quote-gate och sämre UX).
+    documents = [
+        d for d in documents
+        if not (getattr(d, "document_metadata", None) and (d.document_metadata or {}).get("source_type") == "fortknox_report")
+    ]
     notes = db.query(ProjectNote).filter(ProjectNote.project_id == project_id).order_by(ProjectNote.created_at.asc(), ProjectNote.id.asc()).all()
     sources = db.query(ProjectSource).filter(ProjectSource.project_id == project_id).order_by(ProjectSource.created_at.asc(), ProjectSource.id.asc()).all()
     transcripts = []  # TODO: iteration 2
@@ -3386,8 +3392,12 @@ async def compile_fortknox_report(
         # Bilaga: Audit
         llm_json = llm_response.model_dump()
         lines: List[str] = []
+        # Titel (används även som filnamn vid export till dokument)
+        report_title = (llm_json.get("title") or "Rapport").strip()
+        lines.append(f"# {report_title}")
+        lines.append("")
         # Sammanställning
-        lines.append("# Sammanställning")
+        lines.append("## Sammanställning")
         lines.append("")
         if llm_json.get("executive_summary"):
             lines.append(llm_json["executive_summary"])
@@ -3520,7 +3530,7 @@ async def compile_fortknox_report(
             created_at=db_report.created_at,
             latency_ms=db_report.latency_ms
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -3541,6 +3551,132 @@ async def compile_fortknox_report(
                 detail=str(e)
             ).model_dump()
         )
+
+
+class KnoxReportToDocumentRequest(BaseModel):
+    report_id: int
+
+
+@app.post("/api/projects/{project_id}/documents/from-knox-report", response_model=DocumentListResponse, status_code=201)
+async def create_document_from_knox_report(
+    project_id: int,
+    body: KnoxReportToDocumentRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Spara en Fort Knox-rapport som ett dokument i projektet.
+    - Filnamn baseras på rapportens H1-title (slug + datum) för showreel.
+    - Dokumentet markeras i document_metadata som fortknox_report och exkluderas från future snapshot-underlag.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    report = db.query(KnoxReport).filter(KnoxReport.id == body.report_id, KnoxReport.project_id == project_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="KnoxReport not found")
+    if not (report.rendered_markdown or "").strip():
+        raise HTTPException(status_code=409, detail="KnoxReport has no rendered_markdown")
+
+    # Idempotens: om rapporten redan sparats som dokument i projektet, returnera befintligt.
+    # (Undviker dubletter vid upprepade klick eller reload.)
+    existing_docs = db.query(Document).filter(Document.project_id == project_id).order_by(Document.created_at.desc(), Document.id.desc()).all()
+    for d in existing_docs:
+        meta = getattr(d, "document_metadata", None) or {}
+        if meta.get("source_type") == "fortknox_report" and meta.get("knox_report_id") == report.id:
+            return DocumentListResponse(
+                id=d.id,
+                project_id=d.project_id,
+                filename=d.filename,
+                file_type=d.file_type,
+                classification=d.classification.value,
+                sanitize_level=d.sanitize_level.value,
+                usage_restrictions=d.usage_restrictions,
+                pii_gate_reasons=d.pii_gate_reasons,
+                created_at=d.created_at
+            )
+
+    import re
+    import uuid
+    from datetime import datetime
+
+    # Extrahera title från första H1-raden: "# Title"
+    md = report.rendered_markdown.strip()
+    title = ""
+    for line in md.splitlines():
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
+    if not title:
+        title = f"FortKnox rapport {report.id}"
+
+    # Slugga title för filsystem
+    # Behåll bokstäver, siffror, mellanslag, bindestreck och svenska tecken.
+    safe_title = re.sub(r"[^\w\s\-åäöÅÄÖ]", "", title)
+    safe_title = re.sub(r"\s+", "-", safe_title.strip().lower())
+    safe_title = safe_title[:80] if safe_title else f"fortknox-rapport-{report.id}"
+
+    date_prefix = datetime.utcnow().strftime("%Y-%m-%d")
+    filename = f"fortknox-{report.policy_id}-{date_prefix}-{safe_title}.md"
+    filename = filename[:140]  # extra safety
+
+    # Skriv fil till uploads (server-side). Inget innehåll i loggar.
+    file_id = str(uuid.uuid4())
+    permanent_path = UPLOAD_DIR / f"{file_id}.md"
+    with open(permanent_path, "w", encoding="utf-8") as f:
+        f.write(md + "\n")
+
+    db_document = Document(
+        project_id=project_id,
+        filename=filename,
+        file_type="txt",
+        classification=project.classification,
+        masked_text=md,
+        file_path=str(permanent_path),
+        sanitize_level=SanitizeLevel.STRICT,
+        usage_restrictions={"ai_allowed": True, "export_allowed": True},
+        pii_gate_reasons=None,
+        document_metadata={
+            "source_type": "fortknox_report",
+            "knox_report_id": report.id,
+            "policy_id": report.policy_id,
+            "policy_version": report.policy_version,
+            "template_id": report.template_id,
+            "input_fingerprint": report.input_fingerprint
+        }
+    )
+    db.add(db_document)
+
+    event = ProjectEvent(
+        project_id=project_id,
+        event_type="fortknox_report_saved_as_document",
+        actor=username,
+        event_metadata=_safe_event_metadata({
+            "report_id": report.id,
+            "document_id": None,  # filled after commit
+            "policy_id": report.policy_id,
+            "template_id": report.template_id
+        }, context="audit")
+    )
+    db.add(event)
+
+    db.commit()
+    db.refresh(db_document)
+    event.event_metadata["document_id"] = db_document.id
+    db.commit()
+
+    return DocumentListResponse(
+        id=db_document.id,
+        project_id=db_document.project_id,
+        filename=db_document.filename,
+        file_type=db_document.file_type,
+        classification=db_document.classification.value,
+        sanitize_level=db_document.sanitize_level.value,
+        usage_restrictions=db_document.usage_restrictions,
+        pii_gate_reasons=db_document.pii_gate_reasons,
+        created_at=db_document.created_at
+    )
 
 
 class SanitizeLevelUpdate(BaseModel):

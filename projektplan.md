@@ -14,6 +14,7 @@ Det här dokumentet är **styrande** för arbetet i repo:t. Vi bygger inte fler 
 - [x] Export / avslut
 - [x] Röstmemo/transkription som dokument
 - [x] Fort Knox “External” gate (datum maskas i pipeline, datum blockar inte)
+- [x] Fort Knox: spara rapport som dokument (intern/extern)
 
 ### Showreel polish sprint (nu)
 - [x] **Design-system light**: enhetliga `Button`, `Input`, `Select`, `Card`, `Modal` i alla nyckelvyer

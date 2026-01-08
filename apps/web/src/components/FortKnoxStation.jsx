@@ -31,6 +31,8 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
   const [editText, setEditText] = useState('')
   const [editLevel, setEditLevel] = useState('normal')
   const [saving, setSaving] = useState(false)
+  const [savingReportDoc, setSavingReportDoc] = useState(false)
+  const [savedReportDoc, setSavedReportDoc] = useState(null) // {id, filename}
 
   const username = 'admin'
   const password = 'password'
@@ -234,7 +236,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     } catch (err) {
       clearTimeout(timeoutId)
       if (err.name === 'AbortError') {
-        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 30s'], detail: null })
+        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 180s'], detail: null })
       } else {
         setError({ error_code: 'NETWORK_ERROR', reasons: [err.message || 'Network error'], detail: null })
       }
@@ -242,6 +244,37 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
       setIsCacheHit(false)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const saveReportAsDocument = async () => {
+    if (!projectId || !report?.id) return
+    setSavingReportDoc(true)
+    setSavedReportDoc(null)
+    try {
+      const response = await fetch(apiUrl(`/projects/${projectId}/documents/from-knox-report`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${auth}`
+        },
+        body: JSON.stringify({ report_id: report.id })
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(async () => {
+          const text = await response.text().catch(() => 'Unknown error')
+          return { detail: text }
+        })
+        const parsed = parseKnoxError(errorData)
+        throw new Error(parsed?.detail || parsed?.error_code || 'Kunde inte spara rapport som dokument')
+      }
+      const doc = await response.json()
+      setSavedReportDoc({ id: doc.id, filename: doc.filename })
+    } catch (e) {
+      console.error('Failed to save Knox report as document:', e)
+      alert(e?.message || 'Kunde inte spara rapport som dokument')
+    } finally {
+      setSavingReportDoc(false)
     }
   }
 
@@ -549,6 +582,20 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
               Extern
             </button>
           </div>
+          
+          <div className="fortknox-station-explain">
+            {activeTab === 'internal' ? (
+              <p>
+                <strong>Intern</strong>: redaktionell brief för internt arbete. Innehållet är sanerat men kan vara mer detaljerat.
+                <span className="fortknox-station-explain-muted"> Rapport kan ta 1–3 min att generera (lokal modell).</span>
+              </p>
+            ) : (
+              <p>
+                <strong>Extern</strong>: strikt policy för extern sammanställning. Underlaget måste vara <strong>strict</strong> eller högre och får inte återskapa citat eller identifierande formuleringar.
+                <span className="fortknox-station-explain-muted"> Rapport kan ta 1–3 min att generera (lokal modell).</span>
+              </p>
+            )}
+          </div>
 
           {activeTab === 'internal' && (
             <div className="fortknox-station-content">
@@ -574,6 +621,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                   <div className="fortknox-skeleton shimmer"></div>
                   <div className="fortknox-skeleton shimmer"></div>
                   <div className="fortknox-skeleton shimmer" style={{ width: '60%' }}></div>
+                  <div className="fortknox-loading-hint">Detta kan ta 1–3 min (lokal modell).</div>
                 </div>
               )}
 
@@ -596,6 +644,20 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                   <div className="fortknox-report-header">
                     <CheckCircle size={18} />
                     <span>Rapport genererad</span>
+                  </div>
+                  <div className="fortknox-report-actions">
+                    <Button
+                      variant="secondary"
+                      onClick={saveReportAsDocument}
+                      disabled={savingReportDoc}
+                    >
+                      {savingReportDoc ? 'Sparar...' : 'Spara som dokument'}
+                    </Button>
+                    {savedReportDoc && (
+                      <span className="fortknox-report-saved">
+                        Sparat: {savedReportDoc.filename}
+                      </span>
+                    )}
                   </div>
                   {renderMarkdown(report.rendered_markdown)}
                   {report.input_fingerprint && (
@@ -744,6 +806,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                   <div className="fortknox-loading">
                     <div className="fortknox-skeleton shimmer"></div>
                     <div className="fortknox-skeleton shimmer"></div>
+                    <div className="fortknox-loading-hint">Detta kan ta 1–3 min (lokal modell).</div>
                   </div>
                 )}
 
@@ -752,6 +815,20 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                     <div className="fortknox-report-header">
                       <CheckCircle size={18} />
                       <span>Rapport genererad</span>
+                    </div>
+                    <div className="fortknox-report-actions">
+                      <Button
+                        variant="secondary"
+                        onClick={saveReportAsDocument}
+                        disabled={savingReportDoc}
+                      >
+                        {savingReportDoc ? 'Sparar...' : 'Spara som dokument'}
+                      </Button>
+                      {savedReportDoc && (
+                        <span className="fortknox-report-saved">
+                          Sparat: {savedReportDoc.filename}
+                        </span>
+                      )}
                     </div>
                     {renderMarkdown(report.rendered_markdown)}
                     {report.input_fingerprint && (
@@ -868,11 +945,12 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
               </Button>
             </div>
 
-            {loading && (
+              {loading && (
               <div className="fortknox-loading">
                 <div className="fortknox-skeleton shimmer"></div>
                 <div className="fortknox-skeleton shimmer"></div>
                 <div className="fortknox-skeleton shimmer" style={{ width: '60%' }}></div>
+                  <div className="fortknox-loading-hint">Detta kan ta 1–3 min (lokal modell).</div>
               </div>
             )}
 
@@ -1051,6 +1129,20 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                   <div className="fortknox-report-header">
                     <CheckCircle size={18} />
                     <span>Rapport genererad</span>
+                  </div>
+                  <div className="fortknox-report-actions">
+                    <Button
+                      variant="secondary"
+                      onClick={saveReportAsDocument}
+                      disabled={savingReportDoc}
+                    >
+                      {savingReportDoc ? 'Sparar...' : 'Spara som dokument'}
+                    </Button>
+                    {savedReportDoc && (
+                      <span className="fortknox-report-saved">
+                        Sparat: {savedReportDoc.filename}
+                      </span>
+                    )}
                   </div>
                   {renderMarkdown(report.rendered_markdown)}
                   {report.input_fingerprint && (

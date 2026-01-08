@@ -17,6 +17,8 @@ function FortKnoxPanel({ projectId }) {
   const [error, setError] = useState(null)
   const [lastReportId, setLastReportId] = useState(null)
   const [isCacheHit, setIsCacheHit] = useState(false)
+  const [savingReportDoc, setSavingReportDoc] = useState(false)
+  const [savedReportDoc, setSavedReportDoc] = useState(null) // {id, filename}
   const [fixingItems, setFixingItems] = useState(new Set())
   const [fixedItems, setFixedItems] = useState(new Set())
   const [fixErrors, setFixErrors] = useState(new Map())
@@ -577,6 +579,37 @@ function FortKnoxPanel({ projectId }) {
     }
   }
 
+  const saveReportAsDocument = async () => {
+    if (!projectId || !report?.id) return
+    setSavingReportDoc(true)
+    setSavedReportDoc(null)
+    try {
+      const response = await fetch(apiUrl(`/projects/${projectId}/documents/from-knox-report`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${auth}`
+        },
+        body: JSON.stringify({ report_id: report.id })
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(async () => {
+          const text = await response.text().catch(() => 'Unknown error')
+          return { detail: text }
+        })
+        const parsed = parseKnoxError(errorData)
+        throw new Error(parsed?.detail || parsed?.error_code || 'Kunde inte spara rapport som dokument')
+      }
+      const doc = await response.json()
+      setSavedReportDoc({ id: doc.id, filename: doc.filename })
+    } catch (e) {
+      console.error('Failed to save Knox report as document:', e)
+      alert(e?.message || 'Kunde inte spara rapport som dokument')
+    } finally {
+      setSavingReportDoc(false)
+    }
+  }
+
   const renderMarkdown = (markdown) => {
     if (!markdown) return null
     
@@ -751,6 +784,7 @@ function FortKnoxPanel({ projectId }) {
           <div className="fortknox-skeleton shimmer"></div>
           <div className="fortknox-skeleton shimmer"></div>
           <div className="fortknox-skeleton shimmer" style={{ width: '60%' }}></div>
+          <div className="fortknox-loading-hint">Detta kan ta 1–3 min (lokal modell).</div>
         </div>
       )}
 
@@ -1025,6 +1059,20 @@ function FortKnoxPanel({ projectId }) {
               <CheckCircle size={18} />
               <span>Rapport genererad</span>
             </h4>
+            <div className="fortknox-report-header-actions">
+              <Button
+                variant="secondary"
+                onClick={saveReportAsDocument}
+                disabled={savingReportDoc}
+              >
+                {savingReportDoc ? 'Sparar...' : 'Spara som dokument'}
+              </Button>
+              {savedReportDoc && (
+                <span className="fortknox-report-saved">
+                  Sparat: {savedReportDoc.filename}
+                </span>
+              )}
+            </div>
           </div>
           {policyId === 'internal' && (
             <div className="fortknox-report-info">
