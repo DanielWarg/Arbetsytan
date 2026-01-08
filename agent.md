@@ -1,6 +1,6 @@
-# agent.md
+## agent.md
 
-Operativt kontrakt för AI-assistenter.
+Operativt kontrakt för AI-assistenter (intern utvecklingsprocess). Detta dokument är inte en del av produkten – det beskriver hur repo:t hålls stabilt och showreel-säkert under utveckling.
 
 ## Roll
 

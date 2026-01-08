@@ -71,7 +71,7 @@ make prod-smoke
 ```
 
 ### Felsökning
-- **Caddy startar inte**: kontrollera att `caddy` finns i PATH och att port `8443` är ledig.
+- **Caddy startar inte**: Caddy kör som docker-service här. Kontrollera att port `8443` är ledig och kör `make prod-logs` för att se `caddy`‑loggen.
 - **Funnel inte aktiv**: kör `tailscale status` och `tailscale funnel status`.
 - **Backend 500**: `make prod-logs` och se `api`-containerns log (inga råtexter ska loggas).
 - **CORS**: säkerställ `CORS_ALLOW_ORIGINS=https://{DOMAIN_ROOT}` i `deploy/tailscale/.env`.
