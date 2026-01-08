@@ -614,6 +614,11 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                 >
                   {loading ? 'Kompilerar...' : 'Kompilera rapport'}
                 </Button>
+                {loading && (
+                  <span className="fortknox-inline-hint">
+                    Lokal AI arbetar – kan ta upp till 3 min.
+                  </span>
+                )}
               </div>
 
               {loading && (
@@ -774,6 +779,11 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                   >
                     {loading ? 'Kompilerar...' : 'Kompilera Extern'}
                   </Button>
+                  {loading && (
+                    <span className="fortknox-inline-hint">
+                      Lokal AI arbetar – kan ta upp till 3 min.
+                    </span>
+                  )}
                 </div>
 
                 {error && !loading && status === 'BLOCKED' && (
@@ -943,6 +953,11 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
               >
                 {loading ? 'Kompilerar...' : 'Kompilera rapport'}
               </Button>
+              {loading && (
+                <span className="fortknox-inline-hint">
+                  Lokal AI arbetar – kan ta upp till 3 min.
+                </span>
+              )}
             </div>
 
               {loading && (
@@ -1089,6 +1104,11 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
                 >
                   {loading ? 'Kompilerar...' : 'Kompilera Extern'}
                 </Button>
+                {loading && (
+                  <span className="fortknox-inline-hint">
+                    Lokal AI arbetar – kan ta upp till 3 min.
+                  </span>
+                )}
               </div>
 
               {error && !loading && status === 'BLOCKED' && (

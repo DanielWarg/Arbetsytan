@@ -258,6 +258,13 @@
   flex-wrap: wrap;
 }
 
+.fortknox-inline-hint {
+  align-self: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
 .fortknox-fix-center {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-accent-warning);
