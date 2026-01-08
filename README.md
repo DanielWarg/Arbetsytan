@@ -58,11 +58,19 @@ Fort Knox används för analys och överblick, inte för kreativt skrivande.
 - **Ingen rådata i loggar eller UI** (metadata‑only)
 - **Skydd mot osäkra feeds och nätverksanrop** (SSRF‑skydd)
 
+### Allt kör lokalt (ingen tredjeparts‑AI)
+
+- **Tal‑till‑text (STT)** körs lokalt i API:t (default: `STT_ENGINE=faster_whisper`, `WHISPER_MODEL=small`).
+- **Fort Knox (LLM)** körs lokalt via `fortknox-local/` + `llama.cpp`. Startscriptet prioriterar **Ministral‑3‑8B** (fallback **Mistral‑7B**) om modellen finns nedladdad som `.gguf`.
+- **Inget innehåll skickas till externa AI‑tjänster**. All bearbetning sker på din Mac.
+- **Om du exponerar UI:t via Tailscale Funnel** så är det bara en HTTPS‑tunnel *till din Mac* (för demo/åtkomst) – systemet börjar fortfarande inte “skicka data vidare” till internet/tredje part.
+
 ### Teknik (översikt)
 
 - **Backend**: FastAPI + PostgreSQL
 - **Frontend**: React + Vite
-- **Tal‑till‑text**: lokal Whisper (ingen extern tjänst)
+- **Tal‑till‑text**: lokal `faster-whisper` (default: `small`)
+- **Fort Knox LLM**: lokal `llama.cpp` (Ministral‑3‑8B / fallback Mistral‑7B)
 - **Deployment**: Docker Compose
 
 ### Starta lokalt
