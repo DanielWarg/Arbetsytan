@@ -453,9 +453,13 @@ async def delete_project(
     db.query(ProjectEvent).filter(ProjectEvent.project_id == project_id).delete()
     # Delete documents (cascade should handle, but explicit for safety)
     db.query(Document).filter(Document.project_id == project_id).delete()
+    # Delete project sources (avoid ORM trying to NULL fk on parent delete)
+    db.query(ProjectSource).filter(ProjectSource.project_id == project_id).delete()
     # Delete project notes (cascade will delete journalist notes and images)
     db.query(ProjectNote).filter(ProjectNote.project_id == project_id).delete()
     db.query(JournalistNote).filter(JournalistNote.project_id == project_id).delete()
+    # Delete Knox reports (JSON manifest rows)
+    db.query(KnoxReport).filter(KnoxReport.project_id == project_id).delete()
     # Delete project
     db.delete(project)
     db.commit()
@@ -828,37 +832,48 @@ async def delete_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
+    project_id = document.project_id
+    file_type = document.file_type
+
     # Delete associated files if they exist
     import os
     if document.file_path and os.path.exists(document.file_path):
         try:
             os.remove(document.file_path)
         except Exception as e:
-            logger.error(f"Failed to delete file {document.file_path}: {e}")
+            # No paths/content in logs (showreel-safe)
+            logger.warning(f"Failed to delete document file: doc_id={document_id} err={type(e).__name__}")
     
     # Delete audio file if it exists (for recordings)
     if hasattr(document, 'audio_path') and document.audio_path and os.path.exists(document.audio_path):
         try:
             os.remove(document.audio_path)
         except Exception as e:
-            logger.error(f"Failed to delete audio file {document.audio_path}: {e}")
+            logger.warning(f"Failed to delete audio file: doc_id={document_id} err={type(e).__name__}")
     
-    # Delete from database
-    db.delete(document)
-    db.commit()
-    
-    # Log event
-    log_event(
-        db=db,
-        project_id=document.project_id,
+    # Create event (metadata only)
+    event = ProjectEvent(
+        project_id=project_id,
         event_type="document_deleted",
         actor=username,
-        metadata={
+        event_metadata=_safe_event_metadata({
             "document_id": document_id,
-            "filename": document.filename
-        }
+            "file_type": file_type
+        }, context="audit")
     )
-    
+    db.add(event)
+
+    # Delete from database
+    db.delete(document)
+
+    # Update project updated_at
+    from sqlalchemy.sql import func
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project:
+        project.updated_at = func.now()
+
+    db.commit()
+
     return Response(status_code=204)
 
 
