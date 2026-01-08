@@ -6,6 +6,7 @@ import { Badge } from '../ui/Badge'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { apiUrl } from '../lib/api'
+import { pollJob } from '../lib/jobs'
 import './FortKnoxPanel.css'
 
 function FortKnoxPanel({ projectId }) {
@@ -532,15 +533,69 @@ function FortKnoxPanel({ projectId }) {
     }
 
     try {
-      const response = await fetch(apiUrl('/fortknox/compile'), {
+      // Försök async jobs först (demo-safe: backend svarar 409 om avstängt)
+      let response = await fetch(apiUrl('/fortknox/compile/jobs'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${auth}`
         },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
+        body: JSON.stringify(requestBody)
       })
+
+      if (response.status === 202) {
+        const job = await response.json()
+        clearTimeout(timeoutId)
+
+        const finalJob = await pollJob(job.id, { auth, timeoutMs: 180000 })
+        if (String(finalJob.status) !== 'succeeded') {
+          setError({ error_code: finalJob.error_code || 'JOB_FAILED', reasons: [finalJob.error_detail || 'Job failed'], detail: null })
+          setReport(null)
+          setIsCacheHit(false)
+          return
+        }
+
+        const reportId = finalJob?.result?.data?.id
+        if (!reportId) {
+          setError({ error_code: 'JOB_NO_REPORT_ID', reasons: ['Job saknar rapport-id'], detail: null })
+          setReport(null)
+          setIsCacheHit(false)
+          return
+        }
+
+        const reportRes = await fetch(apiUrl(`/fortknox/reports/${reportId}`), {
+          headers: { 'Authorization': `Basic ${auth}` }
+        })
+        if (!reportRes.ok) {
+          setError({ error_code: 'JOB_REPORT_FETCH_FAILED', reasons: [`HTTP ${reportRes.status}`], detail: null })
+          setReport(null)
+          setIsCacheHit(false)
+          return
+        }
+
+        const data = await reportRes.json()
+        const cacheHit = lastReportId !== null && data.id === lastReportId
+        setIsCacheHit(cacheHit)
+        setReport(data)
+        setError(null)
+        setLastReportId(data.id)
+        setFixedItems(new Set())
+        setFixErrors(new Map())
+        return
+      }
+
+      // Fallback till sync
+      if (response.status === 409) {
+        response = await fetch(apiUrl('/fortknox/compile'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        })
+      }
 
       clearTimeout(timeoutId)
 

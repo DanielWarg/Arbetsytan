@@ -197,7 +197,36 @@ class KnoxReport(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     latency_ms = Column(Integer, nullable=True)  # Latency i millisekunder
 
-    # Index för idempotens lookup
+    # Index för idempotens lookup (engine_id ingår i app-logik, men fingerprint är huvudnyckeln)
     __table_args__ = (
         Index('idx_knox_report_idempotency', 'project_id', 'policy_id', 'template_id', 'input_fingerprint'),
     )
+
+
+class AiJobStatus(str, enum.Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class AiJob(Base):
+    """Bakgrundsjobb (STT/LLM) med metadata-only payload/result."""
+    __tablename__ = "ai_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, nullable=False)  # e.g. "fortknox_compile", "recording_transcribe"
+    status = Column(SQLEnum(AiJobStatus), default=AiJobStatus.QUEUED, nullable=False)
+    progress = Column(Integer, default=0, nullable=False)  # 0..100 (best effort)
+
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True)
+    actor = Column(String, nullable=True)
+
+    payload = Column(JSON, nullable=True)  # metadata-only request payload
+    result = Column(JSON, nullable=True)   # metadata-only result payload (ids, timings)
+
+    error_code = Column(String, nullable=True)
+    error_detail = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

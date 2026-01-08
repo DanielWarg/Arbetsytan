@@ -10,6 +10,7 @@ import { apiUrl } from '../lib/api'
 import { FileText, StickyNote, Mic, Upload, File, Info, Edit, Trash2, Lock } from 'lucide-react'
 import JournalistNotes from './JournalistNotes'
 import FortKnoxStation from '../components/FortKnoxStation'
+import { pollJob } from '../lib/jobs'
 import './ProjectDetail.css'
 
 function ProjectDetail() {
@@ -179,16 +180,43 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(username + ':' + password)
 
-      // Upload audio
+      // Försök async jobs först (demo-safe: backend svarar 409 om avstängt)
       // NOTE: Do NOT set Content-Type header - browser will set it automatically with boundary for FormData
-      const response = await fetch(apiUrl(`/projects/${id}/recordings`), {
+      let response = await fetch(apiUrl(`/projects/${id}/recordings/jobs`), {
         method: 'POST',
         headers: {
           'Authorization': 'Basic ' + auth
-          // Do NOT set Content-Type - let browser set it with boundary
         },
         body: formData
       })
+
+      // Fallback till sync
+      if (response.status === 409) {
+        response = await fetch(apiUrl(`/projects/${id}/recordings`), {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + auth
+          },
+          body: formData
+        })
+      } else if (response.status === 202) {
+        const job = await response.json()
+        // Upload finished, now processing
+        setRecordingUploading(false)
+        setRecordingProcessing(true)
+
+        const finalJob = await pollJob(job.id, { auth, timeoutMs: 180000 })
+        if (String(finalJob.status) !== 'succeeded') {
+          throw new Error(finalJob.error_detail || finalJob.error_code || 'Kunde inte processa röstmemo')
+        }
+        const docId = finalJob?.result?.data?.id
+        if (!docId) throw new Error('Job saknar dokument-id')
+
+        setRecordingProcessing(false)
+        setRecordingSuccess({ documentId: docId })
+        await fetchProject()
+        return
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -400,13 +428,42 @@ function ProjectDetail() {
       const password = 'password'
       const auth = btoa(username + ':' + password)
       
-      const response = await fetch(apiUrl(`/projects/${id}/recordings`), {
+      // Försök async jobs först (demo-safe: backend svarar 409 om avstängt)
+      let response = await fetch(apiUrl(`/projects/${id}/recordings/jobs`), {
         method: 'POST',
         headers: {
           'Authorization': 'Basic ' + auth
         },
         body: formData
       })
+
+      // Fallback till sync
+      if (response.status === 409) {
+        response = await fetch(apiUrl(`/projects/${id}/recordings`), {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + auth
+          },
+          body: formData
+        })
+      } else if (response.status === 202) {
+        const job = await response.json()
+        setRecordingUploading(false)
+        setRecordingProcessing(true)
+
+        const finalJob = await pollJob(job.id, { auth, timeoutMs: 180000 })
+        if (String(finalJob.status) !== 'succeeded') {
+          throw new Error(finalJob.error_detail || finalJob.error_code || 'Kunde inte processa inspelning')
+        }
+        const docId = finalJob?.result?.data?.id
+        if (!docId) throw new Error('Job saknar dokument-id')
+
+        await new Promise(r => setTimeout(r, 400))
+        setRecordingProcessing(false)
+        setRecordingSuccess({ documentId: docId })
+        await fetchProject()
+        return
+      }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))

@@ -229,6 +229,25 @@ class ScoutFeedResponse(BaseModel):
         from_attributes = True
 
 
+# Async jobs (metadata-only)
+class AiJobResponse(BaseModel):
+    id: int
+    kind: str
+    status: str
+    progress: int
+    project_id: Optional[int] = None
+    actor: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+    result: Optional[Dict[str, Any]] = None
+    error_code: Optional[str] = None
+    error_detail: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ScoutItemResponse(BaseModel):
     id: int
     feed_id: int

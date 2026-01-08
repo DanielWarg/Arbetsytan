@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Query
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Query, BackgroundTasks
 from pydantic import BaseModel
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,8 +37,8 @@ def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
     assert_no_content(sanitized, context=context)
     return sanitized
 
-from database import get_db, engine
-from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, KnoxReport, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
+from database import get_db, engine, SessionLocal
+from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, KnoxReport, AiJob, AiJobStatus, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
 from security_core.privacy_guard import sanitize_for_logging, assert_no_content
 from schemas import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
@@ -46,6 +46,7 @@ from schemas import (
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
     JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectSourceUpdate, ProjectStatusUpdate,
     ScoutFeedCreate, ScoutFeedUpdate, ScoutFeedResponse, ScoutItemResponse,
+    AiJobResponse,
     FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
     CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse,
     KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse, SelectionSet
@@ -59,6 +60,127 @@ from text_processing import (
 from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256
 from fortknox_remote import compile_remote, FortKnoxRemoteError
 
+
+def _job_to_response(job: AiJob) -> AiJobResponse:
+    return AiJobResponse(
+        id=job.id,
+        kind=job.kind,
+        status=job.status.value if hasattr(job.status, "value") else str(job.status),
+        progress=job.progress,
+        project_id=job.project_id,
+        actor=job.actor,
+        payload=job.payload,
+        result=job.result,
+        error_code=job.error_code,
+        error_detail=job.error_detail,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
+
+
+def _update_job(job_id: int, **fields):
+    """Best-effort uppdatering av jobbstatus (metadata-only)."""
+    db = SessionLocal()
+    try:
+        job = db.query(AiJob).filter(AiJob.id == job_id).first()
+        if not job:
+            return
+        for k, v in fields.items():
+            setattr(job, k, v)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _safe_job_result(data: Optional[dict]) -> Optional[dict]:
+    """Plocka endast metadata/ids (aldrig textfält)."""
+    if not isinstance(data, dict):
+        return None
+    # Conservative allow-list
+    allowed = {
+        "id",
+        "project_id",
+        "policy_id",
+        "policy_version",
+        "template_id",
+        "engine_id",
+        "input_fingerprint",
+        "ruleset_hash",
+        "created_at",
+        "latency_ms",
+        "filename",
+        "file_type",
+        "sanitize_level",
+    }
+    return {k: v for k, v in data.items() if k in allowed}
+
+
+def _run_job_http_post(
+    job_id: int,
+    url: str,
+    *,
+    json_body: Optional[dict] = None,
+    files: Optional[dict] = None,
+    auth_user: str = "",
+    auth_pass: str = ""
+):
+    """
+    Kör ett jobb genom att anropa vår egen API-endpoint (återanvänd pipeline utan duplicering).
+    Loggar aldrig innehåll; endast status/ids.
+    """
+    import time
+    import requests
+
+    _update_job(job_id, status=AiJobStatus.RUNNING, progress=10)
+    started = time.time()
+    try:
+        r = requests.post(
+            url,
+            json=json_body,
+            files=files,
+            auth=(auth_user, auth_pass) if auth_user and auth_pass else None,
+            timeout=180
+        )
+        latency_ms = int((time.time() - started) * 1000)
+        if r.status_code >= 200 and r.status_code < 300:
+            data = None
+            if (r.headers.get("content-type", "") or "").startswith("application/json"):
+                try:
+                    data = r.json()
+                except Exception:
+                    data = None
+            _update_job(
+                job_id,
+                status=AiJobStatus.SUCCEEDED,
+                progress=100,
+                result={
+                    "http_status": r.status_code,
+                    "latency_ms": latency_ms,
+                    "data": _safe_job_result(data),
+                },
+            )
+            return
+
+        # Fail: försök plocka ut felkod/metadata
+        payload = None
+        try:
+            payload = r.json()
+        except Exception:
+            payload = None
+
+        error_code = None
+        error_detail = None
+        if isinstance(payload, dict):
+            # KnoxErrorResponse ligger ofta i "detail" (FastAPI HTTPException)
+            detail = payload.get("detail")
+            if isinstance(detail, dict):
+                error_code = detail.get("error_code")
+                error_detail = detail.get("detail") or payload.get("detail")
+            else:
+                error_detail = payload.get("detail") if isinstance(payload.get("detail"), str) else None
+        _update_job(job_id, status=AiJobStatus.FAILED, progress=100, error_code=error_code or f"HTTP_{r.status_code}", error_detail=(error_detail or "Job failed"))
+    except Exception as e:
+        _update_job(job_id, status=AiJobStatus.FAILED, progress=100, error_code="JOB_EXCEPTION", error_detail=type(e).__name__)
 
 def run_sanitize_pipeline(raw_text: str) -> Dict:
     """
@@ -181,6 +303,9 @@ BASIC_AUTH_ADMIN_PASS = os.getenv("BASIC_AUTH_ADMIN_PASS", BASIC_AUTH_PASS)
 BASIC_AUTH_EDITOR_USER = os.getenv("BASIC_AUTH_EDITOR_USER", "").strip()
 BASIC_AUTH_EDITOR_PASS = os.getenv("BASIC_AUTH_EDITOR_PASS", "").strip()
 
+# Async jobs (STT/LLM) - off by default (demo-safe)
+ASYNC_JOBS_ENABLED = os.getenv("ASYNC_JOBS", "0").strip() == "1"
+
 
 def _role_for_username(username: str) -> str:
     if username == BASIC_AUTH_ADMIN_USER:
@@ -224,12 +349,26 @@ def require_admin(username: str = Depends(verify_basic_auth)):
     return True
 
 
+@app.get("/api/jobs/{job_id}", response_model=AiJobResponse)
+async def get_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Hämta status för ett bakgrundsjobb (metadata-only)."""
+    job = db.query(AiJob).filter(AiJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_to_response(job)
+
+
 async def health_check():
     """Health check handler (no auth required)"""
     return {
         "status": "ok",
         "demo_mode": DEMO_MODE,
-        "auth_mode": AUTH_MODE
+        "auth_mode": AUTH_MODE,
+        "async_jobs": ASYNC_JOBS_ENABLED
     }
 
 
@@ -3636,6 +3775,54 @@ class KnoxReportToDocumentRequest(BaseModel):
     report_id: int
 
 
+@app.post("/api/fortknox/compile/jobs", response_model=AiJobResponse, status_code=202)
+async def compile_fortknox_report_job(
+    request: KnoxCompileRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Skapa ett bakgrundsjobb för Fort Knox-rapport.
+    Demo-safe: om ASYNC_JOBS inte är aktivt -> 409 så klient kan falla tillbaka till sync-endpoint.
+    """
+    if not ASYNC_JOBS_ENABLED:
+        raise HTTPException(status_code=409, detail="Async jobs disabled")
+
+    job = AiJob(
+        kind="fortknox_compile",
+        status=AiJobStatus.QUEUED,
+        progress=0,
+        project_id=request.project_id,
+        actor=username,
+        payload=_safe_event_metadata({
+            "project_id": request.project_id,
+            "policy_id": request.policy_id,
+            "template_id": request.template_id,
+            "snapshot_mode": bool(request.snapshot_mode),
+            "selection": {
+                "include": len(request.selection.include) if request.selection and request.selection.include else 0,
+                "exclude": len(request.selection.exclude) if request.selection and request.selection.exclude else 0
+            }
+        }, context="audit")
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Kör samma pipeline via intern HTTP för att undvika duplicering
+    background_tasks.add_task(
+        _run_job_http_post,
+        job.id,
+        "http://127.0.0.1:8000/api/fortknox/compile",
+        json_body=request.model_dump(),
+        auth_user=BASIC_AUTH_ADMIN_USER,
+        auth_pass=BASIC_AUTH_ADMIN_PASS
+    )
+    return _job_to_response(job)
+
+
 @app.post("/api/projects/{project_id}/documents/from-knox-report", response_model=DocumentListResponse, status_code=201)
 async def create_document_from_knox_report(
     project_id: int,
@@ -3756,6 +3943,98 @@ async def create_document_from_knox_report(
         pii_gate_reasons=db_document.pii_gate_reasons,
         created_at=db_document.created_at
     )
+
+
+@app.post("/api/projects/{project_id}/recordings/jobs", response_model=AiJobResponse, status_code=202)
+async def upload_recording_job(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Skapa ett bakgrundsjobb för röstmemo/transkription.
+    Demo-safe: om ASYNC_JOBS inte är aktivt -> 409 så klient kan falla tillbaka till sync-endpoint.
+    """
+    if not ASYNC_JOBS_ENABLED:
+        raise HTTPException(status_code=409, detail="Async jobs disabled")
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size > 25 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB")
+
+    # Spara till temporär fil (för att kunna skicka multipart internt)
+    temp_id = str(uuid.uuid4())
+    audio_ext = os.path.splitext(file.filename or "")[1] or ".mp3"
+    temp_path = UPLOAD_DIR / f"job_audio_{temp_id}{audio_ext}"
+    with open(temp_path, "wb") as f:
+        f.write(file_content)
+
+    # Skapa jobbrad (metadata-only)
+    job = AiJob(
+        kind="recording_transcribe",
+        status=AiJobStatus.QUEUED,
+        progress=0,
+        project_id=project_id,
+        actor=username,
+        payload=_safe_event_metadata({
+            "project_id": project_id,
+            "mime": file.content_type or "application/octet-stream",
+            "size_bytes": file_size
+        }, context="audit")
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    def _run_recording_job():
+        import requests
+        try:
+            _update_job(job.id, status=AiJobStatus.RUNNING, progress=10)
+            with open(temp_path, "rb") as fh:
+                files = {"file": (file.filename or f"recording{audio_ext}", fh, file.content_type or "application/octet-stream")}
+                r = requests.post(
+                    f"http://127.0.0.1:8000/api/projects/{project_id}/recordings",
+                    files=files,
+                    auth=(BASIC_AUTH_ADMIN_USER, BASIC_AUTH_ADMIN_PASS),
+                    timeout=180
+                )
+            if temp_path.exists():
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+            if 200 <= r.status_code < 300:
+                data = None
+                try:
+                    data = r.json()
+                except Exception:
+                    data = None
+                _update_job(
+                    job.id,
+                    status=AiJobStatus.SUCCEEDED,
+                    progress=100,
+                    result={"http_status": r.status_code, "data": _safe_job_result(data)}
+                )
+                return
+            _update_job(job.id, status=AiJobStatus.FAILED, progress=100, error_code=f"HTTP_{r.status_code}", error_detail="Recording job failed")
+        except Exception as e:
+            if temp_path.exists():
+                try:
+                    os.remove(temp_path)
+                except Exception:
+                    pass
+            _update_job(job.id, status=AiJobStatus.FAILED, progress=100, error_code="JOB_EXCEPTION", error_detail=type(e).__name__)
+
+    background_tasks.add_task(_run_recording_job)
+    return _job_to_response(job)
 
 
 class SanitizeLevelUpdate(BaseModel):

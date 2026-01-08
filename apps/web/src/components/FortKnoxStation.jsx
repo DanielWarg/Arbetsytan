@@ -5,6 +5,7 @@ import { Badge } from '../ui/Badge'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { apiUrl } from '../lib/api'
+import { pollJob } from '../lib/jobs'
 import './FortKnoxStation.css'
 
 function FortKnoxStation({ projectId, onClose, embedded = false }) {
@@ -143,19 +144,59 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     const timeoutId = setTimeout(() => controller.abort(), 180000)
 
     try {
-      const response = await fetch(apiUrl('/fortknox/compile'), {
+      const body = {
+        project_id: parseInt(projectId),
+        policy_id: policyId,
+        template_id: templateId
+      }
+
+      // Försök async jobs först (demo-safe: backend svarar 409 om avstängt)
+      let response = await fetch(apiUrl('/fortknox/compile/jobs'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${auth}`
         },
-        body: JSON.stringify({
-          project_id: parseInt(projectId),
-          policy_id: policyId,
-          template_id: templateId
-        }),
-        signal: controller.signal
+        body: JSON.stringify(body)
       })
+
+      if (response.status === 202) {
+        const job = await response.json()
+        clearTimeout(timeoutId)
+        const finalJob = await pollJob(job.id, { auth, timeoutMs: 180000 })
+        if (String(finalJob.status) !== 'succeeded') {
+          setError({ error_code: finalJob.error_code || 'JOB_FAILED', reasons: [finalJob.error_detail || 'Job failed'], detail: null })
+          setReport(null)
+          setIsCacheHit(false)
+          return
+        }
+
+        const reportId = finalJob?.result?.data?.id
+        const reportRes = await fetch(apiUrl(`/fortknox/reports/${reportId}`), {
+          headers: { 'Authorization': `Basic ${auth}` }
+        })
+        if (!reportRes.ok) throw new Error(`HTTP ${reportRes.status}`)
+        const data = await reportRes.json()
+        const cacheHit = lastReportId !== null && data.id === lastReportId
+        setIsCacheHit(cacheHit)
+        setReport(data)
+        setError(null)
+        setLastReportId(data.id)
+        return
+      }
+
+      // Fallback till sync
+      if (response.status === 409) {
+        response = await fetch(apiUrl('/fortknox/compile'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        })
+      }
 
       clearTimeout(timeoutId)
 
@@ -198,21 +239,61 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     const timeoutId = setTimeout(() => controller.abort(), 180000)
 
     try {
-      const response = await fetch(apiUrl('/fortknox/compile'), {
+      const body = {
+        project_id: parseInt(projectId),
+        policy_id: 'external',
+        template_id: templateId,
+        selection: selection,
+        snapshot_mode: true
+      }
+
+      // Försök async jobs först (demo-safe: backend svarar 409 om avstängt)
+      let response = await fetch(apiUrl('/fortknox/compile/jobs'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${auth}`
         },
-        body: JSON.stringify({
-          project_id: parseInt(projectId),
-          policy_id: 'external',
-          template_id: templateId,
-          selection: selection,
-          snapshot_mode: true
-        }),
-        signal: controller.signal
+        body: JSON.stringify(body)
       })
+
+      if (response.status === 202) {
+        const job = await response.json()
+        clearTimeout(timeoutId)
+        const finalJob = await pollJob(job.id, { auth, timeoutMs: 180000 })
+        if (String(finalJob.status) !== 'succeeded') {
+          setError({ error_code: finalJob.error_code || 'JOB_FAILED', reasons: [finalJob.error_detail || 'Job failed'], detail: null })
+          setReport(null)
+          setIsCacheHit(false)
+          return
+        }
+
+        const reportId = finalJob?.result?.data?.id
+        const reportRes = await fetch(apiUrl(`/fortknox/reports/${reportId}`), {
+          headers: { 'Authorization': `Basic ${auth}` }
+        })
+        if (!reportRes.ok) throw new Error(`HTTP ${reportRes.status}`)
+        const data = await reportRes.json()
+        const cacheHit = lastReportId !== null && data.id === lastReportId
+        setIsCacheHit(cacheHit)
+        setReport(data)
+        setError(null)
+        setLastReportId(data.id)
+        return
+      }
+
+      // Fallback till sync
+      if (response.status === 409) {
+        response = await fetch(apiUrl('/fortknox/compile'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        })
+      }
 
       clearTimeout(timeoutId)
 
