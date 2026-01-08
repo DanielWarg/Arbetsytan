@@ -18,6 +18,12 @@ done
 # This keeps init_db.sql idempotent even on fresh databases.
 python3 -c "from database import engine; from models import Base; Base.metadata.create_all(bind=engine)"
 
+# Optional: run Alembic migrations (off by default to avoid breaking demo)
+if [ "${ALEMBIC_UPGRADE:-0}" = "1" ]; then
+  echo "Running Alembic migrations..."
+  (cd /app && alembic -c alembic.ini upgrade head) || exit 1
+fi
+
 # Run init script (optional/legacy migrations)
 PGPASSWORD="${PGPASSWORD_ENV}" psql -h postgres -U "${PGUSER}" -d "${PGDATABASE}" -f /app/init_db.sql || true
 
