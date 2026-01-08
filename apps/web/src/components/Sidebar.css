@@ -49,6 +49,7 @@
   font-family: var(--font-sans);
   margin-top: var(--spacing-xs);
 }
+
 .sidebar-close-btn {
   display: none;
   position: absolute;
@@ -66,7 +67,6 @@
   color: var(--color-text-primary);
   background: var(--color-bg-hover);
 }
-
 
 .logo-dot {
   width: 0.5rem;

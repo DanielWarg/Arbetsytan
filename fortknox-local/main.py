@@ -10,6 +10,8 @@ Säkerhet: Loggar aldrig textinnehåll, bara metadata.
 import os
 import json
 import logging
+import re
+import hashlib
 from typing import Dict, Any, Optional
 from datetime import datetime
 
@@ -41,6 +43,7 @@ app.add_middleware(
 LLAMA_SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://localhost:8080")
 FORTKNOX_PORT = int(os.getenv("FORTKNOX_PORT", "8787"))
 TESTMODE = os.getenv("FORTKNOX_TESTMODE", "0") == "1"
+FORTKNOX_MAX_ITEM_CHARS = int(os.getenv("FORTKNOX_MAX_ITEM_CHARS", "2000"))
 
 # Schemas (måste matcha apps/api/schemas.py)
 class KnoxPolicyInput(BaseModel):
@@ -113,7 +116,7 @@ TEST_FIXTURES = {
 }
 
 
-def call_llama_server(prompt: str, *, temperature: float = 0.2, n_predict: int = 4096) -> str:
+def call_llama_server(prompt: str, *, temperature: float = 0.2, n_predict: int = 2048) -> str:
     """
     Anropa llama.cpp server för LLM-inferens.
     
@@ -135,7 +138,8 @@ def call_llama_server(prompt: str, *, temperature: float = 0.2, n_predict: int =
                 # Undvik stop på "\n\n\n" då modellen ofta skriver nya rader i JSON och kan trunkeras.
                 "stop": ["</s>"]
             },
-            timeout=60
+            # Lokala modeller kan ta tid, särskilt när kontexten är stor.
+            timeout=180
         )
         response.raise_for_status()
         data = response.json()
@@ -244,16 +248,94 @@ def parse_llm_response(llm_text: str, template_id: str) -> Dict[str, Any]:
     
     json_str = llm_text[start_idx:end_idx]
     
+    def _normalize_response_shape(data: Dict[str, Any]) -> Dict[str, Any]:
+        # Fort Knox v1: next_steps ska vara list[str]. Modeller tenderar att returnera list[dict].
+        ns = data.get("next_steps")
+        if isinstance(ns, list):
+            normalized: list[str] = []
+            for item in ns:
+                if isinstance(item, str):
+                    normalized.append(item)
+                    continue
+                if isinstance(item, dict):
+                    who = item.get("who") or item.get("role") or item.get("owner")
+                    what = item.get("what") or item.get("action")
+                    why = item.get("why") or item.get("reason")
+                    parts = [p for p in [who, what, why] if isinstance(p, str) and p.strip()]
+                    if parts:
+                        normalized.append(" – ".join(parts))
+                    else:
+                        # Sista utväg: serialisera deterministiskt (utan att logga innehåll).
+                        normalized.append(json.dumps(item, ensure_ascii=False, sort_keys=True))
+                    continue
+                # Okänd typ -> str()
+                normalized.append(str(item))
+            data["next_steps"] = normalized
+        return data
+
     try:
         data = json.loads(json_str)
         # Sätt template_id om det saknas
         if "template_id" not in data:
             data["template_id"] = template_id
-        return data
+        return _normalize_response_shape(data)
     except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error: {e}")
-        logger.error(f"Response text (first 500 chars): {llm_text[:500]}")
-        raise ValueError(f"Invalid JSON from LLM: {e}")
+        # Showreel-säkert: logga aldrig råtext. Logga endast metadata.
+        digest = hashlib.sha256(json_str.encode("utf-8", errors="ignore")).hexdigest()[:16]
+        logger.error(f"JSON parse error: {e} (len={len(json_str)}, sha256_16={digest})")
+
+        # Försök reparera vanliga JSON-fel från LLM:
+        # - Saknad komma mellan värde och nästa fält/element (t.ex. ..."confidence":"high"\n"next_steps":...).
+        # - Trailing commas före } eller ].
+        def _repair_missing_commas(s: str) -> str:
+            out: list[str] = []
+            in_str = False
+            esc = False
+            depth = 0
+            last_non_ws: Optional[str] = None
+
+            for ch in s:
+                if not in_str and ch == '"':
+                    # Om vi är inne i en container och senaste token ser ut att vara ett värde,
+                    # och nästa token börjar direkt med en sträng => saknad komma.
+                    if depth > 0 and last_non_ws and last_non_ws not in "{[,:":  # already separated?
+                        if last_non_ws in ('}', ']', '"') or last_non_ws.isdigit() or last_non_ws in ("e", "E", "l"):
+                            out.append(',')
+                out.append(ch)
+
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == '\\\\':
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                else:
+                    if ch == '"':
+                        in_str = True
+                    elif ch in "{[":
+                        depth += 1
+                    elif ch in "}]":
+                        depth = max(0, depth - 1)
+
+                if not in_str and ch not in " \\t\\r\\n":
+                    last_non_ws = ch
+
+            return "".join(out)
+
+        repaired = _repair_missing_commas(json_str)
+        # Ta bort trailing commas före } eller ]
+        repaired = re.sub(r",(\\s*[}\\]])", r"\\1", repaired)
+
+        try:
+            data = json.loads(repaired)
+            if "template_id" not in data:
+                data["template_id"] = template_id
+            logger.info("JSON repaired successfully", extra={"sha256_16": digest})
+            return _normalize_response_shape(data)
+        except json.JSONDecodeError as e2:
+            logger.error(f"JSON repair failed: {e2} (sha256_16={digest})")
+            raise ValueError(f"Invalid JSON from LLM: {e}")
 
 
 @app.get("/health")
@@ -296,9 +378,17 @@ async def compile_report(request: CompileRequest):
             logger.error(f"Fixture validation failed: {e}")
             raise HTTPException(status_code=500, detail="Test fixture validation failed")
     
-    # Build prompt
-    documents_text = "\n\n".join([f"[Dokument {doc.id}]\n{doc.text}" for doc in request.documents])
-    notes_text = "\n\n".join([f"[Not {note.id}]\n{note.text}" for note in request.notes])
+    # Build prompt (bounded input för stabilitet + mindre risk för context-trunkering).
+    # OBS: input är redan maskad/sanerad innan den når Fort Knox Local.
+    def _clip(s: str) -> str:
+        if not s:
+            return ""
+        if len(s) <= FORTKNOX_MAX_ITEM_CHARS:
+            return s
+        return s[:FORTKNOX_MAX_ITEM_CHARS] + "\n\n[TRUNCATED]"
+
+    documents_text = "\n\n".join([f"[Dokument {doc.id}]\n{_clip(doc.text)}" for doc in request.documents])
+    notes_text = "\n\n".join([f"[Not {note.id}]\n{_clip(note.text)}" for note in request.notes])
     
     try:
         prompt = build_prompt(request, documents_text, notes_text)
@@ -321,7 +411,7 @@ async def compile_report(request: CompileRequest):
                       "Om du är osäker: returnera en minimal JSON enligt schemat med tomma listor.\n"
                 )
 
-            llm_response_text = call_llama_server(retry_prompt, temperature=temperature, n_predict=4096)
+            llm_response_text = call_llama_server(retry_prompt, temperature=temperature, n_predict=2048)
 
             try:
                 response_data = parse_llm_response(llm_response_text, request.template_id)

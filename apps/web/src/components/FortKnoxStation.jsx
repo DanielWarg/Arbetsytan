@@ -137,7 +137,8 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     setLoading(true)
     setError(null)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    // Lokal LLM kan ta tid. Backend default är 180s (FORTKNOX_REMOTE_TIMEOUT).
+    const timeoutId = setTimeout(() => controller.abort(), 180000)
 
     try {
       const response = await fetch(apiUrl('/fortknox/compile'), {
@@ -176,7 +177,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     } catch (err) {
       clearTimeout(timeoutId)
       if (err.name === 'AbortError') {
-        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 30s'], detail: null })
+        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 180s'], detail: null })
       } else {
         setError({ error_code: 'NETWORK_ERROR', reasons: [err.message || 'Network error'], detail: null })
       }
@@ -191,7 +192,8 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
     setLoading(true)
     setError(null)
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    // Lokal LLM kan ta tid. Backend default är 180s (FORTKNOX_REMOTE_TIMEOUT).
+    const timeoutId = setTimeout(() => controller.abort(), 180000)
 
     try {
       const response = await fetch(apiUrl('/fortknox/compile'), {

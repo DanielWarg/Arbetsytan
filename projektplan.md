@@ -21,7 +21,7 @@ Det här dokumentet är **styrande** för arbetet i repo:t. Vi bygger inte fler 
 - [x] **Tomlägen/loading/error**: polera i Scout, Projekt, Fort Knox (samma ton och layout)
 - [ ] **Copy-pass**: konsekvent svenska (ex: “Research/Bearbetning/Faktakoll/Klar/Arkiverad”)
 - [x] **Responsivitet**: laptop-bredd + mindre (toolbar-wrap, modals, listor)
-- [ ] **Demo-check**: en snabb “happy path” genom hela appen utan visuella glitchar
+- [x] **Demo-check**: en snabb “happy path” genom hela appen utan visuella glitchar
 
 ### Tekniska regler
 - UI-komponenter ska bo i `apps/web/src/ui/`.

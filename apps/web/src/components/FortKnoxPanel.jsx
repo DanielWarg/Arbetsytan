@@ -519,7 +519,9 @@ function FortKnoxPanel({ projectId }) {
     const auth = btoa(`${username}:${password}`)
     
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    // Lokal LLM kan ta tid. Backend default är 180s (FORTKNOX_REMOTE_TIMEOUT),
+    // så frontend måste tolerera längre körningar än 30s.
+    const timeoutId = setTimeout(() => controller.abort(), 180000)
 
     const requestBody = {
       project_id: parseInt(projectId),
@@ -564,7 +566,7 @@ function FortKnoxPanel({ projectId }) {
     } catch (err) {
       clearTimeout(timeoutId)
       if (err.name === 'AbortError') {
-        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 30s'], detail: null })
+        setError({ error_code: 'TIMEOUT', reasons: ['Request timeout after 180s'], detail: null })
       } else {
         setError({ error_code: 'NETWORK_ERROR', reasons: [err.message || 'Network error'], detail: null })
       }
