@@ -1,102 +1,86 @@
 ## Arbetsytan
 
-Säker journalistisk arbetsyta (showreel) för hantering av känsligt material: projekt, dokument, röstmemo, Scout (feeds) och **Fort Knox** för deterministiska integritetsrapporter.
+Arbetsytan är en säker intern arbetsmiljö för hantering av känsligt journalistiskt material.  
+Systemet är byggt för att samla, strukturera och sammanställa information utan att riskera källskydd eller dataintegritet.
 
-### Showreel-video (UI)
+Arbetsytan utgår från principen att **originalmaterial aldrig ska exponeras i användargränssnittet**. Allt arbete sker i en **maskad vy**.
 
-- **Intro-route**: öppna `/intro` (eller startsidan om “hoppa över” inte är ikryssad).
-- **Video-fil**: lägg `Arbetsytan__Teknisk_djupdykning.mp4` i repo-root (Makefile kopierar den in i `apps/web/public/` vid `make build-web` / `make prod-up`).
-- **Alternativ**: sätt `VITE_SHOWREEL_VIDEO_URL` om du vill peka på en extern videokälla.
+### Varför Arbetsytan?
 
-### Varför den här repo:n finns (för arbetsgivare)
+I journalistiskt arbete hanteras ofta information som inte får läcka – vare sig genom misstag, tekniska genvägar eller externa tjänster.  
+Arbetsytan är byggd för att visa hur man kan arbeta snabbt och strukturerat med känsligt material, samtidigt som säkerheten alltid är standard.
 
-- **Produkt-idé**: en intern redaktionell yta där original aldrig exponeras, men där journalisten ändå kan jobba snabbt.
-- **Teknisk idé**: en deterministisk sanitiseringspipeline + policy-gates (“fail‑closed”) + tydlig UX.
-- **Demo-idé**: kör lokalt (Docker) och kan exponeras över HTTPS på **en domän** via Tailscale Funnel.
+Systemet är konstruerat för att **hellre stoppa ett flöde än att chansa**.
 
-### Kärnfeatures (kort)
+### Vad gör Arbetsytan?
 
-- **Maskad vy som default**: UI visar sanitiserad text; original ligger i separat lagring.
-- **Progressiv sanering**: `normal → strict → paranoid` med PII-gate.
-- **Scout**: RSS/Atom → skapa projekt från “leads” med samma sanitiseringspipeline.
-- **Röstmemo**: lokal STT (ingen extern tjänst) → transkribering sparas som dokument.
-- **Fort Knox**: kompilera **Intern** / **Extern** rapport från projekt-underlag med input/output-gates, re-id guard och idempotens. Rapporter kan sparas som dokument.
-- **Showreel-deploy**: Caddy + Docker Compose lokalt, HTTPS via Tailscale Funnel.
+Arbetsytan är ett internt verktyg som:
 
-### Fort Knox (vad det är och varför det är intressant)
+- **Organiserar arbete i projekt**: allt material samlas i projekt för överblick, struktur och spårbarhet.
+- **Samlar källmaterial**: dokument, textfiler, PDF:er och röstmemon kan laddas upp eller spelas in direkt.
+- **Scout – import från feeds**: via Scout kan projekt skapas direkt från RSS/Atom‑flöden. Feed‑items importeras automatiskt som dokument, anteckningar och källor.
+- **Sanerar innehåll automatiskt**: all text normaliseras och maskas innan den blir tillgänglig.
+- **Visar alltid maskad vy**: användaren arbetar med sanerad text; originalmaterial exponeras aldrig i UI.
+- **Transkriberar röstmemo lokalt**: tal‑till‑text sker lokalt utan externa tjänster.
+- **Skapar säkra sammanställningar (Fort Knox)**: projektmaterial kan sammanställas till strukturerade rapporter med strikt integritetskontroll.
 
-Fort Knox är en deterministisk “rapportstation” som sammanställer projektets underlag utan att tumma på integritet:
+### Vad gör Arbetsytan inte?
 
-- **Input gate**: stoppar om underlag inte når rätt saneringsnivå eller om PII‑gate failar.
-- **Extern policy**: striktare och fail‑closed. Datum/tid blockar inte; datum/tid maskas deterministiskt i pipeline vid `strict/paranoid`.
-- **Output gate + re-id guard**: stoppar om output riskerar att återskapa citat/identifierare.
-- **Idempotens**: samma input → samma fingerprint → samma rapport.
-- **UX**: “Datum maskat” syns som icke-blockande info, och rapporten kan sparas som dokument i projektet.
+- Publicerar innehåll eller fungerar som CMS
+- Skriver artiklar eller producerar färdig journalistik
+- Ersätter journalistens bedömning
+- Exponerar rådata i användargränssnittet
 
-Mer: `docs/ARCHITECTURE.md` och `docs/FLOWS.md`.
+### Hur används Arbetsytan?
 
-### Säkerhet (principer)
+1. **Skapa projekt** – manuellt eller via Scout (RSS/Atom).
+2. **Tillför material** – ladda upp dokument, spela in röstmemon eller importera feed‑items.
+3. **Automatisk sanering** – systemet maskar känsligt innehåll direkt.
+4. **Arbeta i maskad vy** – materialet är säkert att läsa, analysera och strukturera.
+5. **Sammanställ vid behov** – Fort Knox används för överblick och analys, inte för publicering.
 
-- **Metadata-only logs**: inga råtexter (varken input eller output) i loggar/events.
-- **Fail-closed**: om sanering/gates inte kan bevisas → ingen export/rapport.
-- **SSRF-skydd** i feed-import (endast http/https, blockar privata IP-range, timeouts).
+### Fort Knox – säker sammanställning
 
-Mer: `SECURITY_MODEL.md` och `docs/SECURITY.md`.
+Fort Knox är Arbetsytans modul för säker sammanställning av projektmaterial:
 
-### Snabbstart (lokalt)
+- Endast sanerat material används
+- Sammanställning stoppas om något är osäkert (**fail‑closed**)
+- Resultatet kontrolleras så att inga identifierare återskapas (re‑id guard)
+- Samma underlag ger alltid samma rapport (idempotens/fingerprint)
+- Rapporter kan sparas som dokument i projektet
 
-Förutsättningar: Docker Desktop + `docker-compose` (och Node om du vill köra web lokalt utanför docker).
+Fort Knox används för analys och överblick, inte för kreativt skrivande.
 
-Starta hela stacken:
+### Säkerhet i korthet
+
+- **Security by default** – säkerhet är alltid på
+- **Fail‑closed** – vid osäkerhet stoppas flödet
+- **Ingen rådata i loggar eller UI** (metadata‑only)
+- **Skydd mot osäkra feeds och nätverksanrop** (SSRF‑skydd)
+
+### Teknik (översikt)
+
+- **Backend**: FastAPI + PostgreSQL
+- **Frontend**: React + Vite
+- **Tal‑till‑text**: lokal Whisper (ingen extern tjänst)
+- **Deployment**: Docker Compose
+
+### Starta lokalt
 
 ```bash
 make dev
 ```
 
-Öppna UI:
+Öppna:
 - `http://localhost:3000`
 
-### Demo-deploy: en domän via Tailscale Funnel (HTTPS)
+### Sammanfattning
 
-Kör lokal “prod-demo” (Caddy + API + Postgres) på `localhost:8443`:
+Arbetsytan visar hur säkra, interna verktyg kan byggas för journalistiskt arbete där integritet, spårbarhet och tydliga gränser är viktigare än snabb publicering.
 
-```bash
-make prod-up
-```
+### Mer (om du vill läsa vidare)
 
-Exponera över HTTPS via Funnel (en domän, ingen subdomän):
-
-```bash
-tailscale funnel 443 localhost:8443
-```
-
-Runbook: `deploy/tailscale/README.md`.
-
-### Verifiering (snabbt)
-
-```bash
-make verify
-make verify-sanitization
-make verify-fortknox-v1-loop
-```
-
-Mer: `RUNBOOK.md` och `docs/VERIFYING.md`.
-
-### Dokumentation (ingångar)
-
-- **Översikt & riktning**: `VISION.md`, `PRINCIPLES.md`, `ROADMAP.md`
-- **Säkerhet**: `SECURITY_MODEL.md`, `docs/SECURITY.md`
-- **Arkitektur & flöden**: `docs/ARCHITECTURE.md`, `docs/FLOWS.md`
-- **Deploy**: `deploy/tailscale/README.md`
-
-### Teknisk stack (kort)
-
-- **Backend**: FastAPI + PostgreSQL
-- **Frontend**: React + Vite
-- **STT**: faster-whisper/Whisper (lokalt)
-- **Fort Knox Local**: lokal LLM-brygga (se `fortknox-local/`)
-
-### Appendix: STT-detaljer (för den som vill grotta)
-
-Det finns benchmark/verify-stöd och fler detaljer i `docs/STT_BENCHMARK.md` och `docs/VERIFYING.md`.
+- Fort Knox/arkitektur: `docs/ARCHITECTURE.md`, `docs/FLOWS.md`
+- Säkerhet: `SECURITY_MODEL.md`, `docs/SECURITY.md`
+- Deploy (Tailscale Funnel/Caddy): `deploy/tailscale/README.md`
 
