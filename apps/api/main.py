@@ -260,6 +260,28 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Arbetsytan API")
 
+
+@app.middleware("http")
+async def request_timing_middleware(request, call_next):
+    """
+    Lightweight observability:
+    - Adds X-Request-Id header
+    - Logs method/path/status/latency (no content, no query params)
+    """
+    import time
+    rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    start = time.time()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        latency_ms = int((time.time() - start) * 1000)
+        status_code = getattr(response, "status_code", "ERR")
+        logger.info(f"REQ {request.method} {request.url.path} {status_code} {latency_ms}ms rid={rid[:8]}")
+        if response is not None:
+            response.headers["X-Request-Id"] = rid
+
 # Preload STT engine at startup (to avoid blocking first transcription)
 @app.on_event("startup")
 async def preload_stt_engine():
@@ -1273,21 +1295,22 @@ async def upload_recording(
     if file_size > 25 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Maximum size is 25MB")
     
-    # TEMP LOG: Audio file received (metadata only)
-    logger.info(f"[AUDIO] Audio file received: filename={file.filename}, size={file_size} bytes, mime={file.content_type}")
+    # Audio received (metadata only; no filename)
+    safe_ext = (os.path.splitext(file.filename or "")[1] or ".mp3").lower()
+    logger.info(f"[AUDIO] Received: size_bytes={file_size} mime={file.content_type or 'unknown'} ext={safe_ext}")
     
     # Save audio file to permanent location (never exposed via API)
     audio_file_id = str(uuid.uuid4())
-    audio_ext = os.path.splitext(file.filename)[1] or '.mp3'
+    audio_ext = safe_ext or '.mp3'
     audio_path = UPLOAD_DIR / f"{audio_file_id}{audio_ext}"
     
     try:
         with open(audio_path, 'wb') as f:
             f.write(file_content)
-        logger.info(f"[AUDIO] Audio file saved: {audio_path}")
+        logger.info(f"[AUDIO] Saved: ok doc_audio_id={audio_file_id}")
     except Exception as e:
-        logger.error(f"[AUDIO] Failed to save audio file: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to save audio file: {str(e)}")
+        logger.error(f"[AUDIO] Failed to save audio file: err={type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Failed to save audio file")
     
     # Get file metadata (mime type, size)
     # Use actual content-type if available, fallback to application/octet-stream
@@ -1295,25 +1318,25 @@ async def upload_recording(
     
     # Transcribe audio using local STT (openai-whisper)
     # NEVER log raw transcript
-    logger.info(f"[AUDIO] Starting transcription...")
+    logger.info("[AUDIO] Transcription starting")
     try:
         raw_transcript = transcribe_audio(str(audio_path))
         transcript_length = len(raw_transcript) if raw_transcript else 0
-        logger.info(f"[AUDIO] Transcription finished: transcript_length={transcript_length} chars")
+        logger.info(f"[AUDIO] Transcription finished: transcript_length={transcript_length}")
     except Exception as e:
-        logger.error(f"[AUDIO] Transcription failed: {str(e)}")
+        logger.error(f"[AUDIO] Transcription failed: err={type(e).__name__}")
         # Fail-closed: cleanup and raise error (no document created)
         if audio_path.exists():
             os.remove(audio_path)
         raise HTTPException(
             status_code=400,
-            detail=f"Audio transcription failed: {str(e)}"
+            detail="Audio transcription failed"
         )
     
     # Normalize transcript text (deterministic post-processing)
     normalized_transcript = normalize_transcript_text(raw_transcript)
     normalized_length = len(normalized_transcript) if normalized_transcript else 0
-    logger.info(f"[AUDIO] Transcript normalized: length={normalized_length} chars (was {transcript_length})")
+    logger.info(f"[AUDIO] Transcript normalized: length={normalized_length}")
     
     # Get actual duration from transcription (if available)
     # For now, estimate from file size (can be improved with audio metadata)
@@ -1338,7 +1361,7 @@ async def upload_recording(
         # Cleanup audio file
         if audio_path.exists():
             os.remove(audio_path)
-        raise HTTPException(status_code=500, detail=f"Failed to create transcript file: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create transcript file")
     
     # Feed processed text into existing ingest pipeline (same as TXT upload)
     try:
@@ -1430,10 +1453,10 @@ async def upload_recording(
         )
         db.add(event)
         
-        logger.info(f"[AUDIO] Creating document...")
+        logger.info("[AUDIO] Creating document")
         db.commit()
         db.refresh(db_document)
-        logger.info(f"[AUDIO] Document created with id={db_document.id}")
+        logger.info(f"[AUDIO] Document created: id={db_document.id}")
         
         # Return metadata only (no masked_text, no raw transcript)
         return DocumentListResponse(
@@ -1461,7 +1484,7 @@ async def upload_recording(
             os.remove(temp_txt_path)
         if audio_path.exists():
             os.remove(audio_path)
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Processing failed")
 
 
 # ============================================================================
