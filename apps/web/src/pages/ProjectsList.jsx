@@ -8,6 +8,7 @@ import { Input } from '../ui/Input'
 import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
 import { apiUrl } from '../lib/api'
+import { formatScoutDate } from '../lib/datetime'
 import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss, X, Loader2 } from 'lucide-react'
 import './ProjectsList.css'
 
@@ -429,12 +430,7 @@ function ProjectsList() {
                     <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
                     <span className="scout-widget-title">{item.title}</span>
                     <span className="scout-widget-time">
-                      {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', { 
-                        month: 'short', 
-                        day: 'numeric', 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
+                      {formatScoutDate(item.published_at || item.fetched_at)}
                     </span>
                   </a>
                   <div className="scout-widget-item-actions">
@@ -707,12 +703,7 @@ function ProjectsList() {
                       <div className="scout-modal-item-header">
                         <Badge variant="normal">{item.raw_source}</Badge>
                         <span className="scout-modal-item-time">
-                          {new Date(item.published_at || item.fetched_at).toLocaleString('sv-SE', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {formatScoutDate(item.published_at || item.fetched_at)}
                         </span>
                       </div>
                       <div className="scout-modal-item-content">
