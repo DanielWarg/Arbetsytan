@@ -169,22 +169,59 @@ security = HTTPBasic()
 # Environment variables
 AUTH_MODE = os.getenv("AUTH_MODE", "basic")
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+# Backwards compatible envs (legacy)
 BASIC_AUTH_USER = os.getenv("BASIC_AUTH_USER", "admin")
 BASIC_AUTH_PASS = os.getenv("BASIC_AUTH_PASS", "password")
+
+# Auth-ram: stöd för två roller i Basic Auth (admin/editor)
+# - Admin creds defaultar till legacy BASIC_AUTH_*
+# - Editor creds är optional. Om ej satta finns bara admin.
+BASIC_AUTH_ADMIN_USER = os.getenv("BASIC_AUTH_ADMIN_USER", BASIC_AUTH_USER)
+BASIC_AUTH_ADMIN_PASS = os.getenv("BASIC_AUTH_ADMIN_PASS", BASIC_AUTH_PASS)
+BASIC_AUTH_EDITOR_USER = os.getenv("BASIC_AUTH_EDITOR_USER", "").strip()
+BASIC_AUTH_EDITOR_PASS = os.getenv("BASIC_AUTH_EDITOR_PASS", "").strip()
+
+
+def _role_for_username(username: str) -> str:
+    if username == BASIC_AUTH_ADMIN_USER:
+        return "admin"
+    if BASIC_AUTH_EDITOR_USER and username == BASIC_AUTH_EDITOR_USER:
+        return "editor"
+    # Default: om det bara finns en användare i demo så är den admin.
+    return "admin"
 
 
 def verify_basic_auth(credentials: HTTPBasicCredentials = Depends(security)):
     """Verify Basic Auth credentials"""
     if AUTH_MODE != "basic":
-        return True
+        # Non-basic auth is not implemented in this demo. Treat as internal/admin.
+        return "system"
     
-    if credentials.username != BASIC_AUTH_USER or credentials.password != BASIC_AUTH_PASS:
+    is_admin = (
+        credentials.username == BASIC_AUTH_ADMIN_USER
+        and credentials.password == BASIC_AUTH_ADMIN_PASS
+    )
+    is_editor = (
+        BASIC_AUTH_EDITOR_USER
+        and BASIC_AUTH_EDITOR_PASS
+        and credentials.username == BASIC_AUTH_EDITOR_USER
+        and credentials.password == BASIC_AUTH_EDITOR_PASS
+    )
+
+    if not (is_admin or is_editor):
         raise HTTPException(
             status_code=401,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
+
+
+def require_admin(username: str = Depends(verify_basic_auth)):
+    """Policy gate: endast admin får utföra destruktiva åtgärder."""
+    if _role_for_username(username) != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    return True
 
 
 async def health_check():
@@ -375,6 +412,7 @@ async def update_project_status(
 async def delete_project(
     project_id: int,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
     username: str = Depends(verify_basic_auth)
 ):
     """
@@ -823,6 +861,7 @@ async def update_document(
 async def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
     username: str = Depends(verify_basic_auth)
 ):
     """
@@ -2257,6 +2296,7 @@ async def create_scout_feed(
 async def delete_scout_feed(
     feed_id: int,
     db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
     username: str = Depends(verify_basic_auth)
 ):
     """Disable a Scout feed (soft delete)."""
