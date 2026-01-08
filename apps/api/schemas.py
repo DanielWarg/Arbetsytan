@@ -212,6 +212,12 @@ class ScoutFeedCreate(BaseModel):
     url: str
 
 
+class ScoutFeedUpdate(BaseModel):
+    name: Optional[str] = None
+    url: Optional[str] = None
+    is_enabled: Optional[bool] = None
+
+
 class ScoutFeedResponse(BaseModel):
     id: int
     name: str

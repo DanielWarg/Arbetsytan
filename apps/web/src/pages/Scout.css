@@ -224,6 +224,24 @@
   border-radius: var(--radius-sm);
 }
 
+.scout-feed-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.scout-feed-edit-fields {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex: 1;
+  align-items: center;
+}
+
+.scout-feed-item.editing .scout-feed-info {
+  display: none;
+}
+
 .scout-feed-info {
   display: flex;
   align-items: center;

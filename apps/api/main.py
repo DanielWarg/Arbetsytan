@@ -45,7 +45,7 @@ from schemas import (
     DocumentResponse, DocumentListResponse, DocumentUpdate, NoteCreate, NoteUpdate, NoteResponse, NoteListResponse,
     JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
     JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectSourceUpdate, ProjectStatusUpdate,
-    ScoutFeedCreate, ScoutFeedResponse, ScoutItemResponse,
+    ScoutFeedCreate, ScoutFeedUpdate, ScoutFeedResponse, ScoutItemResponse,
     FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
     CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse,
     KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse, SelectionSet
@@ -2252,6 +2252,30 @@ async def delete_scout_feed(
     feed.is_enabled = False
     db.commit()
     return None
+
+
+@app.put("/api/scout/feeds/{feed_id}", response_model=ScoutFeedResponse)
+async def update_scout_feed(
+    feed_id: int,
+    body: ScoutFeedUpdate,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """Update a Scout feed (name/url) or toggle enabled state."""
+    feed = db.query(ScoutFeed).filter(ScoutFeed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="Feed not found")
+
+    if body.name is not None:
+        feed.name = body.name
+    if body.url is not None:
+        feed.url = body.url
+    if body.is_enabled is not None:
+        feed.is_enabled = body.is_enabled
+
+    db.commit()
+    db.refresh(feed)
+    return feed
 
 
 @app.get("/api/scout/items", response_model=List[ScoutItemResponse])

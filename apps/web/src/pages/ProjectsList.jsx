@@ -478,6 +478,9 @@ function ProjectsList() {
               <RefreshCw size={14} className={scoutFetching ? 'spinning' : ''} />
               <span>{scoutFetching ? 'Uppdaterar...' : 'Uppdatera'}</span>
             </Button>
+            <Link to="/scout?tab=feeds" className="btn btn-outline btn-sm btn-overview">
+              <span>Redigera</span>
+            </Link>
             <Link to="/scout" className="btn btn-outline btn-sm btn-overview">
               <Eye size={16} />
               <span>Visa alla</span>
