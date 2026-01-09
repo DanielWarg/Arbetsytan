@@ -9,6 +9,7 @@ import CreateProject from './CreateProject'
 import { getDueUrgency } from '../lib/urgency'
 import { apiUrl } from '../lib/api'
 import { formatScoutDate } from '../lib/datetime'
+import { formatScoutSource } from '../lib/scout'
 import { FolderPlus, Folder, Search, Calendar, Eye, Lock, FileText, ArrowRight, RefreshCw, Plus, Trash2, ExternalLink, Rss, X, Loader2 } from 'lucide-react'
 import './ProjectsList.css'
 
@@ -427,7 +428,7 @@ function ProjectsList() {
                       }
                     }}
                   >
-                    <Badge variant="normal" className="scout-widget-badge">{item.raw_source}</Badge>
+                    <Badge variant="normal" className="scout-widget-badge">{formatScoutSource(item.raw_source)}</Badge>
                     <span className="scout-widget-title">{item.title}</span>
                     <span className="scout-widget-time">
                       {formatScoutDate(item.published_at || item.fetched_at)}
@@ -701,7 +702,7 @@ function ProjectsList() {
                   {scoutModalItems.filter(item => !hiddenScoutItems.has(item.id)).map(item => (
                     <div key={item.id} className="scout-modal-item">
                       <div className="scout-modal-item-header">
-                        <Badge variant="normal">{item.raw_source}</Badge>
+                        <Badge variant="normal">{formatScoutSource(item.raw_source)}</Badge>
                         <span className="scout-modal-item-time">
                           {formatScoutDate(item.published_at || item.fetched_at)}
                         </span>

@@ -796,6 +796,10 @@
 .scout-widget-badge {
   flex-shrink: 0;
   font-size: var(--font-size-xs); /* Keep badge small */
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scout-widget-title {

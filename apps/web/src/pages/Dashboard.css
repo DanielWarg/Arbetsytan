@@ -233,9 +233,10 @@
 }
 
 .scout-item-link {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) 1fr 120px;
   align-items: center;
-  gap: var(--spacing-sm);
+  column-gap: var(--spacing-sm);
   text-decoration: none;
   color: inherit;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -264,11 +265,17 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
   flex-shrink: 0;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
 
 .scout-item-badge {
   font-size: var(--font-size-sm);
   padding: 4px 10px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scout-empty {

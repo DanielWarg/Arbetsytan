@@ -5,6 +5,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { apiUrl } from '../lib/api'
 import { formatScoutDate } from '../lib/datetime'
+import { formatScoutSource } from '../lib/scout'
 import './Scout.css'
 
 function Scout() {
@@ -258,7 +259,7 @@ function Scout() {
               {scoutItems.map(item => (
                 <div key={item.id} className="scout-item-full">
                   <Badge variant="normal" className="scout-item-badge">
-                    {item.raw_source}
+                    {formatScoutSource(item.raw_source)}
                   </Badge>
                   <span className="scout-item-time-full">
                     {formatScoutDate(item.published_at || item.fetched_at)}

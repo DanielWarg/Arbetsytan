@@ -5,6 +5,7 @@ import { Badge } from '../ui/Badge'
 import { getDueUrgency } from '../lib/urgency'
 import { apiUrl } from '../lib/api'
 import { formatScoutDate } from '../lib/datetime'
+import { formatScoutSource } from '../lib/scout'
 import './Dashboard.css'
 
 function Dashboard() {
@@ -205,7 +206,7 @@ function Dashboard() {
                   }
                 }}
               >
-                <Badge variant="normal" className="scout-item-badge">{item.raw_source}</Badge>
+                <Badge variant="normal" className="scout-item-badge">{formatScoutSource(item.raw_source)}</Badge>
                 <span className="scout-item-title">{item.title}</span>
                 <span className="scout-item-time">
                   {formatScoutDate(item.published_at || item.fetched_at)}
