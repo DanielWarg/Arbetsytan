@@ -49,6 +49,7 @@
 
 .intro-video-shell {
   margin-top: var(--spacing-xl);
+  position: relative;
 }
 
 .intro-video {
@@ -60,16 +61,21 @@
   border: 1px solid var(--color-border-default);
 }
 
-.intro-video-hint {
-  margin-top: var(--spacing-sm);
+.intro-video-caption {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.92);
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
   font-family: var(--font-sans);
-}
-
-.intro-video-hint code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  font-size: 0.95em;
+  letter-spacing: 0.01em;
+  pointer-events: none;
 }
 
 .intro-actions {

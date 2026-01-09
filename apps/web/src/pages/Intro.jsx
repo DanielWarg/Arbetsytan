@@ -64,6 +64,7 @@ export default function Intro() {
 
         <div className="intro-video-shell">
           {/* Placeholder-friendly: video will show controls even if file is missing */}
+          <div className="intro-video-caption">Arbetsytan — Teknisk djupdykning</div>
           <video
             className="intro-video"
             src={videoSrc}
@@ -71,10 +72,6 @@ export default function Intro() {
             playsInline
             preload="metadata"
           />
-          <div className="intro-video-hint">
-            Lägg din video i <code>apps/web/public/Arbetsytan__Teknisk_djupdykning.mp4</code> eller sätt{' '}
-            <code>VITE_SHOWREEL_VIDEO_URL</code>.
-          </div>
         </div>
 
         <div className="intro-actions">
