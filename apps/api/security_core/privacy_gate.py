@@ -55,7 +55,7 @@ async def ensure_masked_or_raise(text: str, mode: str = "strict", request_id: st
         
         return payload
         
-    except HTTPException as e:
+    except HTTPException:
         # Re-raise HTTPException (validation errors, etc.)
         raise
     except Exception as e:

@@ -7,9 +7,7 @@ from ..config import privacy_max_chars, CONTROL_MODEL_ENABLED
 from .models import (
     PrivacyMaskRequest,
     PrivacyMaskResponse,
-    PrivacyLog,
     ControlResult,
-    MaskedPayload,
     PrivacyLeakError
 )
 from .regex_mask import regex_masker

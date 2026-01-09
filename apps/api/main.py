@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Query, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Query, BackgroundTasks, Response
 from pydantic import BaseModel
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +10,96 @@ import os
 import uuid
 import shutil
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 from datetime import datetime, timezone
+
+# Local modules (keep all imports at top for lint/clarity)
+from security_core.privacy_guard import sanitize_for_logging, assert_no_content
+from database import get_db, engine, SessionLocal
+from models import (
+    Project,
+    ProjectEvent,
+    Document,
+    ProjectNote,
+    JournalistNote,
+    JournalistNoteImage,
+    ProjectSource,
+    ScoutFeed,
+    ScoutItem,
+    KnoxReport,
+    AiJob,
+    AiJobStatus,
+    Base,
+    Classification,
+    SanitizeLevel,
+    NoteCategory,
+    SourceType,
+    ProjectStatus,
+)
+from schemas import (
+    ProjectCreate,
+    ProjectUpdate,
+    ProjectResponse,
+    ProjectEventCreate,
+    ProjectEventResponse,
+    DocumentResponse,
+    DocumentListResponse,
+    DocumentUpdate,
+    NoteCreate,
+    NoteUpdate,
+    NoteResponse,
+    NoteListResponse,
+    JournalistNoteCreate,
+    JournalistNoteUpdate,
+    JournalistNoteResponse,
+    JournalistNoteListResponse,
+    JournalistNoteImageResponse,
+    ProjectSourceCreate,
+    ProjectSourceResponse,
+    ProjectSourceUpdate,
+    ProjectStatusUpdate,
+    ScoutFeedCreate,
+    ScoutFeedUpdate,
+    ScoutFeedResponse,
+    ScoutItemResponse,
+    AiJobResponse,
+    FeedPreviewResponse,
+    FeedItemPreview,
+    CreateProjectFromFeedRequest,
+    CreateProjectFromFeedResponse,
+    CreateProjectFromScoutItemRequest,
+    CreateProjectFromScoutItemResponse,
+    KnoxCompileRequest,
+    KnoxReportResponse,
+    KnoxErrorResponse,
+)
+from text_processing import (
+    extract_text_from_pdf,
+    extract_text_from_txt,
+    normalize_text,
+    mask_text,
+    mask_datetime,
+    validate_file_type,
+    pii_gate_check,
+    transcribe_audio,
+    normalize_transcript_text,
+    process_transcript,
+    refine_editorial_text,
+    sanitize_journalist_note,
+)
+from fortknox import (
+    build_knox_input_pack,
+    input_gate,
+    re_id_guard,
+    render_markdown,
+    get_policy,
+    canonical_json,
+    compute_sha256,
+    break_quote_ngrams,
+)
+from fortknox_remote import compile_remote, FortKnoxRemoteError
+from fortknox_langchain import compile_with_langchain, FortKnoxLangChainConfigError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -36,31 +123,6 @@ def _safe_event_metadata(meta: dict, context: str = "audit") -> dict:
     sanitized = sanitize_for_logging(meta, context=context)
     assert_no_content(sanitized, context=context)
     return sanitized
-
-from database import get_db, engine, SessionLocal
-from models import Project, ProjectEvent, Document, ProjectNote, JournalistNote, JournalistNoteImage, ProjectSource, ScoutFeed, ScoutItem, KnoxReport, AiJob, AiJobStatus, Base, Classification, SanitizeLevel, NoteCategory, SourceType, ProjectStatus
-from security_core.privacy_guard import sanitize_for_logging, assert_no_content
-from schemas import (
-    ProjectCreate, ProjectUpdate, ProjectResponse, ProjectEventCreate, ProjectEventResponse,
-    DocumentResponse, DocumentListResponse, DocumentUpdate, NoteCreate, NoteUpdate, NoteResponse, NoteListResponse,
-    JournalistNoteCreate, JournalistNoteUpdate, JournalistNoteResponse, JournalistNoteListResponse,
-    JournalistNoteImageResponse, ProjectSourceCreate, ProjectSourceResponse, ProjectSourceUpdate, ProjectStatusUpdate,
-    ScoutFeedCreate, ScoutFeedUpdate, ScoutFeedResponse, ScoutItemResponse,
-    AiJobResponse,
-    FeedPreviewResponse, FeedItemPreview, CreateProjectFromFeedRequest, CreateProjectFromFeedResponse,
-    CreateProjectFromScoutItemRequest, CreateProjectFromScoutItemResponse,
-    KnoxCompileRequest, KnoxReportResponse, KnoxErrorResponse, SelectionSet
-)
-from text_processing import (
-    extract_text_from_pdf, extract_text_from_txt,
-    normalize_text, mask_text, mask_datetime, validate_file_type, pii_gate_check, PiiGateError,
-    transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
-    sanitize_journalist_note
-)
-from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256, break_quote_ngrams
-from fortknox_remote import compile_remote, FortKnoxRemoteError
-from fortknox_langchain import compile_with_langchain, FortKnoxLangChainConfigError
-
 
 def _job_to_response(job: AiJob) -> AiJobResponse:
     return AiJobResponse(
@@ -179,9 +241,21 @@ def _run_job_http_post(
                 error_detail = detail.get("detail") or payload.get("detail")
             else:
                 error_detail = payload.get("detail") if isinstance(payload.get("detail"), str) else None
-        _update_job(job_id, status=AiJobStatus.FAILED, progress=100, error_code=error_code or f"HTTP_{r.status_code}", error_detail=(error_detail or "Job failed"))
+        _update_job(
+            job_id,
+            status=AiJobStatus.FAILED,
+            progress=100,
+            error_code=error_code or f"HTTP_{r.status_code}",
+            error_detail=(error_detail or "Job failed"),
+        )
     except Exception as e:
-        _update_job(job_id, status=AiJobStatus.FAILED, progress=100, error_code="JOB_EXCEPTION", error_detail=type(e).__name__)
+        _update_job(
+            job_id,
+            status=AiJobStatus.FAILED,
+            progress=100,
+            error_code="JOB_EXCEPTION",
+            error_detail=type(e).__name__,
+        )
 
 def run_sanitize_pipeline(raw_text: str) -> Dict:
     """
@@ -261,6 +335,27 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="Arbetsytan API")
 
+try:
+    # Optional, but installed in demo image: Prometheus metrics
+    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+    HTTP_REQUESTS_TOTAL = Counter(
+        "arbetsytan_http_requests_total",
+        "Total number of HTTP requests",
+        ["method", "route", "status"],
+    )
+    HTTP_REQUEST_LATENCY_SECONDS = Histogram(
+        "arbetsytan_http_request_latency_seconds",
+        "HTTP request latency in seconds",
+        ["method", "route", "status"],
+    )
+except Exception:
+    # Fail-open for metrics: app must still start (demo-safe)
+    HTTP_REQUESTS_TOTAL = None
+    HTTP_REQUEST_LATENCY_SECONDS = None
+    generate_latest = None
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+
 
 @app.middleware("http")
 async def request_timing_middleware(request, call_next):
@@ -277,11 +372,22 @@ async def request_timing_middleware(request, call_next):
         response = await call_next(request)
         return response
     finally:
-        latency_ms = int((time.time() - start) * 1000)
+        latency_s = (time.time() - start)
+        latency_ms = int(latency_s * 1000)
         status_code = getattr(response, "status_code", "ERR")
         logger.info(f"REQ {request.method} {request.url.path} {status_code} {latency_ms}ms rid={rid[:8]}")
+
+        # Metrics (metadata-only): label on route template when available to avoid high-cardinality
+        if HTTP_REQUESTS_TOTAL is not None and HTTP_REQUEST_LATENCY_SECONDS is not None:
+            if request.url.path != "/api/metrics":
+                route_obj = request.scope.get("route")
+                route_label = getattr(route_obj, "path", None) or request.url.path
+                status_label = str(status_code)
+                HTTP_REQUESTS_TOTAL.labels(request.method, route_label, status_label).inc()
+                HTTP_REQUEST_LATENCY_SECONDS.labels(request.method, route_label, status_label).observe(latency_s)
         if response is not None:
             response.headers["X-Request-Id"] = rid
+
 
 # Preload STT engine at startup (to avoid blocking first transcription)
 @app.on_event("startup")
@@ -375,6 +481,19 @@ def require_admin(username: str = Depends(verify_basic_auth)):
     if _role_for_username(username) != "admin":
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return True
+
+
+@app.get("/api/metrics", response_class=PlainTextResponse)
+async def metrics(_: bool = Depends(require_admin)):
+    """
+    Prometheus metrics endpoint (admin-only).
+
+    Innehåller endast räknare/tider (ingen rådata).
+    """
+    if generate_latest is None:
+        raise HTTPException(status_code=503, detail="Metrics not available")
+    payload = generate_latest()
+    return Response(content=payload, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/api/jobs/{job_id}", response_model=AiJobResponse)
@@ -508,7 +627,10 @@ async def update_project(
     
     if project_update.due_date is not None:
         if project.due_date != project_update.due_date:
-            changes["due_date"] = {"old": str(project.due_date) if project.due_date else None, "new": str(project_update.due_date) if project_update.due_date else None}
+            changes["due_date"] = {
+                "old": str(project.due_date) if project.due_date else None,
+                "new": str(project_update.due_date) if project_update.due_date else None,
+            }
         project.due_date = project_update.due_date
     
     if project_update.tags is not None:
@@ -764,7 +886,7 @@ async def upload_document(
             os.remove(temp_path)
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file type. Only PDF and TXT files are allowed. PDF must start with %PDF-, TXT must be valid text."
+                detail="Invalid file type. Only PDF and TXT files are allowed. PDF must start with %PDF-, TXT must be valid text."
             )
         
         # Extract text
@@ -960,7 +1082,6 @@ async def update_document(
     # Progressive sanitization pipeline (same as documents)
     pii_gate_reasons = {}
     sanitize_level = SanitizeLevel.NORMAL
-    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
     
     # Try normal masking
     masked_text = mask_text(normalized_text, level="normal")
@@ -976,13 +1097,23 @@ async def update_document(
         is_safe, reasons = pii_gate_check(masked_text)
         if is_safe:
             sanitize_level = SanitizeLevel.STRICT
+            usage_restrictions = {"ai_allowed": True, "export_allowed": True}
         else:
             pii_gate_reasons["strict"] = reasons
             
             # Use paranoid masking
             masked_text = mask_text(normalized_text, level="paranoid")
             sanitize_level = SanitizeLevel.PARANOID
-            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
+
+    # DATUM/TID-maskning: alltid för strict/paranoid
+    if sanitize_level in (SanitizeLevel.STRICT, SanitizeLevel.PARANOID):
+        level_str = "paranoid" if sanitize_level == SanitizeLevel.PARANOID else "strict"
+        masked_text, _datetime_stats = mask_datetime(masked_text, level=level_str)
+
+    # DATUM/TID-maskning: körs alltid för strict/paranoid
+    if sanitize_level in (SanitizeLevel.STRICT, SanitizeLevel.PARANOID):
+        level_str = "paranoid" if sanitize_level == SanitizeLevel.PARANOID else "strict"
+        masked_text, _datetime_stats = mask_datetime(masked_text, level=level_str)
     
     # Update document
     document.masked_text = masked_text
@@ -1220,7 +1351,6 @@ async def re_sanitize_document(
             # Use paranoid masking
             masked_text = mask_text(normalized_text, level="paranoid")
             sanitize_level = SanitizeLevel.PARANOID
-            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
     
     # Ensure we meet the requested level
     if level == "strict" and sanitize_level == SanitizeLevel.NORMAL:
@@ -1363,7 +1493,7 @@ async def upload_recording(
     try:
         with open(temp_txt_path, 'w', encoding='utf-8') as f:
             f.write(processed_text)
-    except Exception as e:
+    except Exception:
         # Cleanup audio file
         if audio_path.exists():
             os.remove(audio_path)
@@ -1484,7 +1614,7 @@ async def upload_recording(
         if audio_path.exists():
             os.remove(audio_path)
         raise
-    except Exception as e:
+    except Exception:
         # Cleanup on error
         if temp_txt_path.exists():
             os.remove(temp_txt_path)
@@ -1533,7 +1663,6 @@ async def create_note(
     # Progressive sanitization pipeline (same as documents)
     pii_gate_reasons = {}
     sanitize_level = SanitizeLevel.NORMAL
-    usage_restrictions = {"ai_allowed": True, "export_allowed": True}
     
     # Try normal masking
     masked_text = mask_text(normalized_text, level="normal")
@@ -1555,7 +1684,6 @@ async def create_note(
             # Use paranoid masking
             masked_text = mask_text(normalized_text, level="paranoid")
             sanitize_level = SanitizeLevel.PARANOID
-            usage_restrictions = {"ai_allowed": False, "export_allowed": False}
     
     # Create note
     db_note = ProjectNote(
@@ -1776,7 +1904,10 @@ async def re_sanitize_note(
     # Return error explaining this limitation
     raise HTTPException(
         status_code=400,
-        detail="Notes cannot be re-sanitized because original text is not stored. Please edit the note manually to update sanitization level."
+        detail=(
+            "Notes cannot be re-sanitized because original text is not stored. "
+            "Please edit the note manually to update sanitization level."
+        )
     )
 
 
@@ -1844,7 +1975,12 @@ async def list_journalist_note_images(
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
     
-    images = db.query(JournalistNoteImage).filter(JournalistNoteImage.note_id == note_id).order_by(JournalistNoteImage.created_at.desc()).all()
+    images = (
+        db.query(JournalistNoteImage)
+        .filter(JournalistNoteImage.note_id == note_id)
+        .order_by(JournalistNoteImage.created_at.desc())
+        .all()
+    )
     return images
 
 
@@ -2047,9 +2183,10 @@ async def export_project_markdown(
     md += "## Källor\n\n"
     if include_metadata:
         md += "(Detta är metadata som journalisten manuellt har lagt till.)\n\n"
+        type_labels = {"link": "Länk", "person": "Person", "document": "Dokument", "other": "Övrigt"}
         if sources:
             for src in sources:
-                type_label = {"link": "Länk", "person": "Person", "document": "Dokument", "other": "Övrigt"}.get(src.type.value, src.type.value)
+                type_label = type_labels.get(src.type.value, src.type.value)
                 md += f"**{type_label}** — {src.title}\n"
                 if src.comment:
                     md += f"Kommentar: {src.comment}\n"
@@ -2808,7 +2945,7 @@ async def create_project_from_feed(
                     # Try to parse ISO format
                     dt = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
                     published_display = dt.strftime('%Y-%m-%d %H:%M')
-                except:
+                except Exception:
                     published_display = published_str
             
             feed_title = feed_data.get('title', 'RSS Feed')
@@ -3072,7 +3209,7 @@ async def create_project_from_scout_item(
                 from datetime import datetime
                 dt = datetime.fromisoformat(published_str.replace('Z', '+00:00'))
                 published_display = dt.strftime('%Y-%m-%d %H:%M')
-            except:
+            except Exception:
                 published_display = published_str
         
         if article_text:
@@ -3176,7 +3313,10 @@ Källa hämtad via RSS (endast sammanfattning)"""
                 "item_link": scout_item.link,
                 "item_guid": scout_item.guid_hash,
                 "published": published_str,
-                "raw_source": scout_item.raw_source
+                "raw_source": scout_item.raw_source,
+                # Metadata-only: använd för UI-badge (Datum maskat) utan att logga/spara råtext
+                "datetime_masked": bool(datetime_masked),
+                "datetime_mask_count": int(datetime_mask_count or 0),
             }
         )
         db.add(db_document)

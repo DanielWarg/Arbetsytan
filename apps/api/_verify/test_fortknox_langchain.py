@@ -1,11 +1,9 @@
-import os
 from datetime import datetime, timezone
 
 import pytest
 
-from schemas import KnoxInputPack, KnoxPolicy, KnoxDocumentItem, KnoxNoteItem, KnoxSourceItem
-
 from fortknox_langchain import build_langchain_prompt, FortKnoxLangChainConfigError, compile_with_langchain
+from schemas import KnoxDocumentItem, KnoxInputPack, KnoxNoteItem, KnoxPolicy, KnoxSourceItem
 
 
 def _minimal_pack() -> KnoxInputPack:

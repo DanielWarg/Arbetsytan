@@ -51,8 +51,14 @@ def build_langchain_prompt(pack: KnoxInputPack, policy: KnoxPolicy, template_id:
         "policy": {"id": policy_id, "version": policy_version, "ruleset": getattr(policy, "ruleset_hash", None)},
         "input_fingerprint": pack.input_fingerprint,
         "manifest": pack.input_manifest,  # metadata-only
-        "documents": [{"id": d.doc_id, "sanitize_level": d.sanitize_level, "text": d.masked_text} for d in pack.documents],
-        "notes": [{"id": n.note_id, "sanitize_level": n.sanitize_level, "text": n.masked_body} for n in pack.notes],
+        "documents": [
+            {"id": d.doc_id, "sanitize_level": d.sanitize_level, "text": d.masked_text}
+            for d in pack.documents
+        ],
+        "notes": [
+            {"id": n.note_id, "sanitize_level": n.sanitize_level, "text": n.masked_body}
+            for n in pack.notes
+        ],
     }
 
     prompt = (

@@ -61,11 +61,18 @@ def get_test_fixtures() -> Dict[str, Dict[str, Any]]:
         "template_id": "weekly",
         "language": "sv",
         "title": "Testrapport - Extern",
-        "executive_summary": "Detta är en testrapport för extern användning med långt citat som kommer att trigga quote detection.",
+        "executive_summary": (
+            "Detta är en testrapport för extern användning med långt citat som kommer att trigga quote detection."
+        ),
         "themes": [
             {
                 "name": "Tema 1",
-                "bullets": ["Detta är ett mycket långt citat från källan som kommer att trigga quote detection eftersom det är för många ord i följd som matchar input texten"]
+                "bullets": [
+                    (
+                        "Detta är ett mycket långt citat från källan som kommer att trigga quote detection "
+                        "eftersom det är för många ord i följd som matchar input texten"
+                    )
+                ]
             }
         ],
         "timeline_high_level": ["2025-01-15: Händelse 1", "2025-01-16: Händelse 2"],  # Exakta datum för external fail

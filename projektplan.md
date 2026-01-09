@@ -18,6 +18,8 @@ Det här dokumentet är **styrande** för arbetet i repo:t. Vi bygger inte fler 
 
 ### Showreel polish sprint (nu)
 - [x] **Design-system light**: enhetliga `Button`, `Input`, `Select`, `Card`, `Modal` i alla nyckelvyer
+- [x] **CI/supply-chain**: Dependabot + backend lint (ruff) för “industristandard”-känsla
+- [x] **Observability light**: request-id + admin-skyddad `/api/metrics` (Prometheus)
 - [ ] **Spacing/typografi**: harmonisera rubriker, padding, list‑layout så det känns “premium”
 - [x] **Tomlägen/loading/error**: polera i Scout, Projekt, Fort Knox (samma ton och layout)
 - [ ] **Copy-pass**: konsekvent svenska (ex: “Research/Bearbetning/Faktakoll/Klar/Arkiverad”)

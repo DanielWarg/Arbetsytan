@@ -3,8 +3,6 @@ MASTERCLASS: Enhanced transcript normalization with Swedish language support
 Avancerad textförbättring med svenska ordlistor, grammatikkontroll och kontextuell korrigering
 """
 import re
-from typing import List, Tuple, Set
-from collections import Counter
 
 # Svenska ordlista (vanliga ord för stavningskontroll)
 # I produktion skulle detta kunna laddas från en fil eller bibliotek
@@ -170,8 +168,9 @@ def _enhance_punctuation(text: str) -> str:
     text = re.sub(r'([.,!?;:])\s+([.,!?;:])', r'\1', text)  # Remove multiple punctuation
     
     # Normalize quotes
-    text = re.sub(r'["""]', '"', text)
-    text = re.sub(r'[''']', "'", text)
+    # Replace typographic/curly quotes with plain ASCII (deterministic)
+    text = re.sub(r'[“”„«»]', '"', text)
+    text = re.sub(r"[’‘´`]", "'", text)
     
     return text
 

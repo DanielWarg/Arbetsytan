@@ -4,7 +4,7 @@ Scout RSS feed fetching logic.
 import hashlib
 import logging
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 
@@ -81,7 +81,7 @@ def fetch_all_feeds(db: Session) -> Dict[int, int]:
     Returns:
         Dictionary mapping feed_id to count of new items created
     """
-    feeds = db.query(ScoutFeed).filter(ScoutFeed.is_enabled == True).all()
+    feeds = db.query(ScoutFeed).filter(ScoutFeed.is_enabled.is_(True)).all()
     results = {}
     
     for feed in feeds:

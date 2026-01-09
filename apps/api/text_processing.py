@@ -4,8 +4,6 @@ Fail-closed: raises exceptions on errors.
 """
 import re
 import os
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Tuple, List, Optional
 from collections import Counter
@@ -489,7 +487,7 @@ def validate_file_type(file_path: str, filename: str) -> Tuple[str, bool]:
             try:
                 first_bytes.decode('latin-1')
                 return ('txt', True)
-            except:
+            except Exception:
                 return ('txt', False)
     
     # Unknown extension
@@ -802,26 +800,6 @@ def _apply_masterclass_enhancements(text: str) -> str:
     Apply masterclass-level enhancements to transcript.
     Includes Swedish word list checking, verb form correction, and advanced structure improvements.
     """
-    # Swedish common words for spell checking
-    SWEDISH_COMMON_WORDS = {
-        'konflikt', 'konflikter', 'situation', 'situationer', 'problem', 'arbetsplats',
-        'människa', 'människor', 'grupp', 'grupper', 'individ', 'individer',
-        'kollega', 'kollegor', 'avdelning', 'avdelningar', 'verksamhet', 'syfte',
-        'beteende', 'beteenden', 'känsla', 'känslor', 'frustration', 'blockering',
-        'önskemål', 'önskemålen', 'behov', 'autonomi', 'rättvisa', 'visshet',
-        'dialog', 'exempel', 'illustration', 'kontorsutrymme', 'samtal', 'uppgift',
-        'uppgifter', 'stress', 'irritation', 'tolkning', 'uppfattning',
-        'är', 'var', 'vara', 'ha', 'har', 'hade', 'kan', 'ska', 'skulle', 'måste',
-        'bör', 'börja', 'börjar', 'göra', 'gör', 'gjorde', 'kommer', 'kom',
-        'ser', 'såg', 'säger', 'sa', 'talar', 'talade', 'pratar', 'pratade',
-        'tänker', 'tänkte', 'känner', 'kände', 'vill', 'ville', 'behöver', 'behövde',
-        'finns', 'fanns', 'ligger', 'låg', 'står', 'stod', 'sitter', 'satt',
-        'går', 'gick', 'blir', 'blev', 'får', 'fick',
-        'definierar', 'definierade', 'hänvisar', 'hänvisade', 'illustrerar', 'illustrerade',
-        'identifiera', 'identifierade', 'lösa', 'löste', 'flytta', 'flyttade',
-        'sätta', 'satte', 'jobba', 'jobbar', 'jobade', 'slutföra', 'slutförde',
-    }
-    
     # Fix verb forms: "börja gråta" -> "börjar gråta"
     text = re.sub(r'\bbörja (gråta|prata|tala|jobba|arbeta)\b', r'börjar \1', text, flags=re.IGNORECASE)
     

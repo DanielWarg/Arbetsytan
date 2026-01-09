@@ -5,11 +5,11 @@ import hashlib
 import json
 import re
 import logging
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from models import Project, Document, ProjectNote, ProjectSource, SanitizeLevel
+from models import Project, Document, ProjectNote, ProjectSource
 from schemas import (
     KnoxInputPack, KnoxPolicy, KnoxDocumentItem, KnoxNoteItem, KnoxSourceItem
 )

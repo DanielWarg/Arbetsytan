@@ -33,6 +33,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Lint (ruff)
+        run: |
+          ruff check .
+
       - name: Run tests (verify suite)
         run: |
           pytest -q _verify/test_*.py

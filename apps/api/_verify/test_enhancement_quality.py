@@ -66,8 +66,6 @@ def test_enhancement():
     print()
     
     total_tests = 0
-    passed_tests = 0
-    issues = []
     
     for test_case in test_cases:
         print(f"📝 Test: {test_case['name']}")
@@ -94,7 +92,7 @@ def test_enhancement():
     # Test 1: Kapitalisering
     test1 = "detta är en test. detta är en annan mening."
     result1 = normalize_transcript_text(test1)
-    print(f"✅ Kapitalisering test:")
+    print("✅ Kapitalisering test:")
     print(f"   Input:  {test1}")
     print(f"   Output: {result1}")
     print(f"   Status: {'✅ PASS' if result1[0].isupper() and '. Detta' in result1 else '❌ FAIL'}")
@@ -103,7 +101,7 @@ def test_enhancement():
     # Test 2: Upprepade ord
     test2 = "det det det är en test och och och vi behöver se"
     result2 = normalize_transcript_text(test2)
-    print(f"✅ Upprepade ord test:")
+    print("✅ Upprepade ord test:")
     print(f"   Input:  {test2}")
     print(f"   Output: {result2}")
     repeated = "det det" in result2 or "och och" in result2
@@ -113,7 +111,7 @@ def test_enhancement():
     # Test 3: Kända Whisper-fel
     test3 = "Om vi drare till sin ytterstaspets så ser vi. höjer östen. börja gråta."
     result3 = normalize_transcript_text(test3)
-    print(f"✅ Kända Whisper-fel test:")
+    print("✅ Kända Whisper-fel test:")
     print(f"   Input:  {test3}")
     print(f"   Output: {result3}")
     errors_fixed = "drare" not in result3 and "ytterstaspets" not in result3 and "höjer östen" not in result3
@@ -123,7 +121,7 @@ def test_enhancement():
     # Test 4: Interpunktion
     test4 = "detta är en mening  .  detta är en annan mening  ,  och detta är en tredje"
     result4 = normalize_transcript_text(test4)
-    print(f"✅ Interpunktion test:")
+    print("✅ Interpunktion test:")
     print(f"   Input:  {test4}")
     print(f"   Output: {result4}")
     proper_punct = ". " in result4 and ", " in result4 and "  " not in result4

@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List, Literal
-from datetime import datetime, date
+from datetime import datetime
 from models import Classification, NoteCategory, SourceType, ProjectStatus
 
 
