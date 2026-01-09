@@ -13,7 +13,7 @@
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
 }
 
@@ -32,9 +32,10 @@
 .overview-card {
   display: flex;
   flex-direction: column;
-  min-height: 170px;
-  max-height: 170px;
-  height: 170px;
+  /* Slightly roomier so Kontrollrum doesn't feel cramped */
+  min-height: 190px;
+  max-height: 190px;
+  height: 190px;
 }
 
 .overview-card-large {
@@ -59,8 +60,8 @@
 
 /* Scout box - tight, shows 6 items */
 .scout-card-fullwidth {
-  min-height: 190px;
-  max-height: 195px;
+  min-height: 230px;
+  max-height: 240px;
   margin-bottom: var(--spacing-md);
 }
 
@@ -107,8 +108,8 @@
 
 /* Dina Projekt box - tight, same as Scout */
 .projects-card-fullwidth {
-  min-height: 190px;
-  max-height: 195px;
+  min-height: 230px;
+  max-height: 240px;
   margin-bottom: var(--spacing-md);
 }
 
