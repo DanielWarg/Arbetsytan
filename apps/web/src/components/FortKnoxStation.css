@@ -392,8 +392,13 @@
 }
 
 .fortknox-edit-modal {
-  padding: var(--spacing-lg);
-  min-width: 500px;
+  /* Modal-body sköter padding + scroll. Gör edit-layouten stabil med sticky actions. */
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
 }
 
 .fortknox-edit-modal h3 {
@@ -402,20 +407,26 @@
 
 .fortknox-edit-modal textarea {
   width: 100%;
-  min-height: 200px;
+  min-height: 280px;
+  flex: 1;
+  resize: vertical;
   padding: var(--spacing-sm);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: 0;
 }
 
 .fortknox-edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-sm);
-  margin-top: var(--spacing-md);
+  position: sticky;
+  bottom: 0;
+  padding-top: var(--spacing-md);
+  background: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border-default);
 }
 
 .spinner {

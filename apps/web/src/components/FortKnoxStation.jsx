@@ -967,6 +967,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
               isOpen={showEditModal}
               onClose={() => setShowEditModal(false)}
               title={`Redigera ${editingItem.type === 'document' ? 'dokument' : 'anteckning'}`}
+              contentClassName="modal-wide"
             >
               <div className="fortknox-edit-modal">
                 {saving && editText === '' ? (
@@ -1291,6 +1292,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
             isOpen={showEditModal}
             onClose={() => setShowEditModal(false)}
             title={`Redigera ${editingItem.type === 'document' ? 'dokument' : 'anteckning'}`}
+            contentClassName="modal-wide"
           >
             <div className="fortknox-edit-modal">
               {saving && editText === '' ? (

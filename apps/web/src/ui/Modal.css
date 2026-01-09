@@ -24,6 +24,10 @@
   overflow: hidden;
 }
 
+.modal-content.modal-wide {
+  max-width: 60rem;
+}
+
 .dark .modal-content {
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
