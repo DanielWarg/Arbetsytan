@@ -13,8 +13,9 @@
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
+  /* More consistent rhythm between cards */
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
 }
 
 @media (min-width: 768px) {
@@ -52,7 +53,7 @@
 .overview-card-fullwidth {
   width: 100%;
   max-width: 100%;
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-2xl);
   min-height: auto;
   max-height: none;
   height: auto;
@@ -75,7 +76,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: var(--spacing-xs);
+  padding: var(--spacing-sm);
 }
 
 .scout-card-fullwidth .scout-widget-list {
@@ -123,7 +124,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: var(--spacing-xs);
+  padding: var(--spacing-sm);
 }
 
 .projects-card-fullwidth .projects-list-compact {

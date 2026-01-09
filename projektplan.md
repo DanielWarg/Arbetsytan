@@ -22,7 +22,7 @@ Det här dokumentet är **styrande** för arbetet i repo:t. Vi bygger inte fler 
 - [x] **Observability light**: request-id + admin-skyddad `/api/metrics` (Prometheus)
 - [x] **Rate limiting**: demo-safe throttling på upload + Fort Knox compile (429 vid missbruk)
 - [x] **E2E smoke i CI**: health → skapa projekt → skapa note → `export_snapshot` (maskad vy)
-- [ ] **Spacing/typografi**: harmonisera rubriker, padding, list‑layout så det känns “premium”
+- [x] **Spacing/typografi**: harmonisera rubriker, padding, list‑layout så det känns “premium”
 - [x] **Tomlägen/loading/error**: polera i Scout, Projekt, Fort Knox (samma ton och layout)
 - [ ] **Copy-pass**: konsekvent svenska (ex: “Research/Bearbetning/Faktakoll/Klar/Arkiverad”)
 - [x] **Responsivitet**: laptop-bredd + mindre (toolbar-wrap, modals, listor)

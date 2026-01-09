@@ -137,7 +137,8 @@
   flex-direction: column;
   min-height: 0;
   background: var(--color-bg-content);
-  padding: var(--spacing-2xl);
+  /* Slightly roomier default for “premium” feel */
+  padding: var(--spacing-3xl);
 }
 
 @media (max-width: 768px) {
@@ -150,7 +151,8 @@
   }
 
   .content-area {
-    padding: var(--spacing-xl);
+    /* Keep mobile tighter to avoid excessive scroll */
+    padding: var(--spacing-2xl);
   }
 
   .header-menu-btn {
