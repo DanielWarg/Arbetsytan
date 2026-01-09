@@ -18,4 +18,6 @@ trafilatura==1.6.3
 beautifulsoup4==4.12.2
 html2text==2024.2.26
 pytest==8.3.4
+langchain-core==0.2.43
+langchain-openai==0.1.25
 

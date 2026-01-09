@@ -1,4 +1,4 @@
-## Arbetsytan – One‑pager (för arbetsgivare)
+## Arbetsytan – One‑pager 
 
 Arbetsytan är en showreel som demonstrerar **hur jag bygger AI‑stöd där data är känslig**: ingest‑pipelines, sanering/normalisering, lokal STT, isolerad LLM‑användning och tydliga policy‑gates. Fokus är **security by default**, **fail‑closed** och **verifierbarhet**.
 
@@ -78,6 +78,10 @@ Arbetsytan använder idag ett eget, deterministiskt Fort Knox‑flöde. Om man v
 6. **Persist**: spara `KnoxReport` + idempotens på fingerprint + engine_id.
 
 Nyckeln: LangChain får vara “orkestrering”, men **gates + determinism + fail‑closed** förblir ägda av Arbetsytan.
+
+**Opt‑in i denna repo:** Vi har en separat endpoint som inte påverkar standardflödet: `POST /api/fortknox/compile/langchain`.
+Aktiveras med `FORTKNOX_PIPELINE=langchain` samt `FORTKNOX_LC_BASE_URL` och `FORTKNOX_LC_MODEL`.
+Rapporter sparas med `engine_id=langchain` för separat idempotens/cache.
 
 ### 7) Vidare läsning
 

@@ -59,6 +59,7 @@ from text_processing import (
 )
 from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256, break_quote_ngrams
 from fortknox_remote import compile_remote, FortKnoxRemoteError
+from fortknox_langchain import compile_with_langchain, FortKnoxLangChainConfigError
 
 
 def _job_to_response(job: AiJob) -> AiJobResponse:
@@ -3835,6 +3836,346 @@ async def compile_fortknox_report(
         )
 
 
+@app.post("/api/fortknox/compile/langchain", response_model=KnoxReportResponse, status_code=201)
+async def compile_fortknox_report_langchain(
+    request: KnoxCompileRequest,
+    db: Session = Depends(get_db),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Opt-in LangChain pipeline for Fort Knox.
+    - Default AV (styrt av env FORTKNOX_PIPELINE=langchain).
+    - Håller befintlig /api/fortknox/compile orörd (regressionsäker).
+    """
+    import time
+    start_time = time.time()
+
+    try:
+        policy = get_policy(request.policy_id)
+
+        # Bygg pack deterministiskt
+        pack = build_knox_input_pack(
+            project_id=request.project_id,
+            policy=policy,
+            template_id=request.template_id,
+            db=db
+        )
+
+        # Samma selection/snapshot_mode-logik som standard compile
+        if request.snapshot_mode or (request.selection is not None):
+            include_docs = set()
+            include_notes = set()
+            exclude_docs = set()
+            exclude_notes = set()
+            if request.selection:
+                for item in (request.selection.include or []):
+                    if item.type == "document":
+                        include_docs.add(item.id)
+                    elif item.type == "note":
+                        include_notes.add(item.id)
+                for item in (request.selection.exclude or []):
+                    if item.type == "document":
+                        exclude_docs.add(item.id)
+                    elif item.type == "note":
+                        exclude_notes.add(item.id)
+
+            current_doc_ids = {d.doc_id for d in pack.documents}
+            current_note_ids = {n.note_id for n in pack.notes}
+            final_doc_ids = (include_docs & current_doc_ids) if include_docs else set(current_doc_ids)
+            final_note_ids = (include_notes & current_note_ids) if include_notes else set(current_note_ids)
+            final_doc_ids -= exclude_docs
+            final_note_ids -= exclude_notes
+
+            new_documents = [d for d in pack.documents if d.doc_id in final_doc_ids]
+            new_notes = [n for n in pack.notes if n.note_id in final_note_ids]
+            if len(new_documents) + len(new_notes) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=KnoxErrorResponse(
+                        error_code="EMPTY_INPUT_SET",
+                        reasons=["Du har exkluderat allt underlag. Välj minst ett dokument eller en anteckning."],
+                        detail="Selection produced empty input set"
+                    ).model_dump()
+                )
+
+            new_manifest: List[Dict[str, Any]] = []
+            for d in new_documents:
+                new_manifest.append({
+                    "kind": "document",
+                    "id": d.doc_id,
+                    "sha256": d.sha256,
+                    "sanitize_level": d.sanitize_level,
+                    "updated_at": d.updated_at.isoformat() if hasattr(d.updated_at, "isoformat") else d.updated_at
+                })
+            for n in new_notes:
+                new_manifest.append({
+                    "kind": "note",
+                    "id": n.note_id,
+                    "sha256": n.sha256,
+                    "sanitize_level": n.sanitize_level,
+                    "updated_at": n.updated_at.isoformat() if hasattr(n.updated_at, "isoformat") else n.updated_at
+                })
+            for m in pack.input_manifest:
+                if m.get("kind") == "source":
+                    new_manifest.append(m)
+            new_manifest = sorted(new_manifest, key=lambda x: (x.get("kind", ""), x.get("id", 0)))
+            manifest_json = canonical_json(new_manifest)
+            new_fingerprint = compute_sha256(manifest_json)
+            pack.documents = new_documents
+            pack.notes = new_notes
+            pack.input_manifest = new_manifest
+            pack.input_fingerprint = new_fingerprint
+
+        # Input set check
+        total_inputs = len(pack.documents) + len(pack.notes) + len(pack.sources)
+        if total_inputs == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="EMPTY_INPUT_SET",
+                    reasons=["Alla dokument, anteckningar och källor är exkluderade från sammanställningen"],
+                    detail="Input set is empty after exclusion"
+                ).model_dump()
+            )
+
+        # Input gate
+        input_pass, input_reasons = input_gate(pack, policy)
+        if not input_pass:
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="INPUT_GATE_FAILED",
+                    reasons=input_reasons,
+                    detail="Input gate validation failed"
+                ).model_dump()
+            )
+
+        # Idempotens (separerad engine_id)
+        engine_id_current = "langchain"
+        existing_report = db.query(KnoxReport).filter(
+            KnoxReport.project_id == request.project_id,
+            KnoxReport.policy_id == policy.policy_id,
+            KnoxReport.template_id == request.template_id,
+            KnoxReport.engine_id == engine_id_current,
+            KnoxReport.input_fingerprint == pack.input_fingerprint,
+        ).order_by(KnoxReport.created_at.desc(), KnoxReport.id.desc()).first()
+        if existing_report:
+            return KnoxReportResponse(
+                id=existing_report.id,
+                project_id=existing_report.project_id,
+                policy_id=existing_report.policy_id,
+                policy_version=existing_report.policy_version,
+                ruleset_hash=existing_report.ruleset_hash,
+                template_id=existing_report.template_id,
+                engine_id=existing_report.engine_id,
+                input_fingerprint=existing_report.input_fingerprint,
+                input_manifest=existing_report.input_manifest,
+                gate_results=existing_report.gate_results,
+                rendered_markdown=existing_report.rendered_markdown,
+                created_at=existing_report.created_at,
+                latency_ms=existing_report.latency_ms
+            )
+
+        # LangChain compile (fail-closed)
+        try:
+            llm_response, llm_latency_ms = compile_with_langchain(pack, policy, request.template_id)
+        except FortKnoxLangChainConfigError as e:
+            raise HTTPException(
+                status_code=409,
+                detail=KnoxErrorResponse(
+                    error_code="LANGCHAIN_DISABLED",
+                    reasons=["langchain_not_enabled_or_configured"],
+                    detail=str(e)
+                ).model_dump()
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=KnoxErrorResponse(
+                    error_code="REMOTE_ERROR",
+                    reasons=["langchain_llm_error"],
+                    detail=type(e).__name__
+                ).model_dump()
+            )
+
+        # Render candidate för output gate
+        rendered_text_candidate = render_markdown(llm_response.model_dump(), request.template_id)
+        input_texts = [doc.masked_text for doc in pack.documents] + [note.masked_body for note in pack.notes]
+        is_safe, pii_reasons = pii_gate_check(rendered_text_candidate)
+        output_gate_reasons = []
+        if not is_safe:
+            output_gate_reasons.extend([f"pii_gate_{reason}" for reason in pii_reasons])
+        re_id_pass, re_id_reasons = re_id_guard(rendered_text_candidate, input_texts, policy)
+        if not re_id_pass:
+            output_gate_reasons.extend(re_id_reasons)
+        if output_gate_reasons:
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="OUTPUT_GATE_FAILED",
+                    reasons=output_gate_reasons,
+                    detail="Output gate validation failed"
+                ).model_dump()
+            )
+
+        # Bygg slutlig rapport (samma struktur som standardvägen)
+        llm_json = llm_response.model_dump()
+        lines: List[str] = []
+        report_title = (llm_json.get("title") or "Rapport").strip()
+        lines.append(f"# {report_title}")
+        lines.append("")
+        lines.append("## Sammanställning")
+        lines.append("")
+        if llm_json.get("executive_summary"):
+            lines.append(llm_json["executive_summary"])
+        else:
+            lines.append("Sammanställningen bygger på valt underlag. Inga personuppgifter eller råtexter exponeras i denna rapport.")
+        lines.append("")
+        lines.append("## 1. Vad vi vet just nu")
+        lines.append("")
+        themes = llm_json.get("themes") or []
+        theme_bullets = []
+        for theme in themes:
+            theme_bullets.extend(theme.get("bullets", []))
+        if theme_bullets:
+            for bullet in theme_bullets[:7]:
+                lines.append(f"- {bullet}")
+        else:
+            lines.append("- Inga tydliga observationer kunde extraheras från underlaget.")
+        lines.append("")
+        lines.append("## 2. Det här behöver vi verifiera")
+        lines.append("")
+        open_q = llm_json.get("open_questions") or []
+        if open_q:
+            for q in open_q[:7]:
+                lines.append(f"- {q}")
+        else:
+            lines.append("- Inga specifika verifieringspunkter identifierades.")
+        lines.append("")
+        lines.append("## 3. Tidslinje")
+        lines.append("")
+        tl = llm_json.get("timeline_high_level") or []
+        if tl:
+            for t in tl:
+                lines.append(f"- {t}")
+        else:
+            lines.append("Ingen tydlig tidslinje i valt material")
+        lines.append("")
+        lines.append("## 4. Underlag som ingick (utan PII)")
+        lines.append("")
+        manifest = pack.input_manifest or []
+        listed = 0
+        for m in manifest:
+            if m.get("kind") in ("document", "note"):
+                type_label = "Dokument" if m["kind"] == "document" else "Anteckning"
+                lines.append(f"- [{type_label}] {m.get('id')} (sanitize: {m.get('sanitize_level')})")
+                listed += 1
+                if listed >= 10:
+                    break
+        remaining = sum(1 for m in manifest if m.get("kind") in ("document", "note")) - listed
+        if remaining > 0:
+            lines.append(f"(+{remaining} fler)")
+        lines.append("")
+        lines.append("## 5. Risker och integritet")
+        lines.append("")
+        lines.append("Inga tecken på PII i output och re-ID guard passerade utan varningar.")
+        lines.append("")
+        lines.append("## 6. Rekommenderade nästa steg")
+        lines.append("")
+        next_steps = llm_json.get("next_steps") or []
+        if next_steps:
+            for step in next_steps[:7]:
+                lines.append(f"- {step}")
+        else:
+            lines.append("- Inga explicita nästa steg identifierade.")
+        lines.append("")
+        lines.append("## Bilaga: Audit")
+        lines.append("")
+        lines.append(f"Policy: {policy.policy_id} v{policy.policy_version}")
+        lines.append(f"Ruleset: {policy.ruleset_hash}")
+        lines.append(f"Ingångsfingerprint: {pack.input_fingerprint[:16]}...")
+        lines.append("")
+        final_rendered_markdown = "\n".join(lines)
+
+        # Final output gate (för att undvika quote-loop och säkerställa fail-closed)
+        final_candidate = final_rendered_markdown
+        is_safe, pii_reasons = pii_gate_check(final_candidate)
+        output_gate_reasons = []
+        if not is_safe:
+            output_gate_reasons.extend([f"pii_gate_{reason}" for reason in pii_reasons])
+        re_id_pass, re_id_reasons = re_id_guard(final_candidate, input_texts, policy)
+        if not re_id_pass:
+            output_gate_reasons.extend(re_id_reasons)
+        if output_gate_reasons:
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="OUTPUT_GATE_FAILED",
+                    reasons=output_gate_reasons,
+                    detail="Output gate validation failed"
+                ).model_dump()
+            )
+
+        final_rendered_markdown = final_candidate
+
+        latency_ms = int((time.time() - start_time) * 1000)
+        gate_results = {"input": {"pass": True, "reasons": []}, "output": {"pass": True, "reasons": []}}
+
+        db_report = KnoxReport(
+            project_id=request.project_id,
+            policy_id=policy.policy_id,
+            policy_version=policy.policy_version,
+            ruleset_hash=policy.ruleset_hash,
+            template_id=request.template_id,
+            engine_id=engine_id_current,
+            input_fingerprint=pack.input_fingerprint,
+            input_manifest=pack.input_manifest,
+            gate_results=gate_results,
+            rendered_markdown=final_rendered_markdown,
+            latency_ms=latency_ms if latency_ms else llm_latency_ms
+        )
+        db.add(db_report)
+        db.commit()
+        db.refresh(db_report)
+
+        return KnoxReportResponse(
+            id=db_report.id,
+            project_id=db_report.project_id,
+            policy_id=db_report.policy_id,
+            policy_version=db_report.policy_version,
+            ruleset_hash=db_report.ruleset_hash,
+            template_id=db_report.template_id,
+            engine_id=db_report.engine_id,
+            input_fingerprint=db_report.input_fingerprint,
+            input_manifest=db_report.input_manifest,
+            gate_results=db_report.gate_results,
+            rendered_markdown=db_report.rendered_markdown,
+            created_at=db_report.created_at,
+            latency_ms=db_report.latency_ms
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Fort Knox compile(langchain): Unexpected error: {e}",
+            extra={
+                "project_id": request.project_id,
+                "policy_id": request.policy_id,
+                "template_id": request.template_id
+            },
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=KnoxErrorResponse(
+                error_code="INTERNAL_ERROR",
+                reasons=["unexpected_error"],
+                detail=type(e).__name__
+            ).model_dump()
+        )
+
+
 class KnoxReportToDocumentRequest(BaseModel):
     report_id: int
 
@@ -3880,6 +4221,53 @@ async def compile_fortknox_report_job(
         _run_job_http_post,
         job.id,
         "http://127.0.0.1:8000/api/fortknox/compile",
+        json_body=request.model_dump(),
+        auth_user=BASIC_AUTH_ADMIN_USER,
+        auth_pass=BASIC_AUTH_ADMIN_PASS
+    )
+    return _job_to_response(job)
+
+
+@app.post("/api/fortknox/compile/langchain/jobs", response_model=AiJobResponse, status_code=202)
+async def compile_fortknox_report_langchain_job(
+    request: KnoxCompileRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_admin),
+    username: str = Depends(verify_basic_auth)
+):
+    """
+    Skapa ett bakgrundsjobb för LangChain-varianten av Fort Knox.
+    Demo-safe: om ASYNC_JOBS inte är aktivt -> 409 så klient kan falla tillbaka.
+    """
+    if not ASYNC_JOBS_ENABLED:
+        raise HTTPException(status_code=409, detail="Async jobs disabled")
+
+    job = AiJob(
+        kind="fortknox_compile_langchain",
+        status=AiJobStatus.QUEUED,
+        progress=0,
+        project_id=request.project_id,
+        actor=username,
+        payload=_safe_event_metadata({
+            "project_id": request.project_id,
+            "policy_id": request.policy_id,
+            "template_id": request.template_id,
+            "snapshot_mode": bool(request.snapshot_mode),
+            "selection": {
+                "include": len(request.selection.include) if request.selection and request.selection.include else 0,
+                "exclude": len(request.selection.exclude) if request.selection and request.selection.exclude else 0
+            }
+        }, context="audit")
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    background_tasks.add_task(
+        _run_job_http_post,
+        job.id,
+        "http://127.0.0.1:8000/api/fortknox/compile/langchain",
         json_body=request.model_dump(),
         auth_user=BASIC_AUTH_ADMIN_USER,
         auth_pass=BASIC_AUTH_ADMIN_PASS
