@@ -24,7 +24,7 @@ Det här dokumentet är **styrande** för arbetet i repo:t. Vi bygger inte fler 
 - [x] **E2E smoke i CI**: health → skapa projekt → skapa note → `export_snapshot` (maskad vy)
 - [x] **Spacing/typografi**: harmonisera rubriker, padding, list‑layout så det känns “premium”
 - [x] **Tomlägen/loading/error**: polera i Scout, Projekt, Fort Knox (samma ton och layout)
-- [ ] **Copy-pass**: konsekvent svenska (ex: “Research/Bearbetning/Faktakoll/Klar/Arkiverad”)
+- [x] **Copy-pass**: konsekvent svenska (ex: “Research/Bearbetning/Faktakoll/Klar/Arkiverad”)
 - [x] **Responsivitet**: laptop-bredd + mindre (toolbar-wrap, modals, listor)
 - [x] **Demo-check**: en snabb “happy path” genom hela appen utan visuella glitchar
 - [x] **Employer one-pager**: arkitektur + dataflöde + hotbild + fail-closed + “produktion vs demo” (`ONEPAGER.md`)

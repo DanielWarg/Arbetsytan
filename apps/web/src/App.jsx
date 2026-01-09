@@ -86,7 +86,7 @@ function AppContent({ demoMode, darkMode, toggleTheme }) {
           <div className="header-right">
             {demoMode && (
               <div className="demo-badge">
-                Demo Protected
+                Demo (skyddad)
               </div>
             )}
             <button 

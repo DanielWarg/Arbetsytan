@@ -102,8 +102,8 @@ function ProjectDetail() {
         })
       ])
       
-      if (!projectRes.ok) throw new Error('Failed to fetch project')
-      if (!eventsRes.ok) throw new Error('Failed to fetch events')
+      if (!projectRes.ok) throw new Error('Kunde inte hämta projekt')
+      if (!eventsRes.ok) throw new Error('Kunde inte hämta händelser')
       
       const projectData = await projectRes.json()
       const eventsData = await eventsRes.json()
@@ -625,7 +625,7 @@ function ProjectDetail() {
         body: JSON.stringify(newSource)
       })
       
-      if (!response.ok) throw new Error('Failed to add source')
+      if (!response.ok) throw new Error('Kunde inte lägga till källa')
       
       // Reset form and close modal
       setNewSource({ title: '', type: 'link', url: '', comment: '' })
@@ -670,7 +670,7 @@ function ProjectDetail() {
         body: JSON.stringify(newSource)
       })
       
-      if (!response.ok) throw new Error('Failed to update source')
+      if (!response.ok) throw new Error('Kunde inte uppdatera källa')
       
       // Reset form and close modal
       setEditingSource(null)
@@ -716,7 +716,7 @@ function ProjectDetail() {
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Failed to update note')
+        throw new Error(errorData.detail || 'Kunde inte uppdatera anteckning')
       }
       
       // Reset and close modal
@@ -817,7 +817,7 @@ function ProjectDetail() {
           endpoint = apiUrl(`/projects/${id}/sources/${deleteConfirm.id}`)
           break
         default:
-          throw new Error('Unknown delete type')
+          throw new Error('Okänd typ att radera')
       }
       
       const response = await fetch(endpoint, {
@@ -829,7 +829,7 @@ function ProjectDetail() {
       
       // 204 No Content is success, don't try to parse body
       if (!response.ok && response.status !== 204) {
-        throw new Error(`Failed to delete: ${response.status}`)
+        throw new Error(`Kunde inte radera (HTTP ${response.status})`)
       }
       
       success = true
@@ -867,7 +867,7 @@ function ProjectDetail() {
         body: JSON.stringify({ status: newStatus })
       })
       
-      if (!response.ok) throw new Error('Failed to update status')
+      if (!response.ok) throw new Error('Kunde inte uppdatera status')
       
       const updatedProject = await response.json()
       setProject(updatedProject)

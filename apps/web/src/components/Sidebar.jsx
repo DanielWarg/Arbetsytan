@@ -53,7 +53,7 @@ function Sidebar({ darkMode, toggleTheme, mobileOpen = false, onMobileClose }) {
         <button 
           onClick={toggleTheme}
           className="theme-toggle-btn"
-          aria-label="Toggle theme"
+          aria-label="Växla tema"
         >
           {darkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>

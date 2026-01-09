@@ -404,7 +404,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
               setRowErrors(prev => new Map(prev).set(`document_${id}`, { code: 'ORIGINAL_MISSING', message: (err?.detail?.message || err?.message || 'Original saknas') }))
               return
             }
-            throw new Error(`Failed to fix document ${id}: ${parsed?.error_code || 'UNKNOWN'}`)
+            throw new Error(`Kunde inte åtgärda dokument ${id}: ${parsed?.error_code || 'OKÄNT_FEL'}`)
           }
         } else if (type === 'note') {
           const response = await fetch(apiUrl(`/projects/${projectId}/notes/${id}/sanitize-level`), {
@@ -418,7 +418,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
           if (!response.ok) {
             const err = await response.json().catch(() => ({}))
             const parsed = parseKnoxError(err)
-            throw new Error((parsed?.detail || parsed?.error_code) || `Failed to fix note ${id}`)
+            throw new Error((parsed?.detail || parsed?.error_code) || `Kunde inte åtgärda anteckning ${id}`)
           }
         }
       })
@@ -457,7 +457,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
             setRowErrors(prev => new Map(prev).set(`document_${item.id}`, { code: 'ORIGINAL_MISSING', message: (err?.detail?.message || err?.message || 'Original saknas') }))
             return
           }
-          throw new Error(`Failed to fix document ${item.id}: ${parsed?.error_code || 'UNKNOWN'}`)
+          throw new Error(`Kunde inte åtgärda dokument ${item.id}: ${parsed?.error_code || 'OKÄNT_FEL'}`)
         }
       } else if (item.type === 'note') {
         const response = await fetch(apiUrl(`/projects/${projectId}/notes/${item.id}/sanitize-level`), {
@@ -471,7 +471,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
         if (!response.ok) {
           const err = await response.json().catch(() => ({}))
           const parsed = parseKnoxError(err)
-          throw new Error((parsed?.detail || parsed?.error_code) || `Failed to fix note ${item.id}`)
+          throw new Error((parsed?.detail || parsed?.error_code) || `Kunde inte åtgärda anteckning ${item.id}`)
         }
       }
       
@@ -534,7 +534,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
           },
           body: JSON.stringify({ masked_text: editText })
         })
-        if (!updateResponse.ok) throw new Error('Failed to update document')
+        if (!updateResponse.ok) throw new Error('Kunde inte uppdatera dokument')
         
         // Bump sanitize level if changed
         if (editLevel !== editingItem.sanitize_level && (editLevel === 'strict' || editLevel === 'paranoid')) {
@@ -546,7 +546,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
             },
             body: JSON.stringify({ level: editLevel })
           })
-          if (!bumpResponse.ok) throw new Error('Failed to bump sanitize level')
+          if (!bumpResponse.ok) throw new Error('Kunde inte höja maskeringsnivå')
         }
       } else if (editingItem.type === 'note') {
         // Update note body
@@ -558,7 +558,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
           },
           body: JSON.stringify({ body: editText })
         })
-        if (!updateResponse.ok) throw new Error('Failed to update note')
+        if (!updateResponse.ok) throw new Error('Kunde inte uppdatera anteckning')
         
         // Bump sanitize level if changed
         if (editLevel !== editingItem.sanitize_level && (editLevel === 'strict' || editLevel === 'paranoid')) {
@@ -570,7 +570,7 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
             },
             body: JSON.stringify({ level: editLevel })
           })
-          if (!bumpResponse.ok) throw new Error('Failed to bump sanitize level')
+          if (!bumpResponse.ok) throw new Error('Kunde inte höja maskeringsnivå')
         }
       }
       

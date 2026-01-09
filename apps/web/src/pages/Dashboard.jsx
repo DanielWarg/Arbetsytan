@@ -27,7 +27,7 @@ function Dashboard() {
           }
         })
         
-        if (!response.ok) throw new Error('Failed to fetch projects')
+        if (!response.ok) throw new Error('Kunde inte hämta projekt')
         
         const data = await response.json()
         
@@ -65,7 +65,7 @@ function Dashboard() {
         
         if (!response.ok) {
           console.error('Scout fetch failed:', response.status, response.statusText)
-          throw new Error(`Failed to fetch scout items: ${response.status}`)
+          throw new Error(`Kunde inte hämta Scout-item (HTTP ${response.status})`)
         }
         
         const data = await response.json()

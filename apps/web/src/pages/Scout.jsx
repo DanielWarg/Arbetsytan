@@ -51,7 +51,7 @@ function Scout() {
           'Authorization': `Basic ${auth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch items')
+      if (!response.ok) throw new Error('Kunde inte hämta leads')
       const data = await response.json()
       setScoutItems(data)
     } catch (err) {
@@ -71,13 +71,13 @@ function Scout() {
           'Authorization': `Basic ${auth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch feeds')
+      if (!response.ok) throw new Error('Kunde inte hämta källor')
       const data = await response.json()
       setFeeds(data)
     } catch (err) {
       console.error('Error fetching feeds:', err)
       setFeeds([])
-      setFlash({ type: 'error', text: 'Kunde inte hämta feeds just nu.' })
+      setFlash({ type: 'error', text: 'Kunde inte hämta källor just nu.' })
     } finally {
       setLoading(false)
     }
@@ -92,12 +92,12 @@ function Scout() {
           'Authorization': `Basic ${auth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch feeds')
+      if (!response.ok) throw new Error('Kunde inte uppdatera källor')
       // Refresh items after fetch
       await fetchItems()
     } catch (err) {
       console.error('Error fetching feeds:', err)
-      setFlash({ type: 'error', text: 'Kunde inte uppdatera feeds.' })
+      setFlash({ type: 'error', text: 'Kunde inte uppdatera källor.' })
     } finally {
       setFetching(false)
     }
@@ -120,14 +120,14 @@ function Scout() {
           url: newFeedUrl
         })
       })
-      if (!response.ok) throw new Error('Failed to create feed')
+      if (!response.ok) throw new Error('Kunde inte skapa källa')
       setNewFeedName('')
       setNewFeedUrl('')
       await fetchFeeds()
-      setFlash({ type: 'success', text: 'Feed tillagd.' })
+      setFlash({ type: 'success', text: 'Källa tillagd.' })
     } catch (err) {
       console.error('Error creating feed:', err)
-      setFlash({ type: 'error', text: 'Kunde inte skapa feed.' })
+      setFlash({ type: 'error', text: 'Kunde inte skapa källa.' })
     }
   }
 
@@ -139,11 +139,11 @@ function Scout() {
           'Authorization': `Basic ${auth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to disable feed')
+      if (!response.ok) throw new Error('Kunde inte inaktivera källa')
       await fetchFeeds()
     } catch (err) {
       console.error('Error disabling feed:', err)
-      setFlash({ type: 'error', text: 'Kunde inte inaktivera feed.' })
+      setFlash({ type: 'error', text: 'Kunde inte inaktivera källa.' })
     }
   }
 
@@ -179,13 +179,13 @@ function Scout() {
           url: editFeedUrl
         })
       })
-      if (!response.ok) throw new Error('Failed to update feed')
+      if (!response.ok) throw new Error('Kunde inte uppdatera källa')
       await fetchFeeds()
-      setFlash({ type: 'success', text: 'Feed uppdaterad.' })
+      setFlash({ type: 'success', text: 'Källa uppdaterad.' })
       cancelEditFeed()
     } catch (err) {
       console.error('Error updating feed:', err)
-      setFlash({ type: 'error', text: 'Kunde inte uppdatera feed.' })
+      setFlash({ type: 'error', text: 'Kunde inte uppdatera källa.' })
       setSavingFeed(false)
     }
   }
@@ -200,12 +200,12 @@ function Scout() {
         },
         body: JSON.stringify({ is_enabled: true })
       })
-      if (!response.ok) throw new Error('Failed to enable feed')
+      if (!response.ok) throw new Error('Kunde inte aktivera källa')
       await fetchFeeds()
-      setFlash({ type: 'success', text: 'Feed aktiverad.' })
+      setFlash({ type: 'success', text: 'Källa aktiverad.' })
     } catch (err) {
       console.error('Error enabling feed:', err)
-      setFlash({ type: 'error', text: 'Kunde inte aktivera feed.' })
+      setFlash({ type: 'error', text: 'Kunde inte aktivera källa.' })
     }
   }
 

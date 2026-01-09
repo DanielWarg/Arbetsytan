@@ -9,7 +9,7 @@ export async function pollJob(jobId, { auth, intervalMs = 1000, timeoutMs = 1800
       headers: auth ? { 'Authorization': `Basic ${auth}` } : undefined
     })
     if (!res.ok) {
-      throw new Error(`Failed to fetch job: ${res.status}`)
+      throw new Error(`Kunde inte hämta jobb (HTTP ${res.status})`)
     }
     const job = await res.json()
     const status = String(job.status || '')
@@ -19,7 +19,7 @@ export async function pollJob(jobId, { auth, intervalMs = 1000, timeoutMs = 1800
     }
 
     if (Date.now() > deadline) {
-      throw new Error('Job timeout')
+      throw new Error('Jobbet tog för lång tid')
     }
 
     await new Promise((r) => setTimeout(r, intervalMs))

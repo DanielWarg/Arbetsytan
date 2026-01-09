@@ -44,7 +44,7 @@ function ProjectsList() {
         }
       })
       
-      if (!response.ok) throw new Error('Failed to fetch projects')
+      if (!response.ok) throw new Error('Kunde inte hämta projekt')
       
       const data = await response.json()
       setProjects(data)
@@ -73,7 +73,7 @@ function ProjectsList() {
           credentials: 'omit'
         })
         
-        if (!response.ok) throw new Error('Failed to fetch scout items')
+        if (!response.ok) throw new Error('Kunde inte hämta Scout-item')
         
         const data = await response.json()
         setScoutItems(data)
@@ -163,7 +163,7 @@ function ProjectsList() {
           'Authorization': `Basic ${scoutAuth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch items')
+      if (!response.ok) throw new Error('Kunde inte hämta items')
       const data = await response.json()
       setScoutModalItems(data)
     } catch (err) {
@@ -182,7 +182,7 @@ function ProjectsList() {
           'Authorization': `Basic ${scoutAuth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch feeds')
+      if (!response.ok) throw new Error('Kunde inte hämta feeds')
       const data = await response.json()
       setScoutModalFeeds(data)
     } catch (err) {
@@ -216,7 +216,7 @@ function ProjectsList() {
           'Authorization': `Basic ${scoutAuth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to fetch feeds')
+      if (!response.ok) throw new Error('Kunde inte hämta feeds')
       await fetchScoutModalItems()
     } catch (err) {
       console.error('Error fetching feeds:', err)
@@ -243,7 +243,7 @@ function ProjectsList() {
           url: newFeedUrl
         })
       })
-      if (!response.ok) throw new Error('Failed to create feed')
+      if (!response.ok) throw new Error('Kunde inte skapa feed')
       setNewFeedName('')
       setNewFeedUrl('')
       await fetchScoutModalFeeds()
@@ -261,7 +261,7 @@ function ProjectsList() {
           'Authorization': `Basic ${scoutAuth}`
         }
       })
-      if (!response.ok) throw new Error('Failed to disable feed')
+      if (!response.ok) throw new Error('Kunde inte inaktivera feed')
       await fetchScoutModalFeeds()
     } catch (err) {
       console.error('Error disabling feed:', err)

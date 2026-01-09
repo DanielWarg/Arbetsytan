@@ -50,7 +50,7 @@ function JournalistNotes({ projectId }) {
         headers: { 'Authorization': `Basic ${auth}` },
         credentials: 'omit'
       })
-      if (!response.ok) throw new Error('Failed to fetch notes')
+      if (!response.ok) throw new Error('Kunde inte hämta anteckningar')
       const data = await response.json()
       setNotes(data)
       
@@ -90,7 +90,7 @@ function JournalistNotes({ projectId }) {
         })
       ])
       
-      if (!noteResponse.ok) throw new Error('Failed to fetch note')
+      if (!noteResponse.ok) throw new Error('Kunde inte hämta anteckning')
       const noteData = await noteResponse.json()
       setActiveNote(noteData)
       setNoteTitle(noteData.title || '')
@@ -184,7 +184,7 @@ function JournalistNotes({ projectId }) {
         credentials: 'omit' // Prevent browser from showing native auth popup
       })
       
-      if (!response.ok) throw new Error('Failed to save note')
+      if (!response.ok) throw new Error('Kunde inte spara anteckning')
       
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)

@@ -172,7 +172,7 @@ function FortKnoxPanel({ projectId }) {
         })
       } else {
         const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
-        throw new Error(errorData.detail || `Failed to fix ${item.type}`)
+        throw new Error(errorData.detail || `Kunde inte åtgärda ${item.type}`)
       }
     } catch (err) {
       console.error(`Failed to fix ${item.type} ${item.id}:`, err)
