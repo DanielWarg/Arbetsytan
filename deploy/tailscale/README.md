@@ -70,6 +70,22 @@ make prod-logs
 make prod-smoke
 ```
 
+### Local E2E smoke (utan Funnel)
+Det här är en snabb “proof-of-life” som även kan köras i CI:
+
+```bash
+bash deploy/tailscale/scripts/smoke_local.sh http://localhost:8443
+```
+
+### Observability (valfritt)
+- **Metrics**: `GET /api/metrics` (Prometheus-format), **admin-only** via Basic Auth.
+
+### Rate limiting (demo-safe)
+- Slås på/av med `RATE_LIMITS=1/0` (default: `1`)
+- Overrides per bucket:
+  - `RATE_LIMIT_UPLOAD_PER_MIN` (default 20/min per user)
+  - `RATE_LIMIT_FORTKNOX_COMPILE_PER_MIN` (default 6/min per user)
+
 ### Felsökning
 - **Caddy startar inte**: Caddy kör som docker-service här. Kontrollera att port `8443` är ledig och kör `make prod-logs` för att se `caddy`‑loggen.
 - **Funnel inte aktiv**: kör `tailscale status` och `tailscale funnel status`.

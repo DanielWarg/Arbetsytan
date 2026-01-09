@@ -92,6 +92,10 @@ jobs:
           docker compose -f deploy/tailscale/docker-compose.prod.yml logs --no-color --tail=200
           exit 1
 
+      - name: E2E smoke (API)
+        run: |
+          bash deploy/tailscale/scripts/smoke_local.sh http://localhost:8443
+
       - name: Shutdown
         if: always()
         run: |
