@@ -226,7 +226,11 @@ def mask_text_normal(text: str) -> str:
 
 def mask_text_strict(text: str) -> str:
     """Strict masking: normal + aggressive numeric masking (5+ digits, including spaced/hyphenated)"""
-    # Start with normal masking
+    # Mask datetime FIRST to avoid false positives in phone/number regexes.
+    # Example regression: "2026-01-06 13:24" could otherwise be partially masked as [PHONE].
+    text, _datetime_stats = mask_datetime(text, level="strict")
+
+    # Then run normal PII masking
     text = mask_text_normal(text)
     
     # More aggressive ID label masking
@@ -281,6 +285,10 @@ def mask_text_strict(text: str) -> str:
 def mask_text_paranoid(text: str) -> str:
     """Paranoid masking: replace all digits, emails/urls, mask names after labels.
     This level MUST guarantee that pii_gate_check() passes."""
+    # Mask datetime FIRST; paranoid digit replacement would otherwise destroy date/time patterns.
+    # This preserves deterministic tokens ([DATUM], [TID], [RELATIV_TID]).
+    text, _datetime_stats = mask_datetime(text, level="paranoid")
+
     # Replace emails and URLs with [LINK] first (before digit replacement)
     email_pattern = r'\b[\w\.-]+@[\w\.-]+\.\w+\b'
     text = re.sub(email_pattern, '[LINK]', text, flags=re.IGNORECASE)
