@@ -62,7 +62,7 @@ Exportfunktionalitet för projektdata (metadata endast, inget känsligt innehål
 ### Modell-caching
 - Global singleton för STT-engine
 - Persistent cache i Docker volume
-- Preload vid startup för snabbare första användning
+- Preload vid startup för snabbare första användning (valfritt; styrs av `PRELOAD_STT=1`)
 
 ## Fort Knox
 

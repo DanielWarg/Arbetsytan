@@ -57,7 +57,7 @@ from text_processing import (
     transcribe_audio, normalize_transcript_text, process_transcript, refine_editorial_text,
     sanitize_journalist_note
 )
-from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256
+from fortknox import build_knox_input_pack, input_gate, re_id_guard, render_markdown, get_policy, canonical_json, compute_sha256, break_quote_ngrams
 from fortknox_remote import compile_remote, FortKnoxRemoteError
 
 
@@ -286,6 +286,11 @@ async def request_timing_middleware(request, call_next):
 @app.on_event("startup")
 async def preload_stt_engine():
     """Preload STT engine at startup to avoid blocking first transcription request."""
+    # Demo-safe default: gör inte cold-start långsam eller nätverksberoende.
+    # Slå på explicit med PRELOAD_STT=1 om du vill.
+    if os.getenv("PRELOAD_STT", "0").strip() != "1":
+        logger.info("[STARTUP] STT preload disabled (set PRELOAD_STT=1 to enable).")
+        return
     try:
         from text_processing import _get_stt_engine
         logger.info("[STARTUP] Preloading STT engine...")
@@ -3719,6 +3724,42 @@ async def compile_fortknox_report(
         lines.append("")
         final_rendered_markdown = "\n".join(lines)
         
+        # 7b. Output gate på final markdown (fail-closed)
+        final_candidate = final_rendered_markdown
+        is_safe, pii_reasons = pii_gate_check(final_candidate)
+        output_gate_reasons = []
+        if not is_safe:
+            output_gate_reasons.extend([f"pii_gate_{reason}" for reason in pii_reasons])
+
+        re_id_pass, re_id_reasons = re_id_guard(final_candidate, input_texts, policy)
+        if (not re_id_pass) and ("quote_detected" in re_id_reasons):
+            # Försök bryta n-gram-overlap deterministiskt (External showreel-säkerhet)
+            final_candidate, _breaks = break_quote_ngrams(final_candidate, input_texts, policy, max_breaks=12)
+            re_id_pass, re_id_reasons = re_id_guard(final_candidate, input_texts, policy)
+        if not re_id_pass:
+            output_gate_reasons.extend(re_id_reasons)
+
+        if output_gate_reasons:
+            logger.warning(
+                "Fort Knox compile: Output gate failed (final)",
+                extra={
+                    "project_id": request.project_id,
+                    "policy_id": request.policy_id,
+                    "template_id": request.template_id,
+                    "reasons": output_gate_reasons
+                }
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=KnoxErrorResponse(
+                    error_code="OUTPUT_GATE_FAILED",
+                    reasons=output_gate_reasons,
+                    detail="Output gate validation failed"
+                ).model_dump()
+            )
+
+        final_rendered_markdown = final_candidate
+
         # 8. Spara KnoxReport
         latency_ms = int((time.time() - start_time) * 1000)
         
@@ -3924,7 +3965,7 @@ async def create_document_from_knox_report(
         masked_text=md,
         file_path=str(permanent_path),
         sanitize_level=SanitizeLevel.STRICT,
-        usage_restrictions={"ai_allowed": True, "export_allowed": True},
+        usage_restrictions={"ai_allowed": True, "export_allowed": True, "fortknox_excluded": True},
         pii_gate_reasons=None,
         document_metadata={
             "source_type": "fortknox_report",

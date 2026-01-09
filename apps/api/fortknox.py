@@ -95,7 +95,10 @@ def build_knox_input_pack(
     # Filtrera bort dokument med fortknox_excluded i usage_restrictions
     documents = [
         doc for doc in documents 
-        if not (doc.usage_restrictions and doc.usage_restrictions.get('fortknox_excluded', False))
+        if not (
+            (doc.usage_restrictions and doc.usage_restrictions.get("fortknox_excluded", False))
+            or ((getattr(doc, "document_metadata", None) or {}).get("source_type") == "fortknox_report")
+        )
     ]
     
     # Hämtar notes (sorterat: created_at asc, id asc)
@@ -314,6 +317,81 @@ def re_id_guard(
     # Om datum finns i output här så är det ett pipeline-fel (fail-closed)
     
     return (len(reasons) == 0, reasons)
+
+
+def break_quote_ngrams(
+    rendered_text: str,
+    input_texts: List[str],
+    policy: KnoxPolicy,
+    *,
+    max_breaks: int = 10
+) -> Tuple[str, int]:
+    """
+    Deterministiskt "de-quote": om output innehåller ett långt n-gram från input,
+    bryt matchen genom att injicera en markör (…).
+
+    Detta är en showreel-säker åtgärd för External policy där vi vill undvika att
+    rå frasering/citat återges ordagrant.
+    """
+    if not rendered_text:
+        return rendered_text, 0
+    if not input_texts:
+        return rendered_text, 0
+    if not getattr(policy, "quote_limit_words", None):
+        return rendered_text, 0
+
+    # Skapa n-grams från input_texts med längd = quote_limit_words + 1 (samma som re_id_guard)
+    n = policy.quote_limit_words + 1
+    all_input_n_grams: set[str] = set()
+    for input_text in input_texts:
+        norm = normalize_text_for_n_gram(input_text or "")
+        all_input_n_grams.update(create_n_grams(norm, n))
+
+    # Segment-tokenisera output så vi kan injicera en markör utan att tappa radbrytningar.
+    # segments = ["foo", "  ", "bar", "\n", ...]
+    segs: List[str] = []
+    seg_is_space: List[bool] = []
+    for m in re.finditer(r"\s+|\S+", rendered_text):
+        s = m.group(0)
+        segs.append(s)
+        seg_is_space.append(s.isspace())
+
+    def _rebuild_word_index():
+        word_seg_idxs = [i for i, is_sp in enumerate(seg_is_space) if not is_sp]
+        word_tokens = [segs[i].lower() for i in word_seg_idxs]
+        return word_seg_idxs, word_tokens
+
+    breaks = 0
+    for _ in range(max_breaks):
+        word_seg_idxs, word_tokens = _rebuild_word_index()
+        if len(word_tokens) < n:
+            break
+
+        found_i = None
+        # Hitta första matchande n-gram i output (deterministiskt vänster->höger)
+        for i in range(0, len(word_tokens) - n + 1):
+            ngram = " ".join(word_tokens[i:i + n])
+            if ngram in all_input_n_grams:
+                found_i = i
+                break
+        if found_i is None:
+            break
+
+        cut = max(3, n // 2)
+        insert_word_pos = min(found_i + cut, len(word_tokens))
+        # Mappa word-position -> segment-index (infoga före den token som ligger där)
+        if insert_word_pos >= len(word_seg_idxs):
+            insert_seg_at = len(segs)
+        else:
+            insert_seg_at = word_seg_idxs[insert_word_pos]
+
+        # Injicera " … " som egna segment för att bryta n-gram-matchningen.
+        # (Det gör att normalize_text_for_n_gram() aldrig kan innehålla exakt samma n-gram.)
+        segs[insert_seg_at:insert_seg_at] = [" ", "…", " "]
+        seg_is_space[insert_seg_at:insert_seg_at] = [True, False, True]
+        breaks += 1
+
+    return "".join(segs), breaks
 
 
 def render_markdown(llm_json: Dict[str, Any], template_id: str) -> str:

@@ -86,6 +86,10 @@ make dev
 
 Arbetsytan visar hur säkra, interna verktyg kan byggas för journalistiskt arbete där integritet, spårbarhet och tydliga gränser är viktigare än snabb publicering.
 
+### För arbetsgivare (snabb överblick)
+
+- **One‑pager (arkitektur + dataflöde + hotbild + fail‑closed + “produktion vs demo”)**: `ONEPAGER.md`
+
 ### Mer (om du vill läsa vidare)
 
 - Fort Knox/arkitektur: `docs/ARCHITECTURE.md`, `docs/FLOWS.md`
