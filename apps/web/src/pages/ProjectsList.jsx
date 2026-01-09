@@ -438,7 +438,7 @@ function ProjectsList() {
                       className="scout-widget-item-create-btn"
                       onClick={() => handleCreateProjectFromScoutItem(item.id)}
                       disabled={creatingFromScoutItem === item.id}
-                      title="Skapa projekt från detta item"
+                      title="Skapa projekt från lead"
                     >
                       {creatingFromScoutItem === item.id ? (
                         <Loader2 size={14} className="spinning" />
@@ -449,7 +449,7 @@ function ProjectsList() {
                     <button
                       className="scout-widget-item-hide-btn"
                       onClick={() => handleHideScoutItem(item.id)}
-                      title="Göm detta item"
+                      title="Dölj lead"
                     >
                       <X size={14} />
                     </button>
@@ -469,7 +469,7 @@ function ProjectsList() {
               className="btn-scout-refresh"
               onClick={handleScoutBoxFetch}
               disabled={scoutFetching}
-              title="Uppdatera feeds"
+              title="Uppdatera källor"
             >
               <RefreshCw size={14} className={scoutFetching ? 'spinning' : ''} />
               <span>{scoutFetching ? 'Uppdaterar...' : 'Uppdatera'}</span>
@@ -721,7 +721,7 @@ function ProjectsList() {
                             className="scout-modal-item-create-btn"
                             onClick={() => handleCreateProjectFromScoutItem(item.id)}
                             disabled={creatingFromScoutItem === item.id}
-                            title="Skapa projekt från detta item"
+                            title="Skapa projekt från lead"
                           >
                             {creatingFromScoutItem === item.id ? (
                               <Loader2 size={14} className="spinning" />
@@ -733,7 +733,7 @@ function ProjectsList() {
                           <button
                             className="scout-modal-item-hide-btn"
                             onClick={() => handleHideScoutItem(item.id)}
-                            title="Göm detta item"
+                            title="Dölj lead"
                           >
                             <X size={14} />
                           </button>
@@ -751,7 +751,7 @@ function ProjectsList() {
           {scoutModalActiveTab === 'feeds' && (
             <div className="scout-modal-tab-content">
               <div className="scout-modal-feeds-form">
-                <h3 className="scout-modal-feeds-form-title">Lägg till feed</h3>
+                <h3 className="scout-modal-feeds-form-title">Lägg till källa</h3>
                 <div className="scout-modal-feeds-form-fields">
                   <input
                     type="text"
@@ -793,7 +793,7 @@ function ProjectsList() {
                           <button
                             className="scout-modal-feed-create-project-btn"
                             onClick={() => handleCreateProjectFromFeed(feed.url, feed.name)}
-                            title="Skapa projekt från denna feed"
+                            title="Skapa projekt från källa"
                           >
                             <Rss size={16} />
                             <span>Skapa projekt</span>
@@ -802,7 +802,7 @@ function ProjectsList() {
                         <button
                           className="scout-modal-feed-disable-btn"
                           onClick={() => handleScoutModalDisableFeed(feed.id)}
-                          title="Inaktivera feed"
+                          title="Inaktivera källa"
                           disabled={!feed.is_enabled}
                         >
                           <Trash2 size={16} />

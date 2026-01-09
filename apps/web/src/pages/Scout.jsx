@@ -283,7 +283,7 @@ function Scout() {
       {activeTab === 'feeds' && (
         <div className="scout-content">
           <div className="scout-feeds-form">
-            <h3 className="scout-feeds-form-title">Lägg till feed</h3>
+            <h3 className="scout-feeds-form-title">Lägg till källa</h3>
             <div className="scout-feeds-form-fields">
               <Input
                 type="text"
