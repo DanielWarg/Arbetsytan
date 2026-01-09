@@ -95,9 +95,40 @@
 
 .scout-actions {
   margin-bottom: var(--spacing-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
 }
 
 /* scout-fetch-btn uses shared .btn styles; keep only layout if needed */
+
+.scout-items-range {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.scout-items-range-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+}
+
+.scout-items-range-select {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+}
+
+.scout-items-range-select:focus {
+  outline: none;
+  border-color: var(--color-interactive-default);
+}
 
 .scout-loading,
 .scout-empty-full {

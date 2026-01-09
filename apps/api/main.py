@@ -2682,7 +2682,9 @@ async def update_scout_feed(
 
 @app.get("/api/scout/items", response_model=List[ScoutItemResponse])
 async def list_scout_items(
-    hours: int = Query(24, ge=1, le=168),
+    # Domstolsflöden publicerar ofta mer sällan än 7 dagar.
+    # Vi tillåter längre lookback men begränsar fortfarande med limit för prestanda.
+    hours: int = Query(24, ge=1, le=8760),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     username: str = Depends(verify_basic_auth)

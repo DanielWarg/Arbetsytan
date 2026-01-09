@@ -12,6 +12,8 @@ function Scout() {
   const location = useLocation()
   const [activeTab, setActiveTab] = useState('items')
   const [scoutItems, setScoutItems] = useState([])
+  const [itemHours, setItemHours] = useState(24)
+  const [sourceFilter, setSourceFilter] = useState('all')
   const [feeds, setFeeds] = useState([])
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(false)
@@ -42,12 +44,13 @@ function Scout() {
     } else {
       fetchFeeds()
     }
-  }, [activeTab])
+  }, [activeTab, itemHours])
 
   const fetchItems = async () => {
     setLoading(true)
     try {
-      const response = await fetch(apiUrl('/scout/items?hours=24&limit=50'), {
+      const limit = itemHours > 168 ? 200 : 50
+      const response = await fetch(apiUrl(`/scout/items?hours=${itemHours}&limit=${limit}`), {
         headers: {
           'Authorization': `Basic ${auth}`
         }
@@ -241,6 +244,32 @@ function Scout() {
       {activeTab === 'items' && (
         <div className="scout-content">
           <div className="scout-actions">
+            <div className="scout-items-range">
+              <span className="scout-items-range-label">Tidsintervall</span>
+              <select
+                className="scout-items-range-select"
+                value={itemHours}
+                onChange={(e) => setItemHours(parseInt(e.target.value, 10))}
+              >
+                <option value={24}>Senaste 24h</option>
+                <option value={168}>Senaste 7 dagar</option>
+                <option value={720}>Senaste 30 dagar</option>
+                <option value={8760}>Senaste 12 månader</option>
+              </select>
+            </div>
+            <div className="scout-items-range">
+              <span className="scout-items-range-label">Källa</span>
+              <select
+                className="scout-items-range-select"
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+              >
+                <option value="all">Alla</option>
+                {Array.from(new Set(scoutItems.map(i => i.raw_source).filter(Boolean))).map((src) => (
+                  <option key={src} value={src}>{src}</option>
+                ))}
+              </select>
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -256,7 +285,9 @@ function Scout() {
             <p className="scout-loading">Laddar...</p>
           ) : scoutItems.length > 0 ? (
             <div className="scout-items-list-full">
-              {scoutItems.map(item => (
+              {scoutItems
+                .filter(item => sourceFilter === 'all' || item.raw_source === sourceFilter)
+                .map(item => (
                 <div key={item.id} className="scout-item-full">
                   <Badge variant="normal" className="scout-item-badge">
                     {formatScoutSource(item.raw_source)}
