@@ -440,6 +440,46 @@ BASIC_AUTH_EDITOR_PASS = os.getenv("BASIC_AUTH_EDITOR_PASS", "").strip()
 # Async jobs (STT/LLM) - off by default (demo-safe)
 ASYNC_JOBS_ENABLED = os.getenv("ASYNC_JOBS", "0").strip() == "1"
 
+# Rate limiting (demo-safe defaults)
+RATE_LIMITS_ENABLED = os.getenv("RATE_LIMITS", "1").strip() == "1"
+_rate_limit_state: Dict[str, List[float]] = {}
+
+
+def _rate_limit_check(key: str, limit: int, window_seconds: int) -> None:
+    """
+    Minimal in-memory rate limiter (per-process).
+    - key: t.ex. "user:bucket"
+    - limit: max antal events per window
+    - window_seconds: fönsterstorlek i sekunder
+    """
+    import time
+
+    now = time.time()
+    window_start = now - window_seconds
+    hits = _rate_limit_state.get(key, [])
+    hits = [t for t in hits if t >= window_start]
+
+    if len(hits) >= limit:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    hits.append(now)
+    _rate_limit_state[key] = hits
+
+
+def rate_limit(bucket: str, default_per_minute: int):
+    """FastAPI dependency factory for rate limiting per authenticated user."""
+
+    def _dep(username: str = Depends(verify_basic_auth)):
+        if not RATE_LIMITS_ENABLED:
+            return True
+        # Allow override per bucket via env, e.g. RATE_LIMIT_FORTKNOX_COMPILE_PER_MIN=3
+        env_key = f"RATE_LIMIT_{bucket.upper()}_PER_MIN"
+        limit = int(os.getenv(env_key, str(default_per_minute)).strip())
+        _rate_limit_check(key=f"{username}:{bucket}", limit=limit, window_seconds=60)
+        return True
+
+    return _dep
+
 
 def _role_for_username(username: str) -> str:
     if username == BASIC_AUTH_ADMIN_USER:
@@ -858,7 +898,8 @@ async def upload_document(
     project_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    _: bool = Depends(rate_limit("upload", 20)),
 ):
     """
     Upload a document to a project.
@@ -1412,7 +1453,8 @@ async def upload_recording(
     project_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    _: bool = Depends(rate_limit("upload", 20)),
 ):
     """
     Upload an audio recording and process it into a transcript document.
@@ -3479,7 +3521,8 @@ async def export_project_snapshot(
 async def compile_fortknox_report(
     request: KnoxCompileRequest,
     db: Session = Depends(get_db),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    _: bool = Depends(rate_limit("fortknox_compile", 6)),
 ):
     """
     Kompilera Fort Knox-rapport från projekt.
@@ -3980,7 +4023,8 @@ async def compile_fortknox_report(
 async def compile_fortknox_report_langchain(
     request: KnoxCompileRequest,
     db: Session = Depends(get_db),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    _: bool = Depends(rate_limit("fortknox_compile", 6)),
 ):
     """
     Opt-in LangChain pipeline for Fort Knox.
@@ -4326,7 +4370,8 @@ async def compile_fortknox_report_job(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    __rl: bool = Depends(rate_limit("fortknox_compile", 6)),
 ):
     """
     Skapa ett bakgrundsjobb för Fort Knox-rapport.
@@ -4374,7 +4419,8 @@ async def compile_fortknox_report_langchain_job(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    __rl: bool = Depends(rate_limit("fortknox_compile", 6)),
 ):
     """
     Skapa ett bakgrundsjobb för LangChain-varianten av Fort Knox.
@@ -4544,7 +4590,8 @@ async def upload_recording_job(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     _: bool = Depends(require_admin),
-    username: str = Depends(verify_basic_auth)
+    username: str = Depends(verify_basic_auth),
+    __rl: bool = Depends(rate_limit("upload", 20)),
 ):
     """
     Skapa ett bakgrundsjobb för röstmemo/transkription.
