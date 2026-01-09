@@ -39,6 +39,33 @@ function FortKnoxStation({ projectId, onClose, embedded = false }) {
   const password = 'password'
   const auth = btoa(`${username}:${password}`)
 
+  // När projekt byts i Fort Knox-sidan måste vi nollställa intern state,
+  // annars ser det ut som att dropdown inte gör något (gammalt snapshot/rapport ligger kvar).
+  useEffect(() => {
+    // Reset internal compile state
+    setLoading(false)
+    setReport(null)
+    setError(null)
+    setLastReportId(null)
+    setIsCacheHit(false)
+
+    // Reset external station state
+    setSnapshot(null)
+    setSnapshotLoading(false)
+    setSelection({ include: [], exclude: [] })
+    setBlockingItems(new Set())
+    setFixingItems(new Set())
+    setRowErrors(new Map())
+    setShowEditModal(false)
+    setEditingItem(null)
+    setEditText('')
+    setEditLevel('normal')
+    setSaving(false)
+    setSavingReportDoc(false)
+    setSavedReportDoc(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
   // Load snapshot when External tab is active
   useEffect(() => {
     if (activeTab === 'external' && projectId && !snapshot) {
