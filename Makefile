@@ -2,6 +2,8 @@
 
 .PHONY: build-web prod-up prod-down prod-logs prod-smoke
 
+.PHONY: web-dev web-dev-stop funnel-off stop-all
+
 dev:
 	@echo "Starting development environment..."
 	@$(MAKE) fortknox-local
@@ -16,6 +18,70 @@ down:
 	@echo "Stopping all services..."
 	docker-compose down
 	@$(MAKE) down-fortknox
+
+# ============================================================================
+# Local frontend dev server (Vite) with pidfile so we can stop reliably
+# ============================================================================
+
+WEB_DEV_PID := /tmp/arbetsytan_web_dev.pid
+WEB_DEV_LOG := /tmp/arbetsytan_web_dev.log
+
+web-dev:
+	@echo "Starting web dev server (Vite) ..."
+	@if [ -f "$(WEB_DEV_PID)" ] && ps -p "$$(cat $(WEB_DEV_PID))" >/dev/null 2>&1; then \
+		echo "✓ web-dev already running (PID: $$(cat $(WEB_DEV_PID)))"; \
+		exit 0; \
+	fi
+	@cd apps/web && nohup npm run dev > "$(WEB_DEV_LOG)" 2>&1 & echo $$! > "$(WEB_DEV_PID)"
+	@sleep 1
+	@echo "✓ web-dev started (PID: $$(cat $(WEB_DEV_PID)), log: $(WEB_DEV_LOG))"
+
+web-dev-stop:
+	@echo "Stopping web dev server (Vite)..."
+	@if [ -f "$(WEB_DEV_PID)" ]; then \
+		PID=$$(cat "$(WEB_DEV_PID)"); \
+		if ps -p "$$PID" >/dev/null 2>&1; then \
+			kill -TERM "$$PID" 2>/dev/null || true; \
+			echo "✓ Stopped web-dev (PID: $$PID)"; \
+		fi; \
+		rm -f "$(WEB_DEV_PID)" 2>/dev/null || true; \
+	fi
+	@# Best-effort fallback if started outside Makefile
+	@pkill -f "npm run dev" 2>/dev/null || true
+	@pkill -f "vite" 2>/dev/null || true
+
+# ============================================================================
+# Tailscale Funnel helpers (optional)
+# ============================================================================
+
+funnel-off:
+	@echo "Stopping Tailscale Funnel (if enabled)..."
+	@if command -v tailscale >/dev/null 2>&1; then \
+		tailscale funnel off || true; \
+	else \
+		echo "tailscale not found. Install: brew install tailscale"; \
+	fi
+
+# ============================================================================
+# One command to stop EVERYTHING related to this repo (Docker + local AI + dev server)
+# ============================================================================
+
+stop-all:
+	@echo "======================================================================"
+	@echo "Stopping ALL Arbetsytan processes (docker + fortknox-local + web-dev)"
+	@echo "======================================================================"
+	@# Stop prod-demo stack (Caddy + API + DB)
+	@docker compose -f deploy/tailscale/docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
+	@# Stop root dev stack (web + api + db)
+	@docker-compose down --remove-orphans 2>/dev/null || true
+	@# Stop local Fort Knox services (llama.cpp + fortknox-local)
+	@$(MAKE) down-fortknox 2>/dev/null || true
+	@# Stop local web dev server (Vite)
+	@$(MAKE) web-dev-stop 2>/dev/null || true
+	@# Stop funnel if running (optional)
+	@$(MAKE) funnel-off 2>/dev/null || true
+	@echo "✓ Done. Verify with: docker ps (should be empty) + lsof -iTCP -sTCP:LISTEN | grep -E '8787|8080|5173|8000|8443'"
+	@echo "======================================================================"
 
 FORTKNOX_DIR := $(shell pwd)/fortknox-local
 
